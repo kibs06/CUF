@@ -2892,23 +2892,10 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                                   return GestureDetector(
                                     onTap: isAvailable
                                         ? () {
-                                            setState(() {
-                                              // Map the tapped label back to the
-                                              // canonical size for this product
-                                              // (bijective conversion, so this
-                                              // always resolves to the same size).
-                                              _selectedSize = sizesMap.keys
-                                                  .firstWhere(
-                                                    (s) =>
-                                                        displaySizeInUnit(
-                                                          s,
-                                                          sizeUnit,
-                                                          category: sizeChart,
-                                                        ) ==
-                                                        label,
-                                                    orElse: () => size,
-                                                  );
-                                            });
+                                            // `size` is already the canonical
+                                            // size key this product's variants
+                                            // are stored under.
+                                            setState(() => _selectedSize = size);
                                           }
                                         : null,
                                     child: Stack(
