@@ -1,5 +1,14 @@
 [
   {
+    "latest_version": "1.0.83",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.83/app-release-1.0.83.apk",
+    "released_at": "2026-11-17",
+    "notes": [
+      "View in your space now opens the phone's AR viewer directly on Android",
+      "The 3D button is back on every product with a live model, even while its file finishes downloading"
+    ]
+  },
+  {
     "latest_version": "1.0.82",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.82/app-release-1.0.82.apk",
     "released_at": "2026-11-16",
