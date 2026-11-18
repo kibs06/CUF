@@ -109,7 +109,7 @@ function productThumb(item) {
 
 function PipelineSkeleton({ wide = false }) {
   return (
-    <div className={`bg-white px-3.5 py-3.5 ${wide ? 'col-span-2 sm:col-span-1' : ''}`}>
+    <div className={`bg-card px-3.5 py-3.5 ${wide ? 'col-span-2 sm:col-span-1' : ''}`}>
       <div className="h-3 w-20 animate-pulse rounded bg-canvas" />
       <div className="mt-2 h-6 w-12 animate-pulse rounded bg-canvas" />
     </div>
@@ -349,7 +349,7 @@ export default function Orders() {
                     onClick={() => applyStatus(stage.key)}
                     aria-pressed={active}
                     aria-label={`Filter orders by ${stage.label}`}
-                    className={`group bg-white px-3.5 py-3.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 ${
+                    className={`group bg-card px-3.5 py-3.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 ${
                       index === 0 ? 'col-span-2 sm:col-span-1' : ''
                     } ${active ? 'bg-primary/[0.045]' : 'hover:bg-canvas/60'}`}
                   >
@@ -377,7 +377,7 @@ export default function Orders() {
         </section>
       )}
 
-      <section aria-label="Filter orders" className="rounded-xl border border-border bg-white p-3">
+      <section aria-label="Filter orders" className="rounded-xl border border-border bg-card p-3">
         <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-[minmax(260px,1.6fr)_190px_145px_145px]">
           <label className="col-span-2 block xl:col-span-1">
             <span className="mb-1 block text-[12px] font-medium text-muted">Search</span>
@@ -396,7 +396,7 @@ export default function Orders() {
                   setSearch(event.target.value)
                   setPage(1)
                 }}
-                className="h-9 w-full rounded-lg border border-border bg-white pl-8 pr-9 text-[12.5px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                className="h-9 w-full rounded-lg border border-border bg-card pl-8 pr-9 text-[12.5px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
               />
               {search && (
                 <button
@@ -419,7 +419,7 @@ export default function Orders() {
             <select
               value={statusFilter}
               onChange={(event) => applyStatus(event.target.value)}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             >
               <option value="all">All statuses</option>
               <optgroup label="Queues">
@@ -448,7 +448,7 @@ export default function Orders() {
                 setDateFrom(event.target.value)
                 setPage(1)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
           </label>
 
@@ -461,7 +461,7 @@ export default function Orders() {
                 setDateTo(event.target.value)
                 setPage(1)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
           </label>
         </div>
@@ -487,7 +487,7 @@ export default function Orders() {
       {isLoading && <TableSkeleton cols={7} rows={8} />}
 
       {isError && (
-        <section className="rounded-xl border border-error/20 bg-white px-6 py-10 text-center">
+        <section className="rounded-xl border border-error/20 bg-card px-6 py-10 text-center">
           <p className="text-[14px] font-semibold text-ink">Could not load orders</p>
           <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
             {error?.message ?? 'The orders service did not respond.'}
@@ -496,7 +496,7 @@ export default function Orders() {
       )}
 
       {!isLoading && !isError && (
-        <section className="overflow-hidden rounded-xl border border-border bg-white">
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5">
             <div>
               <h2 className="text-[15px] font-bold text-ink">Orders</h2>
@@ -708,7 +708,7 @@ export default function Orders() {
                     disabled={page <= 1}
                     onClick={() => setPage((current) => Math.max(1, current - 1))}
                     aria-label="Previous page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <ChevronLeft size={14} />
                   </button>
@@ -720,7 +720,7 @@ export default function Orders() {
                     disabled={page >= totalPages}
                     onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                     aria-label="Next page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <ChevronRight size={14} />
                   </button>
@@ -737,7 +737,7 @@ export default function Orders() {
           role="menu"
           aria-label={`Order ${shortId(contextMenu.order.id)} actions`}
           style={{ left: contextMenu.x, top: contextMenu.y }}
-          className="fixed z-[60] w-56 overflow-hidden rounded-xl border border-border bg-white py-1 shadow-pop"
+          className="fixed z-[60] w-56 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-pop"
         >
           <div className="border-b border-border px-3 py-2">
             <p className="font-mono text-[10.5px] text-muted">
@@ -811,7 +811,7 @@ export default function Orders() {
               value={newStatus}
               onChange={(event) => setNewStatus(event.target.value)}
               aria-label="New order status"
-              className="h-9 rounded-lg border border-border bg-white px-2.5 text-[12px] font-medium text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 rounded-lg border border-border bg-card px-2.5 text-[12px] font-medium text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             >
               {ORDER_STATUSES.map((status) => (
                 <option key={status} value={status}>
@@ -861,7 +861,7 @@ export default function Orders() {
 
               <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/80 pt-3">
                 {selectedOrder.payment_method && (
-                  <span className="rounded-md bg-white px-2 py-1 text-[11px] font-medium text-muted ring-1 ring-border">
+                  <span className="rounded-md bg-card px-2 py-1 text-[11px] font-medium text-muted ring-1 ring-border">
                     Payment ·{' '}
                     {selectedOrder.payment_method.toLowerCase() === 'gcash'
                       ? 'GCash'
@@ -869,7 +869,7 @@ export default function Orders() {
                   </span>
                 )}
                 {selectedOrder.source && (
-                  <span className="rounded-md bg-white px-2 py-1 text-[11px] font-medium text-muted ring-1 ring-border">
+                  <span className="rounded-md bg-card px-2 py-1 text-[11px] font-medium text-muted ring-1 ring-border">
                     Source · {humanizeStatus(selectedOrder.source)}
                   </span>
                 )}

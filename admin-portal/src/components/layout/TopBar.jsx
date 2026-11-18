@@ -132,7 +132,7 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
           type="button"
           onClick={onMenuClick}
           aria-label="Open navigation"
-          className="admin-3d-pressable rounded-xl border border-border bg-white p-2 transition-colors hover:bg-canvas lg:hidden"
+          className="admin-3d-pressable rounded-xl border border-border bg-card p-2 transition-colors hover:bg-canvas lg:hidden"
         >
           <Menu size={18} className="text-muted" />
         </button>
@@ -161,7 +161,7 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
             aria-haspopup="true"
             aria-controls="admin-notifications"
             title="Notifications"
-            className={`admin-3d-pressable relative flex h-[38px] w-[38px] items-center justify-center rounded-xl border bg-white shadow-card transition-colors hover:border-primary/50 hover:bg-canvas ${
+            className={`admin-3d-pressable relative flex h-[38px] w-[38px] items-center justify-center rounded-xl border bg-card shadow-card transition-colors hover:border-primary/50 hover:bg-canvas ${
               notificationsOpen ? 'border-primary/50 bg-canvas' : 'border-border'
             }`}
           >
@@ -176,7 +176,7 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
           {notificationsOpen && (
             <div
               id="admin-notifications"
-              className="absolute right-0 z-50 mt-2 w-[340px] max-w-[calc(100vw-2rem)] origin-top-right overflow-hidden rounded-xl border border-border bg-white shadow-pop"
+              className="absolute right-0 z-50 mt-2 w-[340px] max-w-[calc(100vw-2rem)] origin-top-right overflow-hidden rounded-xl border border-border bg-card shadow-pop"
             >
               <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
                 <div>
@@ -286,7 +286,7 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
                                 type="button"
                                 onClick={() => markRead.mutate([alert.id])}
                                 disabled={markRead.isPending}
-                                className="shrink-0 rounded-lg border border-border px-2 py-1 text-[10.5px] font-semibold text-ink transition-colors hover:bg-white disabled:opacity-50"
+                                className="shrink-0 rounded-lg border border-border px-2 py-1 text-[10.5px] font-semibold text-ink transition-colors hover:bg-card disabled:opacity-50"
                               >
                                 Mark read
                               </button>
@@ -336,7 +336,7 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             aria-label="Your account"
-            className="admin-3d-pressable flex h-[38px] items-center gap-1.5 rounded-xl border border-border bg-white py-1.5 pl-1.5 pr-2.5 shadow-card transition-colors hover:border-primary/50 hover:bg-canvas"
+            className="admin-3d-pressable flex h-[38px] items-center gap-1.5 rounded-xl border border-border bg-card py-1.5 pl-1.5 pr-2.5 shadow-card transition-colors hover:border-primary/50 hover:bg-canvas"
           >
             <AvatarInitials name={profile?.full_name} email={profile?.email} size="sm" />
             <span className="hidden max-w-[140px] truncate text-[13px] font-semibold text-ink sm:inline">
@@ -348,7 +348,7 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 z-50 mt-2 w-60 origin-top-right overflow-hidden rounded-2xl border border-border bg-white shadow-pop"
+              className="absolute right-0 z-50 mt-2 w-60 origin-top-right overflow-hidden rounded-2xl border border-border bg-card shadow-pop"
             >
               <div className="flex items-center gap-3 border-b border-canvas px-4 py-3">
                 <AvatarInitials name={profile?.full_name} email={profile?.email} />

@@ -1,6 +1,7 @@
 import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.jsx'
 import { useAdminNotifications } from '../../hooks/useAdminNotifications.js'
+import { useTheme } from '../../hooks/useTheme.js'
 import AvatarInitials from '../ui/AvatarInitials.jsx'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -22,6 +23,8 @@ import {
   Landmark,
   BadgeCheck,
   Banknote,
+  Moon,
+  Sun,
 } from 'lucide-react'
 
 const GROUPS = [
@@ -70,6 +73,7 @@ export default function Sidebar({ open, onClose }) {
   const proofsUnderReview = notificationCounts?.gcashProofs ?? 0
   const [hovered, setHovered] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const { isDark, toggle: toggleTheme } = useTheme()
   const menuRef = useRef(null)
   // The drawer is always full-width: on touch screens there is no hover, so an
   // open drawer is expanded by definition and hover only matters on desktop.
@@ -100,11 +104,11 @@ export default function Sidebar({ open, onClose }) {
 
   const badgeFor = (to) => {
     if (to === '/reports' && highPriorityCount > 0)
-      return { value: highPriorityCount > 9 ? '9+' : highPriorityCount, tone: 'bg-[#D64545]' }
+      return { value: highPriorityCount > 9 ? '9+' : highPriorityCount, tone: 'bg-danger' }
     if (to === '/model-requests' && waitingModelRequests > 0)
-      return { value: waitingModelRequests > 9 ? '9+' : waitingModelRequests, tone: 'bg-[#E8A020]' }
+      return { value: waitingModelRequests > 9 ? '9+' : waitingModelRequests, tone: 'bg-pending' }
     if (to === '/payment-verification' && proofsUnderReview > 0)
-      return { value: proofsUnderReview > 9 ? '9+' : proofsUnderReview, tone: 'bg-[#E8A020]' }
+      return { value: proofsUnderReview > 9 ? '9+' : proofsUnderReview, tone: 'bg-pending' }
     return null
   }
 
@@ -112,7 +116,7 @@ export default function Sidebar({ open, onClose }) {
     <>
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-[#3B2314]/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-secondary/50 lg:hidden"
           onClick={onClose}
         />
       )}
@@ -162,7 +166,7 @@ export default function Sidebar({ open, onClose }) {
                           expanded ? 'px-2.5' : 'px-2.5 lg:justify-center lg:px-2'
                         } ${
                           isActive
-                            ? 'bg-[#8B5A2B] font-semibold text-white shadow-card ring-1 ring-white/10'
+                            ? 'bg-primary font-semibold text-white shadow-card ring-1 ring-white/10'
                             : 'text-[#C4A882]/90 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8C99A]/70'
                         }`
                       }
@@ -215,7 +219,7 @@ export default function Sidebar({ open, onClose }) {
             {menuOpen && (
               <div
                 role="menu"
-                className="absolute bottom-full left-0 z-50 mb-2 w-60 origin-bottom-left overflow-hidden rounded-2xl border border-border bg-white shadow-pop"
+                className="absolute bottom-full left-0 z-50 mb-2 w-60 origin-bottom-left overflow-hidden rounded-2xl border border-border bg-card shadow-pop"
               >
                 <div className="flex items-center gap-3 border-b border-canvas px-4 py-3">
                   <AvatarInitials name={profile?.full_name} email={profile?.email} />
@@ -229,6 +233,33 @@ export default function Sidebar({ open, onClose }) {
                   </div>
                 </div>
                 <div className="py-1">
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={isDark}
+                    aria-label="Dark mode"
+                    onClick={toggleTheme}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-muted transition-colors hover:bg-canvas hover:text-ink"
+                  >
+                    {isDark ? (
+                      <Moon size={16} strokeWidth={2} />
+                    ) : (
+                      <Sun size={16} strokeWidth={2} />
+                    )}
+                    <span className="flex-1">Dark mode</span>
+                    <span
+                      aria-hidden="true"
+                      className={`relative h-4 w-7 shrink-0 rounded-full border transition-colors ${
+                        isDark ? 'border-primary bg-primary' : 'border-border bg-faint'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-[2px] h-[10px] w-[10px] rounded-full bg-card shadow transition-all ${
+                          isDark ? 'left-[15px]' : 'left-[2px]'
+                        }`}
+                      />
+                    </span>
+                  </button>
                   <Link
                     to="/settings"
                     role="menuitem"

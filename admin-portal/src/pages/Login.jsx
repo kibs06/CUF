@@ -53,7 +53,7 @@ export default function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-secondary outline-none focus:border-primary"
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-secondary outline-none focus:border-primary"
               placeholder="admin@cufmai.ph"
             />
           </div>
@@ -64,7 +64,7 @@ export default function Login() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-secondary outline-none focus:border-primary"
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-secondary outline-none focus:border-primary"
               placeholder="••••••••"
             />
           </div>
@@ -102,7 +102,7 @@ export default function Login() {
                   setSocialPending(null)
                 }
               }}
-              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 font-medium text-secondary hover:bg-surface disabled:opacity-60"
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 font-medium text-secondary hover:bg-surface disabled:opacity-60"
             >
               {socialPending === provider ? 'Redirecting…' : label}
             </button>

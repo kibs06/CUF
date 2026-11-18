@@ -4,7 +4,7 @@ export default function Skeleton({ className = '' }) {
 
 export function StatCardSkeleton() {
   return (
-    <div className="rounded-xl border border-border bg-white px-4 py-3.5">
+    <div className="rounded-xl border border-border bg-card px-4 py-3.5">
       <Skeleton className="h-3 w-20" />
       <Skeleton className="mt-3 h-6 w-24" />
       <Skeleton className="mt-2.5 h-3 w-28" />
@@ -14,7 +14,7 @@ export function StatCardSkeleton() {
 
 export function TableSkeleton({ rows = 5, cols = 5 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="border-b border-border bg-canvas/60 px-4 py-2.5">
         <div className="flex gap-4">
           {Array.from({ length: cols }).map((_, j) => (

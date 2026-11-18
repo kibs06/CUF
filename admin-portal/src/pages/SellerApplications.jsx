@@ -80,12 +80,12 @@ export default function SellerApplications() {
             className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
               tab === t.key
                 ? 'bg-secondary text-white'
-                : 'border border-border bg-white text-muted hover:bg-canvas'
-            } ${t.key === 'pending' && pendingCount > 0 ? 'ring-2 ring-[#E8A020]/40' : ''}`}
+                : 'border border-border bg-card text-muted hover:bg-canvas'
+            } ${t.key === 'pending' && pendingCount > 0 ? 'ring-2 ring-pending/40' : ''}`}
           >
             {t.label}
             {t.key === 'pending' && pendingCount > 0 && (
-              <span className="ml-2 rounded-full bg-[#E8A020] px-1.5 py-0.5 text-xs text-white">
+              <span className="ml-2 rounded-full bg-pending px-1.5 py-0.5 text-xs text-white">
                 {pendingCount}
               </span>
             )}
@@ -96,7 +96,7 @@ export default function SellerApplications() {
       {isLoading && <TableSkeleton cols={5} rows={6} />}
 
       {isError && (
-        <div className="rounded-xl border border-border bg-white p-8 text-center text-muted">
+        <div className="rounded-xl border border-border bg-card p-8 text-center text-muted">
           <p className="text-sm text-error">{error.message}</p>
         </div>
       )}
@@ -114,7 +114,7 @@ export default function SellerApplications() {
           {data.map((row) => (
             <div
               key={row.id}
-              className="admin-3d-listcard admin-list-item admin-list-card flex items-center justify-between rounded-xl border border-border bg-white p-4"
+              className="admin-3d-listcard admin-list-item admin-list-card flex items-center justify-between rounded-xl border border-border bg-card p-4"
             >
               <div className="flex items-center gap-3">
                 <AvatarInitials name={row.full_name} email={row.email} />
@@ -133,7 +133,7 @@ export default function SellerApplications() {
                     <button
                       type="button"
                       onClick={() => setReviewTarget(row)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary/10"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary/10"
                     >
                       <Eye size={13} />
                       Review
@@ -150,7 +150,7 @@ export default function SellerApplications() {
                       type="button"
                       disabled={loadingId === row.id}
                       onClick={() => setRejectTarget(row)}
-                      className="rounded-lg border border-[#D64545] px-3 py-1.5 text-xs font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
+                      className="rounded-lg border border-danger px-3 py-1.5 text-xs font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
                     >
                       Reject
                     </button>
@@ -192,7 +192,7 @@ export default function SellerApplications() {
               type="button"
               onClick={handleReject}
               disabled={loadingId === rejectTarget?.id}
-              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
+              className="rounded-xl border border-danger px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
             >
               Confirm Reject
             </button>
@@ -209,7 +209,7 @@ export default function SellerApplications() {
           value={rejectReason}
           onChange={(e) => setRejectReason(e.target.value)}
           rows={3}
-          className="w-full rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+          className="w-full rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
           placeholder="Optional note for internal records…"
         />
       </Modal>

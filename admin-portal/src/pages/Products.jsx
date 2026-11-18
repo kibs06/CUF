@@ -84,7 +84,7 @@ export default function Products() {
             placeholder="Search products..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-border bg-white py-2.5 pl-9 pr-4 text-sm text-ink placeholder-[#6B5C4E] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+            className="w-full rounded-xl border border-border bg-card py-2.5 pl-9 pr-4 text-sm text-ink placeholder-muted outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
 
@@ -92,7 +92,7 @@ export default function Products() {
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="min-w-[140px] rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
+          className="min-w-[140px] rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink outline-none focus:border-primary"
         >
           <option value="">All Categories</option>
           {categories.map((c) => (
@@ -106,7 +106,7 @@ export default function Products() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="min-w-[130px] rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
+          className="min-w-[130px] rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink outline-none focus:border-primary"
         >
           <option value="">All Status</option>
           <option value="active">Active</option>
@@ -114,7 +114,7 @@ export default function Products() {
         </select>
 
         {/* Fix #6: Connected pill toggle with divider */}
-        <div className="flex overflow-hidden rounded-xl border border-border bg-white">
+        <div className="flex overflow-hidden rounded-xl border border-border bg-card">
           <button
             type="button"
             onClick={() => setView('grid')}
@@ -127,7 +127,7 @@ export default function Products() {
             <LayoutGrid size={15} />
             Grid
           </button>
-          <div className="w-px bg-[#D9D0C7]" />
+          <div className="w-px bg-border" />
           <button
             type="button"
             onClick={() => setView('list')}
@@ -147,7 +147,7 @@ export default function Products() {
       {isLoading && (
         <div className="space-y-4">
           {[1, 2].map((i) => (
-            <div key={i} className="overflow-hidden rounded-xl border border-border bg-white">
+            <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
               <div className="h-40 animate-pulse bg-faint" />
               <div className="grid grid-cols-4 gap-4 p-4">
                 {[1, 2, 3, 4].map((j) => (
@@ -167,7 +167,7 @@ export default function Products() {
 
       {/* Error */}
       {isError && (
-        <div className="rounded-xl border border-border bg-white p-8 text-center">
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
           <p className="text-sm text-error">{error.message}</p>
         </div>
       )}
@@ -227,7 +227,7 @@ export default function Products() {
               type="button"
               onClick={handleDelete}
               disabled={actionId === deleteTarget?.id}
-              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
+              className="rounded-xl border border-danger px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
             >
               Deactivate
             </button>

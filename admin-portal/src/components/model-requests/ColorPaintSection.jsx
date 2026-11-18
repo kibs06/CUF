@@ -72,16 +72,16 @@ function PaintRow({ colorName, savedHex, onSave, saving, saveError, onRemove, re
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-surface bg-card px-3 py-2">
       <span
         className="h-6 w-6 shrink-0 rounded-full border border-black/10"
         style={{ backgroundColor: shown }}
         title={savedHex ? 'Confirmed paint' : 'Prefill guess — confirm it'}
       />
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#3B2314]">
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
         {colorName}
         {!savedHex && (
-          <span className="ml-2 text-[11px] font-normal text-[#6B5C4E]">guess — confirm</span>
+          <span className="ml-2 text-[11px] font-normal text-muted">guess — confirm</span>
         )}
       </span>
       <input
@@ -92,7 +92,7 @@ function PaintRow({ colorName, savedHex, onSave, saving, saveError, onRemove, re
           setText(e.target.value)
           commit(e.target.value)
         }}
-        className="h-8 w-10 shrink-0 cursor-pointer rounded-lg border border-[#D9D0C7] bg-white p-1"
+        className="h-8 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-card p-1"
       />
       <input
         aria-label={`Hex for ${colorName}`}
@@ -104,7 +104,7 @@ function PaintRow({ colorName, savedHex, onSave, saving, saveError, onRemove, re
           if (e.key === 'Enter') commit(e.target.value.trim())
         }}
         placeholder={guessPaintHex(colorName).toLowerCase()}
-        className="w-24 shrink-0 rounded-lg border border-[#D9D0C7] bg-white px-2 py-1.5 font-mono text-xs text-[#3B2314] outline-none focus:border-[#8B5A2B]"
+        className="w-24 shrink-0 rounded-lg border border-border bg-card px-2 py-1.5 font-mono text-xs text-ink outline-none focus:border-primary"
       />
       {/* Confirming is an explicit click: Done only closes the dialog, so an
           untouched "guess — confirm" row must never look savable-by-Done. */}
@@ -113,14 +113,14 @@ function PaintRow({ colorName, savedHex, onSave, saving, saveError, onRemove, re
           type="button"
           disabled={saving || !isPaintHex(text)}
           onClick={() => commit(text.trim())}
-          className="shrink-0 rounded-lg bg-[#8B5A2B] px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#6B4423] disabled:opacity-50"
+          className="shrink-0 rounded-lg bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#6B4423] disabled:opacity-50"
         >
           {saving ? <Loader2 size={13} className="animate-spin" /> : 'Confirm'}
         </button>
       ) : (
         <span className="flex shrink-0 items-center justify-end gap-2 text-[11px]">
           {saving ? (
-            <Loader2 size={13} className="animate-spin text-[#8B5A2B]" />
+            <Loader2 size={13} className="animate-spin text-primary" />
           ) : justSaved || savedHex ? (
             <span className="flex items-center gap-1 text-green-700">
               <Check size={13} /> Saved
@@ -144,8 +144,8 @@ function PaintRow({ colorName, savedHex, onSave, saving, saveError, onRemove, re
               }}
               className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
                 confirming
-                  ? 'bg-[#D64545] text-white hover:bg-[#B83535]'
-                  : 'text-[#D64545] hover:bg-red-50'
+                  ? 'bg-danger text-white hover:bg-[#B83535]'
+                  : 'text-danger hover:bg-red-50'
               }`}
             >
               {removing ? (
@@ -160,7 +160,7 @@ function PaintRow({ colorName, savedHex, onSave, saving, saveError, onRemove, re
         </span>
       )}
       {rowError && (
-        <span className="basis-full text-[11px] break-words text-[#D64545]">
+        <span className="basis-full text-[11px] break-words text-danger">
           {rowError.message}
           {rowError.detail && rowError.detail !== rowError.message ? ` — ${rowError.detail}` : ''}
         </span>
@@ -179,13 +179,13 @@ export default function ColorPaintSection({ productId }) {
   // publish this dialog exists for.
   if (!productId) return null
   if (isLoading) {
-    return <p className="mt-3 text-xs text-[#6B5C4E]">Loading colours…</p>
+    return <p className="mt-3 text-xs text-muted">Loading colours…</p>
   }
   if (isError || !data || data.colors.length === 0) return null
 
   return (
     <div className="mt-4">
-      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
         3D paint per colour
       </p>
       <div className="grid gap-2">
@@ -203,14 +203,14 @@ export default function ColorPaintSection({ productId }) {
           />
         ))}
       </div>
-      <p className="mt-1 text-xs text-[#6B5C4E]">
+      <p className="mt-1 text-xs text-muted">
         The app tints the one model with this hex when the shopper taps the colour.
         Unconfirmed colours show the model as-authored. Dots ringed “guess” are the
         app's own swatch starting point — confirm each one. Removing a paint
         returns the colour to as-authored, in the app and the preview chips.
       </p>
       {sectionError && (
-        <p className="mt-1 text-xs text-[#D64545]">
+        <p className="mt-1 text-xs text-danger">
           {sectionError.message}
           {sectionError.detail && sectionError.detail !== sectionError.message
             ? ` — ${sectionError.detail}`

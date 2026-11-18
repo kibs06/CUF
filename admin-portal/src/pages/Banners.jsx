@@ -219,7 +219,7 @@ export default function Banners() {
       {isLoading && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center gap-4 rounded-xl border border-border bg-white p-4">
+            <div key={i} className="flex items-center gap-4 rounded-xl border border-border bg-card p-4">
               <div className="h-20 w-32 animate-pulse rounded-xl bg-faint" />
               <div className="flex-1 space-y-2">
                 <div className="h-4 w-1/3 animate-pulse rounded bg-faint" />
@@ -232,7 +232,7 @@ export default function Banners() {
 
       {/* Error */}
       {isError && (
-        <div className="rounded-xl border border-border bg-white p-8 text-center">
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
           <p className="text-sm text-error">{error.message}</p>
         </div>
       )}
@@ -254,7 +254,7 @@ export default function Banners() {
             return (
               <div
                 key={banner.id}
-                className={`admin-3d-listcard admin-list-item admin-list-card flex items-center gap-4 rounded-xl border bg-white p-4 ${
+                className={`admin-3d-listcard admin-list-item admin-list-card flex items-center gap-4 rounded-xl border bg-card p-4 ${
                   banner.is_active ? 'border-border' : 'border-border opacity-60'
                 }`}
               >
@@ -288,7 +288,7 @@ export default function Banners() {
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <ImageIcon size={20} className="text-[#D9D0C7]" />
+                      <ImageIcon size={20} className="text-border" />
                     </div>
                   )}
                 </div>
@@ -394,15 +394,15 @@ export default function Banners() {
             </p>
             <div
               onClick={() => fileRef.current?.click()}
-              className="flex h-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-canvas transition-colors hover:border-[#8B5A2B]/40"
+              className="flex h-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-canvas transition-colors hover:border-primary/40"
             >
               {imagePreview ? (
                 <img src={imagePreview} alt="Preview" className="h-full w-full rounded-xl object-cover" />
               ) : (
                 <>
-                  <ImageIcon size={32} className="mb-2 text-[#D9D0C7]" />
+                  <ImageIcon size={32} className="mb-2 text-border" />
                   <p className="text-sm text-muted">Click to upload</p>
-                  <p className="text-xs text-[#D9D0C7]">PNG, JPG, WebP</p>
+                  <p className="text-xs text-border">PNG, JPG, WebP</p>
                 </>
               )}
             </div>
@@ -425,7 +425,7 @@ export default function Banners() {
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               placeholder="e.g. CRAFTED FOR FALL"
-              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
@@ -437,7 +437,7 @@ export default function Banners() {
               value={form.eyebrow_text}
               onChange={(e) => setForm((f) => ({ ...f, eyebrow_text: e.target.value }))}
               placeholder="e.g. NEW ARRIVALS"
-              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
@@ -449,7 +449,7 @@ export default function Banners() {
               value={form.cta_label}
               onChange={(e) => setForm((f) => ({ ...f, cta_label: e.target.value }))}
               placeholder="e.g. Shop Now"
-              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
@@ -460,7 +460,7 @@ export default function Banners() {
               <select
                 value={form.link_type}
                 onChange={(e) => setForm((f) => ({ ...f, link_type: e.target.value, link_value: '' }))}
-                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink outline-none focus:border-primary"
               >
                 {LINK_TYPES.map((lt) => (
                   <option key={lt.value} value={lt.value}>{lt.label}</option>
@@ -476,7 +476,7 @@ export default function Banners() {
                 <select
                   value={form.link_value}
                   onChange={(e) => setForm((f) => ({ ...f, link_value: e.target.value }))}
-                  className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
+                  className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink outline-none focus:border-primary"
                 >
                   <option value="">Select category</option>
                   {CATEGORIES.filter((c) => c !== 'All').map((c) => (
@@ -496,7 +496,7 @@ export default function Banners() {
                   value={form.link_value}
                   onChange={(e) => setForm((f) => ({ ...f, link_value: e.target.value }))}
                   placeholder="Product UUID"
-                  className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+                  className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                 />
               </div>
             )}
@@ -511,7 +511,7 @@ export default function Banners() {
                   value={form.link_value}
                   onChange={(e) => setForm((f) => ({ ...f, link_value: e.target.value }))}
                   placeholder="https://..."
-                  className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+                  className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                 />
               </div>
             )}
@@ -523,11 +523,11 @@ export default function Banners() {
               type="button"
               onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
               className={`relative h-6 w-11 rounded-full transition-colors ${
-                form.is_active ? 'bg-secondary' : 'bg-[#D9D0C7]'
+                form.is_active ? 'bg-secondary' : 'bg-border'
               }`}
             >
               <span
-                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-card transition-transform ${
                   form.is_active ? 'translate-x-5.5 left-0.5' : 'left-0.5'
                 }`}
                 style={{ transform: form.is_active ? 'translateX(22px)' : 'translateX(2px)' }}
@@ -546,7 +546,7 @@ export default function Banners() {
                 type="datetime-local"
                 value={form.starts_at}
                 onChange={(e) => setForm((f) => ({ ...f, starts_at: e.target.value }))}
-                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink outline-none focus:border-primary"
               />
             </div>
             <div>
@@ -555,7 +555,7 @@ export default function Banners() {
                 type="datetime-local"
                 value={form.ends_at}
                 onChange={(e) => setForm((f) => ({ ...f, ends_at: e.target.value }))}
-                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink outline-none focus:border-primary"
               />
             </div>
           </div>
@@ -584,7 +584,7 @@ export default function Banners() {
               type="button"
               onClick={handleDelete}
               disabled={deleteBanner.isPending}
-              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
+              className="rounded-xl border border-danger px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
             >
               {deleteBanner.isPending ? 'Deleting…' : 'Delete'}
             </button>

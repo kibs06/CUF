@@ -202,7 +202,7 @@ export default function Users() {
 
   if (isError) {
     return (
-      <div className="rounded-xl border border-error/20 bg-white p-10 text-center">
+      <div className="rounded-xl border border-error/20 bg-card p-10 text-center">
         <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-errorSoft text-error">
           <AlertTriangle size={20} />
         </span>
@@ -224,7 +224,7 @@ export default function Users() {
       {/* Account summary */}
       <section
         aria-label="Account summary"
-        className="overflow-hidden rounded-xl border border-border bg-white"
+        className="overflow-hidden rounded-xl border border-border bg-card"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -241,7 +241,7 @@ export default function Users() {
             }}
             disabled={isRefreshing}
             aria-label="Refresh accounts"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-white text-[12px] font-semibold text-secondary transition-colors hover:bg-canvas disabled:opacity-50 sm:w-auto sm:px-2.5"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card text-[12px] font-semibold text-secondary transition-colors hover:bg-canvas disabled:opacity-50 sm:w-auto sm:px-2.5"
           >
             <RefreshCw
               size={13}
@@ -279,7 +279,7 @@ export default function Users() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         {/* Directory */}
-        <section className="overflow-hidden rounded-xl border border-border bg-white">
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="border-b border-border px-4 py-4 sm:px-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="w-full sm:w-auto">
@@ -308,7 +308,7 @@ export default function Users() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Search accounts"
-                    className="h-9 w-full rounded-xl border border-border bg-white pl-9 pr-9 text-[13px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                    className="h-9 w-full rounded-xl border border-border bg-card pl-9 pr-9 text-[13px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
                   />
                   {search ? (
                     <button
@@ -341,7 +341,7 @@ export default function Users() {
                     id="user-sort"
                     value={sort}
                     onChange={(event) => setSort(event.target.value)}
-                    className="h-9 w-full appearance-none rounded-xl border border-border bg-white pl-8 pr-7 text-[12px] font-semibold text-secondary outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+                    className="h-9 w-full appearance-none rounded-xl border border-border bg-card pl-8 pr-7 text-[12px] font-semibold text-secondary outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
                   >
                     {SORT_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -374,8 +374,8 @@ export default function Users() {
                       aria-pressed={active}
                       className={`inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[12px] font-semibold transition-colors ${
                         active
-                          ? 'bg-white text-ink shadow-sm ring-1 ring-border'
-                          : 'text-muted hover:bg-white/60 hover:text-ink'
+                          ? 'bg-card text-ink shadow-sm ring-1 ring-border'
+                          : 'text-muted hover:bg-card/60 hover:text-ink'
                       }`}
                     >
                       <Icon
@@ -386,7 +386,7 @@ export default function Users() {
                       {tab.label}
                       <span
                         className={`rounded-full px-1.5 py-0.5 font-mono text-[11px] font-semibold ${
-                          active ? 'bg-canvas text-secondary' : 'bg-white text-muted'
+                          active ? 'bg-canvas text-secondary' : 'bg-card text-muted'
                         }`}
                       >
                         {tab.count}
@@ -403,7 +403,7 @@ export default function Users() {
                 <div
                   role="group"
                   aria-label="Filter by status"
-                  className="flex flex-wrap items-center gap-0.5 rounded-xl border border-border bg-white p-1"
+                  className="flex flex-wrap items-center gap-0.5 rounded-xl border border-border bg-card p-1"
                 >
                   {STATUS_TABS.map((status) => {
                     const active = statusFilter === status.key
@@ -424,7 +424,7 @@ export default function Users() {
                       >
                         <span
                           className={`h-1.5 w-1.5 rounded-full ${
-                            active ? 'bg-white/80' : status.dot
+                            active ? 'bg-card/80' : status.dot
                           }`}
                           aria-hidden="true"
                         />
@@ -476,7 +476,7 @@ export default function Users() {
                     onClick={() => setPage((current) => Math.max(1, current - 1))}
                     disabled={safePage === 1}
                     aria-label="Previous page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <ChevronLeft size={14} />
                   </button>
@@ -488,7 +488,7 @@ export default function Users() {
                     onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
                     disabled={safePage === pageCount}
                     aria-label="Next page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <ChevronRight size={14} />
                   </button>
@@ -500,7 +500,7 @@ export default function Users() {
 
         {/* Context rail */}
         <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-          <section className="rounded-xl border border-border bg-white p-4">
+          <section className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-[14px] font-bold text-ink">Account mix</h2>
@@ -552,7 +552,7 @@ export default function Users() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-border bg-white p-4">
+          <section className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-start gap-3">
               <span
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
@@ -635,7 +635,7 @@ export default function Users() {
 
 function SummaryStat({ label, value, caption, alert = false }) {
   return (
-    <div className="bg-white px-4 py-4">
+    <div className="bg-card px-4 py-4">
       <p className="text-[12px] font-medium text-muted">{label}</p>
       <p
         className={`mt-1.5 font-mono text-[24px] font-semibold leading-none tracking-tight tnum ${
@@ -683,28 +683,28 @@ function EmptyDirectory({ onClear }) {
 function UsersSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="h-[116px] animate-pulse rounded-xl border border-border bg-white" />
+      <div className="h-[116px] animate-pulse rounded-xl border border-border bg-card" />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="overflow-hidden rounded-xl border border-border bg-white">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="border-b border-border p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="h-5 w-28 animate-pulse rounded bg-[#E8DDD5]" />
+              <div className="h-5 w-28 animate-pulse rounded bg-sand" />
               <div className="flex gap-2">
-                <div className="h-9 w-52 animate-pulse rounded-lg bg-[#E8DDD5]" />
-                <div className="h-9 w-36 animate-pulse rounded-lg bg-[#E8DDD5]" />
+                <div className="h-9 w-52 animate-pulse rounded-lg bg-sand" />
+                <div className="h-9 w-36 animate-pulse rounded-lg bg-sand" />
               </div>
             </div>
-            <div className="mt-3 h-9 w-full animate-pulse rounded-lg bg-[#E8DDD5]" />
+            <div className="mt-3 h-9 w-full animate-pulse rounded-lg bg-sand" />
           </div>
           <div className="divide-y divide-border">
             {Array.from({ length: 7 }).map((_, index) => (
               <div key={index} className="flex items-center gap-3 px-4 py-3 md:px-5">
-                <div className="h-10 w-10 shrink-0 animate-pulse rounded-xl bg-[#E8DDD5]" />
+                <div className="h-10 w-10 shrink-0 animate-pulse rounded-xl bg-sand" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3 w-28 animate-pulse rounded bg-[#E8DDD5]" />
-                  <div className="h-2.5 w-40 animate-pulse rounded bg-[#E8DDD5]" />
+                  <div className="h-3 w-28 animate-pulse rounded bg-sand" />
+                  <div className="h-2.5 w-40 animate-pulse rounded bg-sand" />
                 </div>
-                <div className="h-5 w-16 animate-pulse rounded-full bg-[#E8DDD5]" />
+                <div className="h-5 w-16 animate-pulse rounded-full bg-sand" />
               </div>
             ))}
           </div>
@@ -713,7 +713,7 @@ function UsersSkeleton() {
           {[0, 1].map((index) => (
             <div
               key={index}
-              className="h-36 animate-pulse rounded-xl border border-border bg-white"
+              className="h-36 animate-pulse rounded-xl border border-border bg-card"
             />
           ))}
         </div>

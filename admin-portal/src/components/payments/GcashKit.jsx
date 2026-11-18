@@ -15,7 +15,7 @@ export const EASE = 'ease-[cubic-bezier(0.32,0.72,0,1)]'
 export const FIELD_CLASS =
   'h-11 w-full rounded-xl border border-border bg-canvas px-3.5 text-sm text-ink outline-none ' +
   `transition-[border-color,box-shadow,background-color] duration-300 ${EASE} ` +
-  'placeholder:text-muted/50 focus:border-primary focus:bg-white ' +
+  'placeholder:text-muted/50 focus:border-primary focus:bg-card ' +
   'focus:shadow-[0_0_0_3px_rgba(139,90,43,0.12)]'
 
 /** Staggered entry wrapper. Motion lives in `.gcash-rise` in index.css. */
@@ -70,12 +70,12 @@ export function Panel({
   return (
     <Rise
       delay={delay}
-      className={`rounded-[28px] bg-white/55 p-1.5 ring-1 ring-secondary/[0.07] shadow-[0_20px_44px_-34px_rgba(59,35,20,0.55)] ${className}`}
+      className={`rounded-[28px] bg-card/55 p-1.5 ring-1 ring-secondary/[0.07] shadow-[0_20px_44px_-34px_rgba(59,35,20,0.55)] ${className}`}
     >
       <section
         className={
           dark
-            ? `rounded-[22px] border border-secondary/20 bg-[linear-gradient(170deg,#2E1C10_0%,#3B2314_100%)] p-6 text-[#F5F0EB] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] ${innerClassName}`
+            ? `rounded-[22px] border border-secondary/20 bg-[linear-gradient(170deg,#2E1C10_0%,#3B2314_100%)] p-6 text-surface shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] ${innerClassName}`
             : `rounded-[22px] border border-border/70 bg-[linear-gradient(155deg,#ffffff_0%,#fffdfa_58%,#f8f2ea_100%)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(59,35,20,0.05)] ${innerClassName}`
         }
       >
@@ -159,8 +159,8 @@ const ACTION_TONES = {
     'bg-primary text-white hover:bg-primaryDeep shadow-[0_10px_22px_-16px_rgba(111,69,32,0.9)]',
   accent: 'bg-accent text-white hover:bg-accent/90',
   success: 'bg-[#4F6B35] text-white hover:bg-[#445C2D]',
-  ghost: 'border border-border bg-white/60 text-ink hover:border-primary/40 hover:bg-surface',
-  danger: 'border border-error/35 bg-white/60 text-error hover:bg-errorSoft',
+  ghost: 'border border-border bg-card/60 text-ink hover:border-primary/40 hover:bg-surface',
+  danger: 'border border-error/35 bg-card/60 text-error hover:bg-errorSoft',
 }
 
 /**

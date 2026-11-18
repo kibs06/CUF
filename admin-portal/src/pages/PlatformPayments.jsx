@@ -15,12 +15,12 @@ import EmptyState from '../components/ui/EmptyState.jsx'
 const NUMBER_PATTERN = /^[0-9+][0-9 \-]{6,19}$/
 
 const BTN =
-  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 text-[12px] font-semibold text-secondary transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[12px] font-semibold text-secondary transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50'
 const BTN_PRIMARY =
   'inline-flex h-9 items-center gap-1.5 rounded-lg bg-secondary px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-primaryDeep disabled:cursor-not-allowed disabled:opacity-50'
 
 const INPUT =
-  'h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors placeholder:text-muted/60 focus:border-primary focus:ring-2 focus:ring-primary/15'
+  'h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors placeholder:text-muted/60 focus:border-primary focus:ring-2 focus:ring-primary/15'
 const INPUT_MONO = `${INPUT} font-mono tracking-wide`
 
 /** Label, control, hint — the same field shape the other forms use. */
@@ -151,7 +151,7 @@ export default function PlatformPayments() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.95fr)]">
         <div className="space-y-4">
-          <section className="overflow-hidden rounded-xl border border-border bg-white">
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="border-b border-border px-4 py-3.5">
               <h2 className="text-[15px] font-bold text-ink">Where the money lands</h2>
               <p className="mt-0.5 text-[12px] text-muted">
@@ -213,7 +213,7 @@ export default function PlatformPayments() {
                     id="gcash-qr"
                     type="file"
                     accept="image/*"
-                    className="w-full text-[11.5px] text-muted file:mr-2 file:rounded-md file:border-0 file:bg-white file:px-2 file:py-1 file:text-[11px] file:font-semibold file:text-ink"
+                    className="w-full text-[11.5px] text-muted file:mr-2 file:rounded-md file:border-0 file:bg-card file:px-2 file:py-1 file:text-[11px] file:font-semibold file:text-ink"
                     onChange={(e) => setQrFile(e.target.files?.[0] ?? null)}
                   />
                 </div>
@@ -245,7 +245,7 @@ export default function PlatformPayments() {
             </form>
           </section>
 
-          <section className="overflow-hidden rounded-xl border border-border bg-white">
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3.5">
               <div>
                 <h2 className="text-[15px] font-bold text-ink">Receiving history</h2>
@@ -309,7 +309,7 @@ export default function PlatformPayments() {
             )}
           </section>
 
-          <section className="overflow-hidden rounded-xl border border-border bg-white">
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="border-b border-border px-4 py-3.5">
               <h2 className="text-[15px] font-bold text-ink">What each store receives</h2>
               <p className="mt-0.5 text-[12px] text-muted">
@@ -325,7 +325,7 @@ export default function PlatformPayments() {
                   hint={`${(Number(fee.bps) / 100).toFixed(2)}% of goods value`}
                   htmlFor="fee-bps"
                 >
-                  <div className="flex h-9 items-center rounded-lg border border-border bg-white px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
+                  <div className="flex h-9 items-center rounded-lg border border-border bg-card px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
                     <input
                       id="fee-bps"
                       type="number"
@@ -344,7 +344,7 @@ export default function PlatformPayments() {
 
               <div className="w-40">
                 <Field label="Delivery fee" hint="Charged once per order" htmlFor="fee-delivery">
-                  <div className="flex h-9 items-center rounded-lg border border-border bg-white px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
+                  <div className="flex h-9 items-center rounded-lg border border-border bg-card px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
                     <span className="mr-1 font-mono text-[12px] text-muted">₱</span>
                     <input
                       id="fee-delivery"
@@ -372,7 +372,7 @@ export default function PlatformPayments() {
         </div>
 
         <aside className="space-y-4">
-          <section className="overflow-hidden rounded-xl border border-border bg-white">
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="border-b border-border px-4 py-3.5">
               <h2 className="text-[15px] font-bold text-ink">Customer view</h2>
               <p className="mt-0.5 text-[12px] text-muted">
@@ -393,7 +393,7 @@ export default function PlatformPayments() {
                 </p>
 
                 <div className="mt-4 flex items-center gap-3">
-                  <div className="flex h-[68px] w-[68px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
+                  <div className="flex h-[68px] w-[68px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-card">
                     {previewQr ? (
                       <img
                         src={previewQr}

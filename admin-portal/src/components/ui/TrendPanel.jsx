@@ -26,7 +26,7 @@ export default function TrendPanel({
   const hasComparison = data.some((entry) => entry.previous != null)
 
   return (
-    <section className="rounded-xl border border-border bg-white p-4">
+    <section className="rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="text-[15px] font-bold text-ink">{title}</h2>

@@ -71,7 +71,7 @@ export default function Settings() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       {/* Admin Profile section */}
-      <div className="overflow-hidden rounded-xl border border-border bg-white">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex items-center gap-2 border-b border-border px-6 py-4">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-canvas">
             <User size={16} className="text-primary" />
@@ -87,7 +87,7 @@ export default function Settings() {
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
           <div>
@@ -115,7 +115,7 @@ export default function Settings() {
       <MfaCard />
 
       {/* Change Password section */}
-      <div className="overflow-hidden rounded-xl border border-border bg-white">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex items-center gap-2 border-b border-border px-6 py-4">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-canvas">
             <Lock size={16} className="text-primary" />
@@ -131,7 +131,7 @@ export default function Settings() {
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
           <div>
@@ -142,7 +142,7 @@ export default function Settings() {
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
           <button

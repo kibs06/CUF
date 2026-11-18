@@ -88,10 +88,10 @@ function ShelfSummary({ modelled, arCount }) {
   const total = modelled.length
   const withAr = Math.min(arCount, total)
   return (
-    <div className="relative mb-4 overflow-hidden rounded-3xl bg-[#3B2314] px-6 py-5 text-white shadow-[0_18px_40px_-24px_rgba(59,35,20,0.6)]">
+    <div className="relative mb-4 overflow-hidden rounded-3xl bg-secondary px-6 py-5 text-white shadow-[0_18px_40px_-24px_rgba(59,35,20,0.6)]">
       {/* Warm light leaks — depth without leaving the palette. */}
       <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-secondary/40 blur-3xl" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/3 h-48 w-48 rounded-full bg-[#E8A020]/20 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/3 h-48 w-48 rounded-full bg-pending/20 blur-3xl" />
       <div className="relative flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#E8CFA8]">
@@ -382,7 +382,7 @@ export default function ModelRequests() {
           </p>
         </div>
         {counts.waiting > 0 && (
-          <div className="rounded-xl border border-[#E8A020]/40 bg-[#E8A020]/10 px-4 py-2.5">
+          <div className="rounded-xl border border-pending/40 bg-pending/10 px-4 py-2.5">
             <p className="text-[12px] text-muted">Waiting</p>
             <p className="font-display text-xl font-bold text-ink">{counts.waiting}</p>
           </div>
@@ -393,7 +393,7 @@ export default function ModelRequests() {
       <div
         role="tablist"
         aria-label="Request queues"
-        className="inline-flex flex-wrap gap-1 rounded-xl border border-border bg-white p-1"
+        className="inline-flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1"
       >
         {[...TABS, MODELS_TAB].map((t) => {
           const selected = tab === t.key
@@ -427,7 +427,7 @@ export default function ModelRequests() {
       {isLoading && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="space-y-3 rounded-xl border border-border bg-white p-5">
+            <div key={i} className="space-y-3 rounded-xl border border-border bg-card p-5">
               <div className="h-4 w-48 animate-pulse rounded bg-faint" />
               <div className="h-3 w-72 animate-pulse rounded bg-faint" />
               <div className="h-10 w-full animate-pulse rounded-xl bg-canvas" />
@@ -438,7 +438,7 @@ export default function ModelRequests() {
 
       {/* Error — the sentence first, the server's own words under it */}
       {isError && (
-        <div className="rounded-xl border border-border bg-white p-8 text-center">
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
           <p className="text-sm font-semibold text-error">{queueError.message}</p>
           {queueError.detail && queueError.detail !== queueError.message && (
             <p className="mt-2 text-xs text-muted">The server said: {queueError.detail}</p>
@@ -484,7 +484,7 @@ export default function ModelRequests() {
             return (
               <div
                 key={row.id}
-                className={`admin-3d-listcard admin-list-item admin-list-card rounded-xl border border-border bg-white p-5 ${
+                className={`admin-3d-listcard admin-list-item admin-list-card rounded-xl border border-border bg-card p-5 ${
                   isOpen ? 'border-l-4 border-l-[#E8A020]' : ''
                 }`}
               >
@@ -496,7 +496,7 @@ export default function ModelRequests() {
                         onClick={() => setPhotoTarget(row)}
                         title="View all product photos"
                         aria-label={`View photos of ${row.products?.name ?? 'this product'}`}
-                        className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-faint transition-shadow hover:ring-2 hover:ring-[#8B5A2B]/40"
+                        className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-faint transition-shadow hover:ring-2 hover:ring-primary/40"
                       >
                         <img
                           src={productImage}
@@ -554,7 +554,7 @@ export default function ModelRequests() {
                           type="button"
                           disabled={busyId === row.id}
                           onClick={() => handleClaim(row)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary/10 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary/10 disabled:opacity-50"
                         >
                           {busyId === row.id && claim.isPending ? (
                             <Loader2 size={13} className="animate-spin" />
@@ -577,7 +577,7 @@ export default function ModelRequests() {
                         type="button"
                         disabled={busyId === row.id}
                         onClick={() => setDeclineTarget(row)}
-                        className="rounded-lg border border-[#D64545] px-3 py-1.5 text-xs font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
+                        className="rounded-lg border border-danger px-3 py-1.5 text-xs font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
                       >
                         Decline
                       </button>
@@ -630,12 +630,12 @@ export default function ModelRequests() {
       {isModelsTab && modelledQuery.isLoading && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-3xl border border-[#E5DACA] bg-white p-5">
+            <div key={i} className="rounded-3xl border border-[#E5DACA] bg-card p-5">
               <div className="flex items-start gap-4">
-                <div className="h-20 w-20 animate-pulse rounded-xl bg-[#EFE3D3]" />
+                <div className="h-20 w-20 animate-pulse rounded-xl bg-sand" />
                 <div className="flex-1 space-y-2 pt-1">
-                  <div className="h-4 w-24 animate-pulse rounded-full bg-[#EFE3D3]" />
-                  <div className="h-4 w-40 animate-pulse rounded bg-[#EFE3D3]" />
+                  <div className="h-4 w-24 animate-pulse rounded-full bg-sand" />
+                  <div className="h-4 w-40 animate-pulse rounded bg-sand" />
                   <div className="h-3 w-32 animate-pulse rounded bg-canvas" />
                 </div>
               </div>
@@ -646,7 +646,7 @@ export default function ModelRequests() {
       )}
 
       {isModelsTab && modelledQuery.isError && (
-        <div className="rounded-xl border border-border bg-white p-8 text-center">
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
           <p className="text-sm font-semibold text-error">
             {describeError(modelledQuery.error, 'Could not load the products with 3D models.')
               .message}
@@ -680,7 +680,7 @@ export default function ModelRequests() {
                     setMenu({ entry, x: e.clientX, y: e.clientY, ar: arByProduct.get(entry.productId) ?? null })
                   }}
                   style={{ animationDelay: `${Math.min(index * 70, 420)}ms` }}
-                  className="shelf-card group relative overflow-hidden rounded-3xl border border-[#E5DACA] bg-white p-5 transition-all duration-200 hover:-translate-y-1 hover:border-[#8B5A2B]/50 hover:shadow-[0_18px_40px_-18px_rgba(59,35,20,0.35)] focus-within:border-[#8B5A2B]/50"
+                  className="shelf-card group relative overflow-hidden rounded-3xl border border-[#E5DACA] bg-card p-5 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:shadow-[0_18px_40px_-18px_rgba(59,35,20,0.35)] focus-within:border-primary/50"
                 >
                   {/* Warm top glow on hover — depth without leaving the palette. */}
                   <div
@@ -699,7 +699,7 @@ export default function ModelRequests() {
                         }
                         title="View all product photos"
                         aria-label={`View photos of ${entry.name}`}
-                        className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-[#EFE3D3] to-[#E2D2BD] ring-1 ring-[#E5DACA] transition-all hover:ring-2 hover:ring-[#8B5A2B]/50"
+                        className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-[#EFE3D3] to-[#E2D2BD] ring-1 ring-[#E5DACA] transition-all hover:ring-2 hover:ring-primary/50"
                       >
                         <img
                           src={image}
@@ -759,7 +759,7 @@ export default function ModelRequests() {
                       aria-label={`More actions for ${entry.name}`}
                       title="More actions"
                       onClick={(e) => setMenu({ entry, x: e.clientX, y: e.clientY, ar: arByProduct.get(entry.productId) ?? null })}
-                      className="shrink-0 rounded-xl border border-[#E5DACA] bg-canvas px-3 py-2 text-muted transition-colors hover:border-[#8B5A2B]/50 hover:bg-canvas hover:text-ink"
+                      className="shrink-0 rounded-xl border border-[#E5DACA] bg-canvas px-3 py-2 text-muted transition-colors hover:border-primary/50 hover:bg-canvas hover:text-ink"
                     >
                       <MoreVertical size={15} />
                     </button>
@@ -808,7 +808,7 @@ export default function ModelRequests() {
                 type="button"
                 onClick={handleDeleteConfirm}
                 disabled={del.isPending}
-                className="rounded-xl bg-[#D64545] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#B83535] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-danger px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#B83535] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {del.isPending ? 'Deleting…' : 'Delete file and row'}
               </button>
@@ -944,7 +944,7 @@ export default function ModelRequests() {
               // sentence on their notification bell, so an empty one would tell
               // them nothing while closing the ask for good.
               disabled={!declineReason.trim() || busyId === declineTarget?.id}
-              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-danger px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busyId === declineTarget?.id ? 'Declining…' : 'Send decline'}
             </button>
@@ -964,7 +964,7 @@ export default function ModelRequests() {
           value={declineReason}
           onChange={(e) => setDeclineReason(e.target.value)}
           rows={3}
-          className="w-full rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+          className="w-full rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
           placeholder="e.g. The photos did not show the shape of the toe clearly enough to model from."
         />
         {/* Live, and deliberately live: this is the sentence the seller's bell
@@ -1092,8 +1092,8 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
                 key={m.id}
                 className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
                   chosen
-                    ? 'border-[#8B5A2B] bg-secondary/5'
-                    : 'border-border bg-white'
+                    ? 'border-primary bg-secondary/5'
+                    : 'border-border bg-card'
                 }`}
               >
                 <button
@@ -1127,7 +1127,7 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
                         version: m.version,
                       })
                     }
-                    className="shrink-0 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary/10"
+                    className="shrink-0 rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary/10"
                   >
                     View 3D
                   </button>
@@ -1146,7 +1146,7 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={2}
-          className="w-full rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+          className="w-full rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
           placeholder="Anything they should know about the model…"
         />
         <p className="mt-1.5 text-[11px] leading-relaxed text-muted">{noteReachesSeller()}</p>

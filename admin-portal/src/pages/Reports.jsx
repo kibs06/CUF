@@ -267,7 +267,7 @@ export default function Reports() {
       </section>
 
       {/* Filters */}
-      <section aria-label="Filter reports" className="rounded-xl border border-border bg-white p-3">
+      <section aria-label="Filter reports" className="rounded-xl border border-border bg-card p-3">
         <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-[minmax(230px,1.6fr)_repeat(3,minmax(125px,1fr))_minmax(135px,1fr)_minmax(135px,1fr)]">
           <label className="col-span-2 block xl:col-span-1">
             <span className="mb-1 block text-[12px] font-medium text-muted">Search</span>
@@ -285,7 +285,7 @@ export default function Reports() {
                   setSearch(e.target.value)
                   setPage(1)
                 }}
-                className="h-9 w-full rounded-lg border border-border bg-white pl-8 pr-3 text-[12.5px] text-ink placeholder:text-muted/70 outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+                className="h-9 w-full rounded-lg border border-border bg-card pl-8 pr-3 text-[12.5px] text-ink placeholder:text-muted/70 outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
               />
             </span>
           </label>
@@ -298,7 +298,7 @@ export default function Reports() {
                 setStatusFilter(e.target.value)
                 setPage(1)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             >
               <option value="all">All statuses</option>
               <option value="open">Open reports</option>
@@ -318,7 +318,7 @@ export default function Reports() {
                 setTypeFilter(e.target.value)
                 setPage(1)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             >
               <option value="all">All types</option>
               {['message', 'product', 'seller', 'other'].map((type) => (
@@ -337,7 +337,7 @@ export default function Reports() {
                 setPriorityFilter(e.target.value)
                 setPage(1)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             >
               <option value="all">All priorities</option>
               <option value="high">High</option>
@@ -354,7 +354,7 @@ export default function Reports() {
                 setDateFrom(e.target.value)
                 setPage(1)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
           </label>
 
@@ -367,7 +367,7 @@ export default function Reports() {
                 setDateTo(e.target.value)
                 setPage(1)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
           </label>
         </div>
@@ -388,13 +388,13 @@ export default function Reports() {
       {/* Report table */}
       {reportsLoading && <ReportsSkeleton />}
       {isError && (
-        <div className="rounded-xl border border-error/20 bg-white p-10 text-center">
+        <div className="rounded-xl border border-error/20 bg-card p-10 text-center">
           <p className="text-[13px] text-error">{error.message}</p>
         </div>
       )}
 
       {!reportsLoading && !isError && (
-        <section className="overflow-hidden rounded-xl border border-border bg-white">
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="px-4 py-3.5">
             <h2 className="text-[15px] font-bold text-ink">Reports</h2>
             <p className="mt-0.5 text-[12px] text-muted">
@@ -578,7 +578,7 @@ export default function Reports() {
                     disabled={page <= 1}
                     onClick={() => setPage((current) => Math.max(1, current - 1))}
                     aria-label="Previous page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <ChevronLeft size={14} />
                   </button>
@@ -590,7 +590,7 @@ export default function Reports() {
                     disabled={page >= totalPages}
                     onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                     aria-label="Next page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <ChevronRight size={14} />
                   </button>
@@ -609,7 +609,7 @@ export default function Reports() {
             role="dialog"
             aria-modal="true"
             aria-label="Report details"
-            className="relative flex h-full w-full max-w-lg flex-col bg-white shadow-pop"
+            className="relative flex h-full w-full max-w-lg flex-col bg-card shadow-pop"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
@@ -674,7 +674,7 @@ export default function Reports() {
                     setDetailStatus(event.target.value)
                     setActionError(null)
                   }}
-                  className="h-10 w-full rounded-lg border border-border bg-white px-3 text-[13px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-[13px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
                 >
                   {STATUS_OPTIONS.map((status) => (
                     <option key={status} value={status}>
@@ -698,7 +698,7 @@ export default function Reports() {
                     setDetailAction(event.target.value)
                     setActionError(null)
                   }}
-                  className="h-10 w-full rounded-lg border border-border bg-white px-3 text-[13px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-[13px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
                 >
                   {ACTION_OPTIONS.map((action) => (
                     <option key={action} value={action}>
@@ -722,7 +722,7 @@ export default function Reports() {
                   onChange={(event) => setDetailNotes(event.target.value)}
                   rows={3}
                   placeholder="Internal notes (not visible to reporter)"
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-[13px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-[13px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
                 />
               </div>
 
@@ -759,7 +759,7 @@ export default function Reports() {
                         className={`w-full rounded-lg border px-3 py-2 text-left text-[12px] leading-relaxed transition-colors hover:bg-canvas ${
                           selectedTemplate === key
                             ? 'border-primary bg-canvas'
-                            : 'border-border bg-white'
+                            : 'border-border bg-card'
                         }`}
                       >
                         {template}
@@ -778,7 +778,7 @@ export default function Reports() {
                         onChange={(event) => setCustomMsg(event.target.value)}
                         rows={3}
                         placeholder="Type a custom message..."
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-[13px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-[13px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
                       />
                     )}
                     <div className="flex gap-2">
@@ -810,7 +810,7 @@ export default function Reports() {
               </div>
             </div>
 
-            <footer className="shrink-0 border-t border-border bg-white px-5 py-4">
+            <footer className="shrink-0 border-t border-border bg-card px-5 py-4">
               <button
                 type="button"
                 onClick={handleSave}
@@ -848,7 +848,7 @@ function TriageStat({ label, value, caption, onClick, active = false, alert = fa
     </>
   )
 
-  const classes = `border-b-2 bg-white px-4 py-4 text-left transition-colors ${
+  const classes = `border-b-2 bg-card px-4 py-4 text-left transition-colors ${
     active ? 'border-primary bg-canvas' : 'border-transparent'
   }`
 
@@ -870,13 +870,13 @@ function TriageStat({ label, value, caption, onClick, active = false, alert = fa
 
 function ReportsSkeleton() {
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="border-b border-border px-4 py-3.5">
         <div className="h-4 w-24 animate-pulse rounded bg-canvas" />
         <div className="mt-1.5 h-3 w-44 animate-pulse rounded bg-canvas" />
       </div>
       <div className="border-y border-border bg-canvas/60 px-4 py-2.5">
-        <div className="h-3 w-full animate-pulse rounded bg-[#E8DDD5]" />
+        <div className="h-3 w-full animate-pulse rounded bg-sand" />
       </div>
       <div className="divide-y divide-border">
         {Array.from({ length: 6 }).map((_, index) => (

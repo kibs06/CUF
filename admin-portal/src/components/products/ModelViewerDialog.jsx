@@ -127,17 +127,17 @@ export default function ModelViewerDialog({ target, onClose }) {
           dialog is taller with a closer default orbit so the pair fills it. */}
       <div className="relative h-[58vh] min-h-[420px] w-full overflow-hidden">
         {!url && (
-          <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-[#6B5C4E]">
+          <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-muted">
             This model has no file on record, so there is nothing to draw.
           </div>
         )}
         {url && loadError && (
-          <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-[#D64545]">
+          <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-danger">
             The 3D viewer could not load. Check the connection and open it again.
           </div>
         )}
         {url && !loadError && !ready && (
-          <div className="absolute inset-0 grid place-items-center text-sm text-[#6B5C4E]">
+          <div className="absolute inset-0 grid place-items-center text-sm text-muted">
             Loading the 3D viewer…
           </div>
         )}
@@ -160,7 +160,7 @@ export default function ModelViewerDialog({ target, onClose }) {
       </div>
       {paintedColors.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">
             Preview paint
           </span>
           <button
@@ -169,8 +169,8 @@ export default function ModelViewerDialog({ target, onClose }) {
             aria-pressed={tintName === null}
             className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
               tintName === null
-                ? 'border-[#8B5A2B] bg-[#8B5A2B] text-white'
-                : 'border-[#D9D0C7] text-[#3B2314] hover:bg-[#F5F0EB]'
+                ? 'border-primary bg-primary text-white'
+                : 'border-border text-ink hover:bg-surface'
             }`}
           >
             As-authored
@@ -184,8 +184,8 @@ export default function ModelViewerDialog({ target, onClose }) {
               title={`${name} — ${paints[name]}`}
               className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                 tintName === name
-                  ? 'border-[#8B5A2B] bg-[#8B5A2B]/10 text-[#3B2314]'
-                  : 'border-[#D9D0C7] text-[#3B2314] hover:bg-[#F5F0EB]'
+                  ? 'border-primary bg-primary/10 text-ink'
+                  : 'border-border text-ink hover:bg-surface'
               }`}
             >
               <span
@@ -198,7 +198,7 @@ export default function ModelViewerDialog({ target, onClose }) {
         </div>
       )}
       {shown && (
-        <p className="mt-3 text-xs text-[#6B5C4E]">
+        <p className="mt-3 text-xs text-muted">
           Version {shown.version} · {shown.status}. Drag to turn the shoe, scroll to zoom.
           {paintedColors.length > 0 && ' Chips preview the confirmed paints — the tint is what the app shows.'}
         </p>

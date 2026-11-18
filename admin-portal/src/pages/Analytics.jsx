@@ -33,7 +33,7 @@ const STATUS_COLORS = {
 
 function EmptyChart({ message = 'No data yet' }) {
   return (
-    <div className="flex h-64 flex-col items-center justify-center text-[#6B5C4E]">
+    <div className="flex h-64 flex-col items-center justify-center text-muted">
       <TrendingUp size={32} className="mb-2 opacity-40" />
       <p className="text-sm">{message}</p>
     </div>
@@ -55,8 +55,8 @@ export default function Analytics() {
             onClick={() => setDays(d)}
             className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
               days === d
-                ? 'bg-[#8B5A2B] text-white shadow-sm'
-                : 'border border-[#D9D0C7] bg-white text-[#6B5C4E] hover:bg-[#F5F0EB]'
+                ? 'bg-primary text-white shadow-sm'
+                : 'border border-border bg-card text-muted hover:bg-surface'
             }`}
           >
             Last {d} days
@@ -65,8 +65,8 @@ export default function Analytics() {
       </div>
 
       {isError && (
-        <div className="rounded-2xl border border-[#D9D0C7] bg-white p-8 text-center">
-          <p className="text-sm text-[#D64545]">{error.message}</p>
+        <div className="rounded-2xl border border-border bg-card p-8 text-center">
+          <p className="text-sm text-danger">{error.message}</p>
         </div>
       )}
 
@@ -199,8 +199,8 @@ export default function Analytics() {
 
 function ChartCard({ title, children }) {
   return (
-    <div className="rounded-2xl border border-[#D9D0C7] bg-white p-6 shadow-sm">
-      <h2 className="mb-4 font-display text-lg font-semibold text-[#3B2314]">{title}</h2>
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <h2 className="mb-4 font-display text-lg font-semibold text-ink">{title}</h2>
       {children}
     </div>
   )

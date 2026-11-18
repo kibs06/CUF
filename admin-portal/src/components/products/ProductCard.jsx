@@ -8,9 +8,9 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
     product.thumbnail
 
   return (
-    <div className="admin-3d-product group overflow-hidden rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] transition-all hover:border-[#8B5A2B]/30 hover:shadow-md">
+    <div className="admin-3d-product group overflow-hidden rounded-xl border border-border bg-surface transition-all hover:border-primary/30 hover:shadow-md">
       {/* Image */}
-      <div className="relative aspect-square overflow-hidden bg-[#E8DDD5]">
+      <div className="relative aspect-square overflow-hidden bg-sand">
         {primaryImage ? (
           <img
             src={primaryImage}
@@ -19,7 +19,7 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <Package size={32} className="text-[#8B5A2B]/30" />
+            <Package size={32} className="text-primary/30" />
           </div>
         )}
 
@@ -39,7 +39,7 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
         {/* Featured badge */}
         {product.is_featured && (
           <div className="absolute right-2 top-2">
-            <span className="rounded-full px-2 py-0.5 text-xs font-bold bg-[#E8A020] text-white">
+            <span className="rounded-full px-2 py-0.5 text-xs font-bold bg-pending text-white">
               ★ Featured
             </span>
           </div>
@@ -53,7 +53,7 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
               e.stopPropagation()
               onView?.(product)
             }}
-            className="w-full rounded-xl bg-white py-2 text-xs font-semibold text-[#3B2314] shadow-md transition-colors hover:bg-[#F5F0EB]"
+            className="w-full rounded-xl bg-card py-2 text-xs font-semibold text-ink shadow-md transition-colors hover:bg-surface"
           >
             View Details
           </button>
@@ -64,7 +64,7 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
                 e.stopPropagation()
                 onToggleActive?.(product)
               }}
-              className="flex-1 rounded-lg bg-white/90 py-1.5 text-xs font-semibold text-[#3B2314] transition-colors hover:bg-white"
+              className="flex-1 rounded-lg bg-card/90 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-card"
             >
               {product.isActive ? 'Deactivate' : 'Activate'}
             </button>
@@ -74,7 +74,7 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
                 e.stopPropagation()
                 onDelete?.(product)
               }}
-              className="flex-1 rounded-lg bg-[#D64545] py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+              className="flex-1 rounded-lg bg-danger py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
             >
               Delete
             </button>
@@ -84,13 +84,13 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
 
       {/* Info */}
       <div className="p-3">
-        <p className="truncate text-sm font-semibold text-[#3B2314]">{product.name}</p>
-        <p className="mt-0.5 text-xs text-[#6B5C4E]">{product.category}</p>
+        <p className="truncate text-sm font-semibold text-ink">{product.name}</p>
+        <p className="mt-0.5 text-xs text-muted">{product.category}</p>
         <div className="mt-2 flex items-center justify-between">
-          <span className="font-mono text-sm font-bold text-[#8B5A2B]">
+          <span className="font-mono text-sm font-bold text-primary">
             {formatCurrency(product.price)}
           </span>
-          <span className="font-mono text-xs text-[#6B5C4E]">
+          <span className="font-mono text-xs text-muted">
             Stock: {product.totalStock ?? 0}
           </span>
         </div>

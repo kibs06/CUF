@@ -47,8 +47,8 @@ const ID_TYPE_LABELS = {
 
 function SectionTitle({ icon, children }) {
   return (
-    <p className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
-      <span className="text-[#8B5A2B]">{icon}</span>
+    <p className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
+      <span className="text-primary">{icon}</span>
       {children}
     </p>
   )
@@ -57,8 +57,8 @@ function SectionTitle({ icon, children }) {
 function InfoRow({ label, value }) {
   return (
     <div className="flex items-start justify-between gap-4 py-1.5">
-      <span className="flex-shrink-0 text-xs text-[#6B5C4E]">{label}</span>
-      <span className="text-right text-sm font-semibold text-[#3B2314]">
+      <span className="flex-shrink-0 text-xs text-muted">{label}</span>
+      <span className="text-right text-sm font-semibold text-ink">
         {value || '—'}
       </span>
     </div>
@@ -105,7 +105,7 @@ export default function ApplicationDetailModal({
                 type="button"
                 onClick={() => onReject(application)}
                 disabled={rejecting}
-                className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-[#D64545] transition-colors hover:bg-red-50 disabled:opacity-50"
+                className="rounded-xl border border-danger px-4 py-2 text-sm font-semibold text-danger transition-colors hover:bg-red-50 disabled:opacity-50"
               >
                 Reject
               </button>
@@ -125,7 +125,7 @@ export default function ApplicationDetailModal({
       <div className="space-y-5">
         {/* ── Applicant ─────────────────────────────────────────── */}
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#8B5A2B] text-lg font-bold text-white">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-white">
             {(application.full_name || application.email || 'U')
               .split(' ')
               .map((w) => w[0])
@@ -134,11 +134,11 @@ export default function ApplicationDetailModal({
               .slice(0, 2)}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-[#3B2314]">
+            <p className="truncate text-sm font-bold text-ink">
               {application.full_name || 'Unnamed User'}
             </p>
-            <p className="truncate text-xs text-[#6B5C4E]">{application.email}</p>
-            <p className="text-xs text-[#6B5C4E]">
+            <p className="truncate text-xs text-muted">{application.email}</p>
+            <p className="text-xs text-muted">
               Applied {formatDate(application.created_at)}
               {application.phone ? ` · ${application.phone}` : ''}
             </p>
@@ -148,7 +148,7 @@ export default function ApplicationDetailModal({
         {/* ── Identity ──────────────────────────────────────────── */}
         <div>
           <SectionTitle icon={<UserCheck size={13} />}>Identity verification</SectionTitle>
-          <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
+          <div className="rounded-xl border border-border bg-card p-4">
             {hasIdentity ? (
               <div className="flex flex-wrap gap-4">
                 <VerificationDoc
@@ -168,7 +168,7 @@ export default function ApplicationDetailModal({
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-[#6B5C4E]">
+              <p className="text-xs text-muted">
                 No identity photos submitted (legacy application).
               </p>
             )}
@@ -183,7 +183,7 @@ export default function ApplicationDetailModal({
             <SectionTitle icon={<UserCheck size={13} />}>
               Personal details
             </SectionTitle>
-            <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <InfoRow label="Birthday" value={application.birthday} />
               <InfoRow label="Gender" value={application.gender} />
               <InfoRow label="Store location" value={application.store_location} />
@@ -206,7 +206,7 @@ export default function ApplicationDetailModal({
             <SectionTitle icon={<FileText size={13} />}>
               Business documents
             </SectionTitle>
-            <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex flex-wrap gap-4">
                 <VerificationDoc
                   storagePath={biz.dti_cert_url}
@@ -227,7 +227,7 @@ export default function ApplicationDetailModal({
                   size="h-24 w-24"
                 />
               </div>
-              <p className="mt-3 flex items-center gap-1.5 text-xs text-[#6B5C4E]">
+              <p className="mt-3 flex items-center gap-1.5 text-xs text-muted">
                 <BadgeCheck size={13} className="text-[#4ECDC4]" />
                 All three are required for approval.
               </p>
@@ -240,7 +240,7 @@ export default function ApplicationDetailModal({
         {(application.cufmai_member_id || application.barangay_proof_url) && (
           <div>
             <SectionTitle icon={<Landmark size={13} />}>Community proof</SectionTitle>
-            <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               {application.cufmai_member_id ? (
                 <InfoRow
                   label="CUFMAI Member ID"
@@ -254,7 +254,7 @@ export default function ApplicationDetailModal({
                     label="Barangay proof"
                     size="h-24 w-24"
                   />
-                  <p className="text-xs text-[#6B5C4E]">
+                  <p className="text-xs text-muted">
                     Non-member — barangay certificate submitted as community
                     proof.
                   </p>
@@ -267,17 +267,17 @@ export default function ApplicationDetailModal({
         {/* ── Store ─────────────────────────────────────────────── */}
         <div>
           <SectionTitle icon={<Store size={13} />}>Store details</SectionTitle>
-          <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
+          <div className="rounded-xl border border-border bg-card p-4">
             <InfoRow label="Store name" value={application.store_name} />
             {Array.isArray(application.store_tags) &&
               application.store_tags.length > 0 && (
-                <div className="border-t border-[#F5F0EB] py-2">
-                  <p className="text-xs text-[#6B5C4E]">Tags</p>
+                <div className="border-t border-surface py-2">
+                  <p className="text-xs text-muted">Tags</p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {application.store_tags.map((t) => (
                       <span
                         key={t}
-                        className="rounded-full border border-[#D9D0C7] bg-[#F5F0EB] px-2.5 py-0.5 text-[11px] font-semibold text-[#8B5A2B]"
+                        className="rounded-full border border-border bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-primary"
                       >
                         {tagLabel(t)}
                       </span>
@@ -286,9 +286,9 @@ export default function ApplicationDetailModal({
                 </div>
               )}
             {application.store_description && (
-              <div className="border-t border-[#F5F0EB] py-2">
-                <p className="text-xs text-[#6B5C4E]">Description</p>
-                <p className="mt-0.5 text-sm text-[#3B2314]">
+              <div className="border-t border-surface py-2">
+                <p className="text-xs text-muted">Description</p>
+                <p className="mt-0.5 text-sm text-ink">
                   {application.store_description}
                 </p>
               </div>
@@ -300,7 +300,7 @@ export default function ApplicationDetailModal({
         {(application.store_front_url || productPaths.length > 0) && (
           <div>
             <SectionTitle icon={<FileText size={13} />}>Store photos</SectionTitle>
-            <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex flex-wrap gap-4">
                 <VerificationDoc
                   storagePath={application.store_front_url}
@@ -319,9 +319,9 @@ export default function ApplicationDetailModal({
                 ))}
               </div>
               {productPaths.length === 0 && !application.store_front_url && (
-                <p className="text-xs text-[#6B5C4E]">No store photos submitted.</p>
+                <p className="text-xs text-muted">No store photos submitted.</p>
               )}
-              <p className="mt-3 flex items-center gap-1.5 text-xs text-[#6B5C4E]">
+              <p className="mt-3 flex items-center gap-1.5 text-xs text-muted">
                 <BadgeCheck size={13} className="text-[#4ECDC4]" />
                 The store-front photo doubles as the store banner after
                 approval.

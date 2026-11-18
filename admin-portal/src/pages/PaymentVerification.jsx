@@ -4,6 +4,8 @@ import {
   BadgeCheck,
   CheckCircle2,
   Image as ImageIcon,
+  Loader2,
+  RefreshCw,
   ShieldCheck,
   X,
   XCircle,
@@ -37,13 +39,13 @@ const STATUS_VARIANT = {
 // Same control language as Orders / Users: 8–9px-high rounded-lg pills, white
 // with a hairline for secondary actions, solid secondary for the main one.
 const BTN =
-  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 text-[12px] font-semibold text-secondary transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[12px] font-semibold text-secondary transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50'
 const BTN_PRIMARY =
   'inline-flex h-8 items-center gap-1.5 rounded-lg bg-secondary px-2.5 text-[12px] font-semibold text-white transition-colors hover:bg-primaryDeep disabled:cursor-not-allowed disabled:opacity-50'
 const BTN_SUCCESS =
   'inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#4F6B35] px-2.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#445C2D] disabled:cursor-not-allowed disabled:opacity-50'
 const BTN_DANGER =
-  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-error/35 bg-white px-2.5 text-[12px] font-semibold text-error transition-colors hover:bg-errorSoft disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-error/35 bg-card px-2.5 text-[12px] font-semibold text-error transition-colors hover:bg-errorSoft disabled:cursor-not-allowed disabled:opacity-50'
 
 /** One label/value pair, the way the other detail panels read. */
 function Detail({ label, children, tone }) {
@@ -87,18 +89,62 @@ export default function PaymentVerification() {
   // The receipt stays inside the queue: verifying means reading the reference
   // and the amount off the image while the row is still on screen, so a new tab
   // only splits the admin's attention. Escape (or the backdrop) closes it.
-  const openProof = async (row) => {
-    const url = await proofSignedUrl(row.proof?.screenshot_url)
-    if (url) {
-      setProofView({
-        url,
-        reference: row.proof?.reference_number,
-        sender: row.proof?.sender_name,
-        amount: row.total_amount,
-        orderCode: row.order_code,
-      })
-    } else setMessage({ tone: 'error', text: 'Could not open the screenshot.' })
+  //
+  // The overlay opens on the click, before the signed URL exists. Signing is a
+  // round trip to Storage, and waiting for it with nothing on screen reads as a
+  // dead button.
+  const openProof = (row) => {
+    const view = {
+      path: row.proof?.screenshot_url,
+      url: null,
+      status: 'loading',
+      error: null,
+      reference: row.proof?.reference_number,
+      sender: row.proof?.sender_name,
+      amount: row.total_amount,
+      orderCode: row.order_code,
+    }
+    setProofView(view)
+    loadProof(view)
   }
+
+  // Signing and displaying fail separately — no read access to the file, or a
+  // signed link that has gone stale — so the overlay reports either one itself
+  // instead of dropping the reason into a banner behind it.
+  const loadProof = async (view) => {
+    const url = await proofSignedUrl(view.path)
+    // An answer for a row the admin already closed or replaced is dropped.
+    setProofView((current) => {
+      if (current?.path !== view.path) return current
+      return url
+        ? { ...current, url, status: 'ready', error: null }
+        : {
+            ...current,
+            status: 'error',
+            error:
+              "The screenshot couldn't be opened. It may have been removed from storage, or your account may not have access to it.",
+          }
+    })
+  }
+
+  const retryProof = () => {
+    if (!proofView) return
+    const retried = { ...proofView, status: 'loading', url: null, error: null }
+    setProofView(retried)
+    loadProof(retried)
+  }
+
+  const failProofImage = () =>
+    setProofView((current) =>
+      current && current.status === 'ready'
+        ? {
+            ...current,
+            status: 'error',
+            error:
+              'The image came back empty. The signed link has probably expired — try again to fetch a fresh one.',
+          }
+        : current,
+    )
 
   useEffect(() => {
     if (!proofView) return
@@ -141,7 +187,7 @@ export default function PaymentVerification() {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-xl border border-border bg-white">
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3.5">
           <div>
             <h2 className="text-[15px] font-bold text-ink">Proofs and money</h2>
@@ -376,11 +422,11 @@ export default function PaymentVerification() {
           role="dialog"
           aria-modal="true"
           aria-label="Proof screenshot"
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#3B2314]/80 p-4"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-secondary/80 p-4"
           onClick={() => setProofView(null)}
         >
           <div
-            className="flex w-full max-w-4xl flex-wrap items-center justify-between gap-2 pb-3 text-[#F5F0EB]"
+            className="flex w-full max-w-4xl flex-wrap items-center justify-between gap-2 pb-3 text-surface"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="min-w-0">
@@ -404,12 +450,42 @@ export default function PaymentVerification() {
               <X size={16} />
             </button>
           </div>
-          <img
-            src={proofView.url}
-            alt={`Proof screenshot ${proofView.reference ?? ''}`.trim()}
-            className="max-h-[82vh] w-auto max-w-full rounded-lg bg-white object-contain shadow-pop"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {proofView.status === 'ready' ? (
+            <img
+              src={proofView.url}
+              alt={`Proof screenshot ${proofView.reference ?? ''}`.trim()}
+              className="max-h-[82vh] w-auto max-w-full rounded-lg bg-card object-contain shadow-pop"
+              onClick={(e) => e.stopPropagation()}
+              onError={failProofImage}
+            />
+          ) : (
+            <div
+              role={proofView.status === 'error' ? 'alert' : 'status'}
+              className="flex w-full max-w-md flex-col items-center gap-3 rounded-xl bg-card px-6 py-8 text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {proofView.status === 'error' ? (
+                <>
+                  <AlertTriangle size={22} strokeWidth={1.8} className="text-[#8A5D14]" />
+                  <p className="text-[12.5px] leading-relaxed text-ink">{proofView.error}</p>
+                  <button type="button" className={BTN} onClick={retryProof}>
+                    <RefreshCw size={13} strokeWidth={1.7} aria-hidden="true" />
+                    Try again
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Loader2
+                    size={22}
+                    strokeWidth={1.8}
+                    className="animate-spin text-primary"
+                    aria-hidden="true"
+                  />
+                  <p className="text-[12.5px] text-muted">Loading the screenshot…</p>
+                </>
+              )}
+            </div>
+          )}
         </div>
       ) : null}
     </div>

@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CUFMAI Admin Portal</title>
+    <script>
+      // Resolve the theme before the first paint: the React tree would apply it
+      // a frame later, which shows a cream flash to anyone who chose dark.
+      ;(function () {
+        try {
+          var choice = localStorage.getItem('cufmai-admin-theme')
+          var dark =
+            choice === 'dark' ||
+            (choice !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', dark)
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (e) {}
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

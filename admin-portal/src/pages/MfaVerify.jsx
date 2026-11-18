@@ -61,7 +61,7 @@ export default function MfaVerify() {
             autoFocus
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            className="w-full rounded-xl border border-border bg-white px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-secondary outline-none focus:border-primary"
+            className="w-full rounded-xl border border-border bg-card px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-secondary outline-none focus:border-primary"
             placeholder="······"
           />
           <button

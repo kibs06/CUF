@@ -10,29 +10,29 @@ export default function ProductListRow({ product, onView, onToggleActive, onDele
   return (
     <div className="admin-list-item admin-list-card group flex items-center gap-4 rounded-xl border border-transparent p-3">
       {/* Thumbnail */}
-      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5]">
+      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-sand">
         {primaryImage ? (
           <img src={primaryImage} className="h-full w-full object-cover" alt="" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <Package size={20} className="text-[#8B5A2B]/30" />
+            <Package size={20} className="text-primary/30" />
           </div>
         )}
       </div>
 
       {/* Name + category */}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-[#3B2314]">{product.name}</p>
-        <p className="text-xs text-[#6B5C4E]">{product.category}</p>
+        <p className="truncate text-sm font-semibold text-ink">{product.name}</p>
+        <p className="text-xs text-muted">{product.category}</p>
       </div>
 
       {/* Price */}
-      <span className="w-24 text-right font-mono text-sm font-bold text-[#8B5A2B]">
+      <span className="w-24 text-right font-mono text-sm font-bold text-primary">
         {formatCurrency(product.price)}
       </span>
 
       {/* Stock */}
-      <span className="w-20 text-center font-mono text-xs text-[#6B5C4E]">
+      <span className="w-20 text-center font-mono text-xs text-muted">
         {product.totalStock ?? 0} in stock
       </span>
 
@@ -52,21 +52,21 @@ export default function ProductListRow({ product, onView, onToggleActive, onDele
         <button
           type="button"
           onClick={() => onView?.(product)}
-          className="rounded-lg p-1.5 text-[#6B5C4E] transition-all hover:bg-white hover:shadow-sm"
+          className="rounded-lg p-1.5 text-muted transition-all hover:bg-card hover:shadow-sm"
         >
           <Eye size={14} />
         </button>
         <button
           type="button"
           onClick={() => onToggleActive?.(product)}
-          className="rounded-lg p-1.5 text-[#8B5A2B] transition-all hover:bg-white hover:shadow-sm"
+          className="rounded-lg p-1.5 text-primary transition-all hover:bg-card hover:shadow-sm"
         >
           {product.isActive ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
         <button
           type="button"
           onClick={() => onDelete?.(product)}
-          className="rounded-lg p-1.5 text-[#D64545] transition-all hover:bg-red-50"
+          className="rounded-lg p-1.5 text-danger transition-all hover:bg-red-50"
         >
           <Trash2 size={14} />
         </button>

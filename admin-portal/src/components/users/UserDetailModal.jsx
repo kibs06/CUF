@@ -20,16 +20,16 @@ function getInitials(name) {
 
 const ROLE_META = {
   seller: { badge: 'bg-teal-100 text-teal-700', avatar: 'bg-[#4ECDC4]', header: 'bg-teal-50' },
-  admin: { badge: 'bg-red-100 text-red-700', avatar: 'bg-[#D64545]', header: 'bg-red-50' },
-  customer: { badge: 'bg-amber-100 text-amber-700', avatar: 'bg-[#E8A020]', header: 'bg-amber-50' },
+  admin: { badge: 'bg-red-100 text-red-700', avatar: 'bg-danger', header: 'bg-red-50' },
+  customer: { badge: 'bg-amber-100 text-amber-700', avatar: 'bg-pending', header: 'bg-amber-50' },
 }
 
 function Stat({ label, value, sub }) {
   return (
-    <div className="rounded-xl bg-[#F5F0EB] p-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">{label}</p>
-      <p className="font-mono text-sm font-bold text-[#3B2314]">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-[#6B5C4E]">{sub}</p>}
+    <div className="rounded-xl bg-surface p-3">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
+      <p className="font-mono text-sm font-bold text-ink">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-muted">{sub}</p>}
     </div>
   )
 }
@@ -153,10 +153,10 @@ export default function UserDetailModal({ user, onClose }) {
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <h2 className="font-display text-xl font-bold text-[#3B2314]">
+          <h2 className="font-display text-xl font-bold text-ink">
             {user.full_name || 'Unnamed User'}
           </h2>
-          <p className="mt-0.5 truncate text-sm text-[#6B5C4E]">{user.email}</p>
+          <p className="mt-0.5 truncate text-sm text-muted">{user.email}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={`rounded-full px-3 py-1 text-xs font-bold ${meta.badge}`}>
               {user.role}
@@ -220,26 +220,26 @@ export default function UserDetailModal({ user, onClose }) {
           </div>
 
           {isSuspended && (
-            <div className="rounded-xl border border-[#D64545]/30 bg-red-50 px-4 py-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-[#D64545]">
+            <div className="rounded-xl border border-danger/30 bg-red-50 px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-danger">
                 Suspended {user.suspended_at ? formatDate(user.suspended_at) : ''}
               </p>
-              <p className="mt-1 text-sm text-[#6B5C4E]">
+              <p className="mt-1 text-sm text-muted">
                 {user.suspended_reason || 'No reason recorded.'}
               </p>
             </div>
           )}
 
           {/* Actions */}
-          <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
               Admin Actions
             </p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setRoleOpen(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-[#8B5A2B] px-3 py-2 text-sm font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
+                className="inline-flex items-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
               >
                 <KeyRound size={15} />
                 Change role
@@ -257,14 +257,14 @@ export default function UserDetailModal({ user, onClose }) {
                 <button
                   type="button"
                   onClick={() => setSuspendOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-[#D64545] px-3 py-2 text-sm font-semibold text-[#D64545] transition-colors hover:bg-red-50"
+                  className="inline-flex items-center gap-2 rounded-lg border border-danger px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-red-50"
                 >
                   <Ban size={15} />
                   Suspend account
                 </button>
               )}
             </div>
-            <p className="mt-3 text-xs text-[#6B5C4E]">
+            <p className="mt-3 text-xs text-muted">
               Suspended accounts lose all access immediately: they cannot sign in,
               place orders, message sellers, or manage products (enforced by RLS).
             </p>
@@ -275,27 +275,27 @@ export default function UserDetailModal({ user, onClose }) {
       {/* ── Orders tab (customers) ─────────────────────────────── */}
       {tab === 'orders' && (
         <div className="space-y-2">
-          {ordersQ.isLoading && <p className="py-6 text-center text-sm text-[#6B5C4E]">Loading orders…</p>}
+          {ordersQ.isLoading && <p className="py-6 text-center text-sm text-muted">Loading orders…</p>}
           {!ordersQ.isLoading && orders.length === 0 && (
-            <p className="py-6 text-center text-sm text-[#6B5C4E]">No orders yet.</p>
+            <p className="py-6 text-center text-sm text-muted">No orders yet.</p>
           )}
           {orders.map((order) => (
             <div
               key={order.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-[#D9D0C7] bg-white px-4 py-3"
+              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-[#3B2314]">
+                <p className="truncate text-sm font-semibold text-ink">
                   {order.store_name}
                 </p>
-                <p className="text-xs text-[#6B5C4E]">
+                <p className="text-xs text-muted">
                   {formatDate(order.created_at)} · {order.items_count} item(s)
                   {order.payment_method ? ` · ${order.payment_method}` : ''}
                 </p>
               </div>
               <div className="flex flex-shrink-0 items-center gap-3">
                 <Badge label={order.status} variant={order.status} />
-                <span className="font-mono text-sm font-bold text-[#3B2314]">
+                <span className="font-mono text-sm font-bold text-ink">
                   {formatCurrency(order.total_amount)}
                 </span>
               </div>
@@ -306,7 +306,7 @@ export default function UserDetailModal({ user, onClose }) {
 
       {/* ── Business tab (sellers) ─────────────────────────────── */}
       {tab === 'business' && portfolioQ.isLoading && (
-        <p className="py-6 text-center text-sm text-[#6B5C4E]">Loading business data…</p>
+        <p className="py-6 text-center text-sm text-muted">Loading business data…</p>
       )}
       {tab === 'business' && portfolioQ.data && (
         <div className="space-y-5">
@@ -317,15 +317,15 @@ export default function UserDetailModal({ user, onClose }) {
               {portfolio.stores.map((store) => (
                 <div
                   key={store.id}
-                  className="flex items-center justify-between rounded-xl border border-[#D9D0C7] bg-white px-4 py-3"
+                  className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#8B5A2B]/10 text-[#8B5A2B]">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                       <Store size={16} />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-[#3B2314]">{store.name}</p>
-                      <p className="text-xs text-[#6B5C4E]">{store.location}</p>
+                      <p className="text-sm font-semibold text-ink">{store.name}</p>
+                      <p className="text-xs text-muted">{store.location}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -356,9 +356,9 @@ export default function UserDetailModal({ user, onClose }) {
             <SectionTitle>
               Product Listings ({portfolio.products.length})
             </SectionTitle>
-            <div className="overflow-hidden rounded-xl border border-[#D9D0C7] bg-white">
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
               {portfolio.products.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-[#6B5C4E]">
+                <p className="px-4 py-6 text-center text-sm text-muted">
                   No products yet.
                 </p>
               ) : (
@@ -366,7 +366,7 @@ export default function UserDetailModal({ user, onClose }) {
                   <div
                     key={p.id}
                     className={`flex items-center gap-3 px-4 py-2.5 ${
-                      idx > 0 ? 'border-t border-[#F5F0EB]' : ''
+                      idx > 0 ? 'border-t border-surface' : ''
                     }`}
                   >
                     {p.thumbnail ? (
@@ -376,20 +376,20 @@ export default function UserDetailModal({ user, onClose }) {
                         className="h-9 w-9 flex-shrink-0 rounded-lg object-cover"
                       />
                     ) : (
-                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-[#F5F0EB] text-[#6B5C4E]">
+                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-surface text-muted">
                         <Package size={15} />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[#3B2314]">{p.name}</p>
-                      <p className="text-xs text-[#6B5C4E]">{p.category}</p>
+                      <p className="truncate text-sm font-medium text-ink">{p.name}</p>
+                      <p className="text-xs text-muted">{p.category}</p>
                     </div>
-                    <span className="hidden font-mono text-xs text-[#6B5C4E] sm:block">
+                    <span className="hidden font-mono text-xs text-muted sm:block">
                       stock {p.total_stock}
                     </span>
                     <div className="flex flex-shrink-0 items-center gap-2">
                       {p.is_published === false && <Badge label="Hidden" variant="inactive" />}
-                      <span className="w-20 text-right font-mono text-sm font-bold text-[#3B2314]">
+                      <span className="w-20 text-right font-mono text-sm font-bold text-ink">
                         {formatCurrency(p.sale_price ?? p.price)}
                       </span>
                     </div>
@@ -403,7 +403,7 @@ export default function UserDetailModal({ user, onClose }) {
 
       {/* ── Documents tab ─────────────────────────────────────── */}
       {tab === 'documents' && documentsQ.isLoading && (
-        <p className="py-6 text-center text-sm text-[#6B5C4E]">Loading documents…</p>
+        <p className="py-6 text-center text-sm text-muted">Loading documents…</p>
       )}
       {tab === 'documents' && documentsQ.data && (
         <div className="space-y-6">
@@ -433,18 +433,18 @@ export default function UserDetailModal({ user, onClose }) {
             </div>
             {documentsQ.data.store.description && (
               <div className="mt-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Description</p>
-                <p className="mt-1 text-sm text-[#3B2314]">{documentsQ.data.store.description}</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted">Description</p>
+                <p className="mt-1 text-sm text-ink">{documentsQ.data.store.description}</p>
               </div>
             )}
             {documentsQ.data.store.tags.length > 0 && (
               <div className="mt-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Tags</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted">Tags</p>
                 <div className="mt-1 flex flex-wrap gap-2">
                   {documentsQ.data.store.tags.map((tag, idx) => (
                     <span
                       key={idx}
-                      className="rounded-full bg-[#8B5A2B]/10 px-2.5 py-1 text-xs font-medium text-[#8B5A2B]"
+                      className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
                     >
                       {tag}
                     </span>
@@ -453,9 +453,9 @@ export default function UserDetailModal({ user, onClose }) {
               </div>
             )}
             {documentsQ.data.application.rejectionReason && (
-              <div className="mt-3 rounded-xl border border-[#D64545]/30 bg-red-50 p-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-[#D64545]">Rejection Reason</p>
-                <p className="mt-1 text-sm text-[#6B5C4E]">{documentsQ.data.application.rejectionReason}</p>
+              <div className="mt-3 rounded-xl border border-danger/30 bg-red-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-danger">Rejection Reason</p>
+                <p className="mt-1 text-sm text-muted">{documentsQ.data.application.rejectionReason}</p>
               </div>
             )}
           </DocumentSection>
@@ -515,7 +515,7 @@ export default function UserDetailModal({ user, onClose }) {
                   />
                 </DocumentGrid>
                 {documentsQ.data.business.submittedAt && (
-                  <p className="mt-3 text-xs text-[#6B5C4E]">
+                  <p className="mt-3 text-xs text-muted">
                     Submitted: {formatDate(documentsQ.data.business.submittedAt)}
                     {documentsQ.data.business.verifiedAt && (
                       <> · Verified: {formatDate(documentsQ.data.business.verifiedAt)}</>
@@ -524,8 +524,8 @@ export default function UserDetailModal({ user, onClose }) {
                 )}
                 {documentsQ.data.business.id &&
                   ['pending', 'rejected'].includes(documentsQ.data.business.status) && (
-                    <div className="mt-4 rounded-xl border border-[#D9D0C7] bg-[#FDFAF7] p-3">
-                      <p className="text-xs leading-relaxed text-[#6B5C4E]">
+                    <div className="mt-4 rounded-xl border border-border bg-[#FDFAF7] p-3">
+                      <p className="text-xs leading-relaxed text-muted">
                         Verifying grants the Verified Seller badge on the seller's
                         profile and public store page, and tells them in-app and by
                         email. Rejecting withdraws the badge.
@@ -534,7 +534,7 @@ export default function UserDetailModal({ user, onClose }) {
                         <button
                           type="button"
                           onClick={() => setBizVerdict(false)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#D64545] px-3 py-1.5 text-xs font-semibold text-[#D64545] transition-colors hover:bg-red-50"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-danger px-3 py-1.5 text-xs font-semibold text-danger transition-colors hover:bg-red-50"
                         >
                           <XCircle size={14} />
                           Reject documents
@@ -552,7 +552,7 @@ export default function UserDetailModal({ user, onClose }) {
                   )}
               </>
             ) : (
-              <p className="text-sm text-[#6B5C4E]">No business documents submitted.</p>
+              <p className="text-sm text-muted">No business documents submitted.</p>
             )}
           </DocumentSection>
 
@@ -573,7 +573,7 @@ export default function UserDetailModal({ user, onClose }) {
               ))}
             </DocumentGrid>
             {documentsQ.data.store.products.length === 0 && !documentsQ.data.store.storefront.url && (
-              <p className="text-sm text-[#6B5C4E]">No store photos submitted.</p>
+              <p className="text-sm text-muted">No store photos submitted.</p>
             )}
           </DocumentSection>
         </div>
@@ -592,7 +592,7 @@ export default function UserDetailModal({ user, onClose }) {
             <button
               type="button"
               onClick={() => setSuspendOpen(false)}
-              className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface"
             >
               Cancel
             </button>
@@ -603,7 +603,7 @@ export default function UserDetailModal({ user, onClose }) {
               className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
                 isSuspended
                   ? 'bg-teal-600 hover:bg-teal-700'
-                  : 'bg-[#D64545] hover:bg-red-700'
+                  : 'bg-danger hover:bg-red-700'
               }`}
             >
               {busy ? 'Working…' : isSuspended ? 'Reactivate' : 'Suspend'}
@@ -611,16 +611,16 @@ export default function UserDetailModal({ user, onClose }) {
           </>
         }
       >
-        <p className="mb-4 text-sm text-[#6B5C4E]">
+        <p className="mb-4 text-sm text-muted">
           {isSuspended ? (
             <>
-              Allow <strong className="text-[#3B2314]">{user.full_name}</strong> back
+              Allow <strong className="text-ink">{user.full_name}</strong> back
               into the app? They regain sign-in, ordering, and selling access
               immediately.
             </>
           ) : (
             <>
-              Ban <strong className="text-[#3B2314]">{user.full_name}</strong> from
+              Ban <strong className="text-ink">{user.full_name}</strong> from
               the app? They will be blocked from signing in and all API writes the
               moment this is saved.
             </>
@@ -628,7 +628,7 @@ export default function UserDetailModal({ user, onClose }) {
         </p>
         {!isSuspended && (
           <>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">
               Reason (recommended)
             </label>
             <textarea
@@ -636,7 +636,7 @@ export default function UserDetailModal({ user, onClose }) {
               onChange={(e) => setSuspendReason(e.target.value)}
               rows={3}
               autoFocus
-              className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
               placeholder="e.g. Spam listings, chargeback risk, abusive messages…"
             />
           </>
@@ -653,7 +653,7 @@ export default function UserDetailModal({ user, onClose }) {
             <button
               type="button"
               onClick={() => setRoleOpen(false)}
-              className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface"
             >
               Cancel
             </button>
@@ -661,15 +661,15 @@ export default function UserDetailModal({ user, onClose }) {
               type="button"
               onClick={handleRoleChange}
               disabled={busy || roleValue === user.role}
-              className="rounded-xl bg-[#8B5A2B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
             >
               {busy ? 'Working…' : 'Save role'}
             </button>
           </>
         }
       >
-        <p className="mb-4 text-sm text-[#6B5C4E]">
-          Change <strong className="text-[#3B2314]">{user.full_name}</strong>'s role.
+        <p className="mb-4 text-sm text-muted">
+          Change <strong className="text-ink">{user.full_name}</strong>'s role.
           Making someone an admin grants full console access — and the database
           refuses to demote or suspend the last active admin.
         </p>
@@ -683,8 +683,8 @@ export default function UserDetailModal({ user, onClose }) {
               key={opt.value}
               className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors ${
                 roleValue === opt.value
-                  ? 'border-[#8B5A2B] bg-[#8B5A2B]/5'
-                  : 'border-[#D9D0C7] bg-white hover:bg-[#FDFAF7]'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border bg-card hover:bg-[#FDFAF7]'
               }`}
             >
               <input
@@ -696,8 +696,8 @@ export default function UserDetailModal({ user, onClose }) {
                 className="mt-1 accent-[#8B5A2B]"
               />
               <span>
-                <span className="block text-sm font-semibold text-[#3B2314]">{opt.label}</span>
-                <span className="block text-xs text-[#6B5C4E]">{opt.desc}</span>
+                <span className="block text-sm font-semibold text-ink">{opt.label}</span>
+                <span className="block text-xs text-muted">{opt.desc}</span>
               </span>
             </label>
           ))}
@@ -716,7 +716,7 @@ export default function UserDetailModal({ user, onClose }) {
             <button
               type="button"
               onClick={() => setBizVerdict(null)}
-              className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface"
             >
               Cancel
             </button>
@@ -727,7 +727,7 @@ export default function UserDetailModal({ user, onClose }) {
               className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
                 bizVerdict
                   ? 'bg-teal-600 hover:bg-teal-700'
-                  : 'bg-[#D64545] hover:bg-red-700'
+                  : 'bg-danger hover:bg-red-700'
               }`}
             >
               {busy
@@ -739,23 +739,23 @@ export default function UserDetailModal({ user, onClose }) {
           </>
         }
       >
-        <p className="mb-2 text-sm text-[#6B5C4E]">
+        <p className="mb-2 text-sm text-muted">
           {bizVerdict ? (
             <>
-              Verify <strong className="text-[#3B2314]">{user.full_name}</strong>'s
+              Verify <strong className="text-ink">{user.full_name}</strong>'s
               DTI, BIR COR and permit? This grants the Verified Seller badge on
               their profile and public store page, and tells them in-app and by
               email.
             </>
           ) : (
             <>
-              Reject <strong className="text-[#3B2314]">{user.full_name}</strong>'s
+              Reject <strong className="text-ink">{user.full_name}</strong>'s
               business documents? The Verified Seller badge is withdrawn and they
               are told in-app. They can correct the paperwork and resubmit.
             </>
           )}
         </p>
-        <p className="text-xs text-[#6B5C4E]">
+        <p className="text-xs text-muted">
           Approving a seller application already verifies their documents
           automatically; this action is for a separate re-review or a legacy
           seller.
@@ -772,13 +772,13 @@ function TabButton({ active, onClick, children, count }) {
       onClick={onClick}
       className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
         active
-          ? 'bg-[#8B5A2B] text-white shadow-sm'
-          : 'border border-[#D9D0C7] bg-white text-[#6B5C4E] hover:bg-[#F5F0EB]'
+          ? 'bg-primary text-white shadow-sm'
+          : 'border border-border bg-card text-muted hover:bg-surface'
       }`}
     >
       {children}
       {typeof count === 'number' && count > 0 && (
-        <span className={`ml-1.5 font-mono text-xs ${active ? 'text-white/80' : 'text-[#6B5C4E]'}`}>
+        <span className={`ml-1.5 font-mono text-xs ${active ? 'text-white/80' : 'text-muted'}`}>
           {count}
         </span>
       )}
@@ -788,7 +788,7 @@ function TabButton({ active, onClick, children, count }) {
 
 function SectionTitle({ children }) {
   return (
-    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
       {children}
     </p>
   )
@@ -817,9 +817,9 @@ function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
 
   if (!url) {
     return (
-      <div className="rounded-xl border border-dashed border-[#D9D0C7] bg-[#F5F0EB] p-3">
-        <p className="text-xs font-medium text-[#6B5C4E]">{label}</p>
-        <p className="mt-1 text-xs text-[#6B5C4E]/60">Not submitted</p>
+      <div className="rounded-xl border border-dashed border-border bg-surface p-3">
+        <p className="text-xs font-medium text-muted">{label}</p>
+        <p className="mt-1 text-xs text-muted/60">Not submitted</p>
       </div>
     )
   }
@@ -827,8 +827,8 @@ function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
   // Sensitive document - show blur overlay with reveal button
   if (sensitive && !isRevealed) {
     return (
-      <div className="relative rounded-xl border border-[#D64545]/30 bg-white p-3">
-        <div className="mb-2 aspect-square overflow-hidden rounded-lg bg-[#F5F0EB] blur-md">
+      <div className="relative rounded-xl border border-danger/30 bg-card p-3">
+        <div className="mb-2 aspect-square overflow-hidden rounded-lg bg-surface blur-md">
           <img
             src={url}
             alt={label}
@@ -836,22 +836,22 @@ function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
             loading="lazy"
           />
         </div>
-        <p className="text-xs font-medium text-[#3B2314]">{label}</p>
+        <p className="text-xs font-medium text-ink">{label}</p>
         {subtitle && (
-          <p className="mt-0.5 text-xs text-[#6B5C4E]">{subtitle}</p>
+          <p className="mt-0.5 text-xs text-muted">{subtitle}</p>
         )}
         <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-black/5">
-          <div className="rounded-full bg-[#D64545] p-2 mb-2">
+          <div className="rounded-full bg-danger p-2 mb-2">
             <Eye size={16} className="text-white" />
           </div>
-          <p className="text-xs font-semibold text-[#D64545]">Sensitive</p>
+          <p className="text-xs font-semibold text-danger">Sensitive</p>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation()
               setIsRevealed(true)
             }}
-            className="mt-2 rounded-lg bg-[#D64545] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#B33A3A]"
+            className="mt-2 rounded-lg bg-danger px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#B33A3A]"
           >
             Reveal
           </button>
@@ -865,9 +865,9 @@ function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
       <button
         type="button"
         onClick={() => setShowModal(true)}
-        className="group rounded-xl border border-[#D9D0C7] bg-white p-3 text-left transition-colors hover:border-[#8B5A2B] hover:shadow-sm"
+        className="group rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-primary hover:shadow-sm"
       >
-        <div className="mb-2 aspect-square overflow-hidden rounded-lg bg-[#F5F0EB]">
+        <div className="mb-2 aspect-square overflow-hidden rounded-lg bg-surface">
           <img
             src={url}
             alt={label}
@@ -875,9 +875,9 @@ function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
             loading="lazy"
           />
         </div>
-        <p className="text-xs font-medium text-[#3B2314]">{label}</p>
+        <p className="text-xs font-medium text-ink">{label}</p>
         {subtitle && (
-          <p className="mt-0.5 text-xs text-[#6B5C4E]">{subtitle}</p>
+          <p className="mt-0.5 text-xs text-muted">{subtitle}</p>
         )}
         {sensitive && (
           <button
@@ -886,7 +886,7 @@ function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
               e.stopPropagation()
               setIsRevealed(false)
             }}
-            className="mt-2 text-xs font-semibold text-[#D64545] hover:text-[#B33A3A]"
+            className="mt-2 text-xs font-semibold text-danger hover:text-[#B33A3A]"
           >
             Hide
           </button>
@@ -926,16 +926,16 @@ function InfoField({ label, value }) {
   if (!value) {
     return (
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">{label}</p>
-        <p className="mt-1 text-sm text-[#6B5C4E]/60">—</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
+        <p className="mt-1 text-sm text-muted/60">—</p>
       </div>
     )
   }
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">{label}</p>
-      <p className="mt-1 text-sm font-medium text-[#3B2314]">{value}</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
+      <p className="mt-1 text-sm font-medium text-ink">{value}</p>
     </div>
   )
 }

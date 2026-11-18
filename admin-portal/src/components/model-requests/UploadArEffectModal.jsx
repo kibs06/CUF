@@ -76,7 +76,7 @@ export default function UploadArEffectModal({ entry, current, onClose, onDone })
             type="button"
             onClick={close}
             disabled={busy}
-            className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB] disabled:opacity-50"
+            className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface disabled:opacity-50"
           >
             Cancel
           </button>
@@ -84,7 +84,7 @@ export default function UploadArEffectModal({ entry, current, onClose, onDone })
             type="button"
             onClick={handleUpload}
             disabled={!file || busy}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#8B5A2B] px-5 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[#6B4423] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[#6B4423] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {upload.isPending ? (
               <>
@@ -101,16 +101,16 @@ export default function UploadArEffectModal({ entry, current, onClose, onDone })
         </>
       }
     >
-      <p className="mb-4 text-sm text-[#6B5C4E]">
+      <p className="mb-4 text-sm text-muted">
         The DeepAR Studio export for{' '}
-        <strong className="text-[#3B2314]">{entry?.name ?? 'this product'}</strong>. Publishing it
+        <strong className="text-ink">{entry?.name ?? 'this product'}</strong>. Publishing it
         here makes it live for every customer straight away — the app and the portal prefer it
         over their bundled effects, with no release in between.
       </p>
 
       {current && (
-        <p className="mb-3 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2 text-xs text-[#6B5C4E]">
-          Live now: <strong className="text-[#3B2314]">version {current.version}</strong>
+        <p className="mb-3 rounded-xl border border-surface bg-card px-3 py-2 text-xs text-muted">
+          Live now: <strong className="text-ink">version {current.version}</strong>
           {current.file_size_bytes
             ? ` · ${formatBytes(current.file_size_bytes)}`
             : ''}
@@ -118,7 +118,7 @@ export default function UploadArEffectModal({ entry, current, onClose, onDone })
         </p>
       )}
 
-      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">
         Choose a .deepar file
       </label>
       <input
@@ -129,19 +129,19 @@ export default function UploadArEffectModal({ entry, current, onClose, onDone })
           setError(null)
           upload.reset()
         }}
-        className="w-full rounded-xl border border-[#D9D0C7] bg-white px-3 py-2 text-sm text-[#3B2314] file:mr-3 file:rounded-lg file:border-0 file:bg-[#8B5A2B] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+        className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
       />
-      <p className="mt-1 text-xs text-[#6B5C4E]">
+      <p className="mt-1 text-xs text-muted">
         Under {formatBytes(AR_EFFECT_CAP_BYTES)}, the export Studio produces. This is the file
         customers fit in.
       </p>
 
       {error && (
         <div
-          className="mt-3 rounded-xl border px-4 py-3 text-sm text-[#6B5C4E]"
+          className="mt-3 rounded-xl border px-4 py-3 text-sm text-muted"
           style={{ borderColor: '#D64545', backgroundColor: '#FDF2F2' }}
         >
-          <p className="flex items-center gap-2 font-semibold text-[#3B2314]">
+          <p className="flex items-center gap-2 font-semibold text-ink">
             <AlertTriangle size={14} />
             That did not publish
           </p>
@@ -150,12 +150,12 @@ export default function UploadArEffectModal({ entry, current, onClose, onDone })
       )}
 
       {current && (
-        <div className="mt-3 border-t border-[#F5F0EB] pt-3">
+        <div className="mt-3 border-t border-surface pt-3">
           <button
             type="button"
             onClick={handleRemove}
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-[#D64545] transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-danger px-4 py-2 text-sm font-semibold text-danger transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {remove.isPending ? (
               <>

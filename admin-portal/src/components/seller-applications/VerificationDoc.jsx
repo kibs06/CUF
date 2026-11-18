@@ -73,21 +73,21 @@ export default function VerificationDoc({
   if (!storagePath) {
     return (
       <div
-        className={`flex ${size} flex-col items-center justify-center rounded-xl border border-dashed border-[#D9D0C7] bg-[#F5F0EB]`}
+        className={`flex ${size} flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface`}
       >
-        <span className="px-1 text-center text-[10px] text-[#6B5C4E]">Not submitted</span>
+        <span className="px-1 text-center text-[10px] text-muted">Not submitted</span>
       </div>
     )
   }
 
   const placeholder = (
     <div
-      className={`flex ${size} flex-col items-center justify-center rounded-xl border border-[#D9D0C7] bg-[#F5F0EB]`}
+      className={`flex ${size} flex-col items-center justify-center rounded-xl border border-border bg-surface`}
     >
       {loading ? (
-        <Loader2 size={16} className="animate-spin text-[#8B5A2B]" />
+        <Loader2 size={16} className="animate-spin text-primary" />
       ) : (
-        <span className="px-1 text-center text-[10px] text-[#D64545]">Unavailable</span>
+        <span className="px-1 text-center text-[10px] text-danger">Unavailable</span>
       )}
     </div>
   )
@@ -99,7 +99,7 @@ export default function VerificationDoc({
           type="button"
           onClick={() => url && setZoom(true)}
           disabled={!url}
-          className={`group relative ${size} overflow-hidden rounded-xl border border-[#D9D0C7] bg-white shadow-sm transition-shadow disabled:cursor-default ${
+          className={`group relative ${size} overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow disabled:cursor-default ${
             url ? 'cursor-zoom-in hover:shadow-md' : ''
           }`}
           title={url ? `View ${label}` : undefined}
@@ -115,14 +115,14 @@ export default function VerificationDoc({
             placeholder
           )}
         </button>
-        <span className="max-w-[96px] truncate text-[10px] font-medium text-[#6B5C4E]">
+        <span className="max-w-[96px] truncate text-[10px] font-medium text-muted">
           {label}
         </span>
       </div>
 
       {/* Zoom lightbox */}
       <Modal open={zoom} onClose={() => setZoom(false)} title={label} size="xl">
-        <div className="flex items-center justify-center rounded-xl bg-[#3B2314] p-2">
+        <div className="flex items-center justify-center rounded-xl bg-secondary p-2">
           {url && (
             <img
               src={url}

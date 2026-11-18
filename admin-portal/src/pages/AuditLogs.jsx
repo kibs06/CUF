@@ -272,8 +272,8 @@ export default function AuditLogs() {
                   aria-pressed={active}
                   className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition-colors duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] ${
                     active
-                      ? 'bg-white text-ink ring-1 ring-border/80'
-                      : 'text-muted hover:bg-white/70 hover:text-ink'
+                      ? 'bg-card text-ink ring-1 ring-border/80'
+                      : 'text-muted hover:bg-card/70 hover:text-ink'
                   }`}
                 >
                   <Icon size={14} strokeWidth={1.6} aria-hidden="true" />
@@ -309,7 +309,7 @@ export default function AuditLogs() {
           : stats.map((stat) => <AuditMetric key={stat.label} {...stat} />)}
       </section>
 
-      <section aria-label="Filter audit events" className="rounded-xl border border-border bg-white p-3">
+      <section aria-label="Filter audit events" className="rounded-xl border border-border bg-card p-3">
         <div className="grid items-end gap-2.5 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_170px_155px_155px_auto]">
           <label className="block sm:col-span-2 xl:col-span-1">
             <span className="mb-1 block text-[12px] font-medium text-muted">Search</span>
@@ -338,7 +338,7 @@ export default function AuditLogs() {
                   setSearch(event.target.value)
                   setPage(0)
                 }}
-                className="h-9 w-full rounded-lg border border-border bg-white pl-8 pr-9 text-[12.5px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                className="h-9 w-full rounded-lg border border-border bg-card pl-8 pr-9 text-[12.5px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
               />
               {search && (
                 <button
@@ -364,7 +364,7 @@ export default function AuditLogs() {
                 setAction(event.target.value)
                 setPage(0)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             >
               {ACTION_OPTIONS[tab].map((option) => (
                 <option key={option.value} value={option.value}>
@@ -383,7 +383,7 @@ export default function AuditLogs() {
                 setDateFrom(event.target.value)
                 setPage(0)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
           </label>
 
@@ -396,7 +396,7 @@ export default function AuditLogs() {
                 setDateTo(event.target.value)
                 setPage(0)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
           </label>
 
@@ -414,7 +414,7 @@ export default function AuditLogs() {
 
       {isLoading && <AuditSkeleton />}
       {isError && (
-        <div className="rounded-xl border border-error/20 bg-white px-6 py-10 text-center">
+        <div className="rounded-xl border border-error/20 bg-card px-6 py-10 text-center">
           <p className="text-[14px] font-semibold text-ink">Could not load this trail</p>
           <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
             {error?.message ?? 'Could not load audit logs.'}
@@ -423,7 +423,7 @@ export default function AuditLogs() {
       )}
 
       {!isLoading && !isError && (
-        <section className="overflow-hidden rounded-xl border border-border bg-white">
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="px-4 py-3.5">
             <h2 className="text-[15px] font-bold text-ink">Events</h2>
             <p className="mt-0.5 text-[12px] text-muted">
@@ -563,7 +563,7 @@ export default function AuditLogs() {
                       disabled={page === 0}
                       onClick={() => setPage((current) => Math.max(0, current - 1))}
                       aria-label="Previous page"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       <ChevronLeft size={14} />
                     </button>
@@ -575,7 +575,7 @@ export default function AuditLogs() {
                       disabled={page >= pageCount - 1}
                       onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
                       aria-label="Next page"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       <ChevronRight size={14} />
                     </button>
@@ -587,7 +587,7 @@ export default function AuditLogs() {
         </section>
       )}
 
-      <section aria-label="Audit coverage" className="rounded-xl border border-border bg-white px-4 py-3.5">
+      <section aria-label="Audit coverage" className="rounded-xl border border-border bg-card px-4 py-3.5">
         <p className="text-[12px] font-semibold text-ink">Coverage</p>
         <p className="mt-1 max-w-[900px] text-[12px] leading-relaxed text-muted">
           Covers seller application decisions, manual GCash decisions, sign-in security, seller
@@ -607,7 +607,7 @@ export default function AuditLogs() {
 
 function AuditMetric({ label, value, scope, loading = false }) {
   return (
-    <div className="bg-white px-3.5 py-3.5">
+    <div className="bg-card px-3.5 py-3.5">
       {loading ? (
         <>
           <div className="h-3 w-20 animate-pulse rounded bg-canvas" />
@@ -629,13 +629,13 @@ function AuditMetric({ label, value, scope, loading = false }) {
 
 function AuditSkeleton() {
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="px-4 py-3.5">
         <div className="h-4 w-20 animate-pulse rounded bg-canvas" />
         <div className="mt-1.5 h-3 w-40 animate-pulse rounded bg-canvas" />
       </div>
       <div className="border-y border-border bg-canvas/60 px-4 py-2.5">
-        <div className="h-3 w-full animate-pulse rounded bg-[#E8DDD5]" />
+        <div className="h-3 w-full animate-pulse rounded bg-sand" />
       </div>
       <div className="divide-y divide-border">
         {Array.from({ length: 6 }).map((_, index) => (

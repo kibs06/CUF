@@ -70,13 +70,13 @@ import {
 const MAX_EXTRA_PASSES = 3
 
 const fieldClass =
-  'w-full rounded-xl border bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:ring-2 disabled:opacity-60'
-const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]'
+  'w-full rounded-xl border bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:ring-2 disabled:opacity-60'
+const labelClass = 'mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted'
 
 function borderFor(error) {
   return error
-    ? 'border-[#D64545] focus:border-[#D64545] focus:ring-[#D64545]/20'
-    : 'border-[#D9D0C7] focus:border-[#8B5A2B] focus:ring-[#8B5A2B]/20'
+    ? 'border-danger focus:border-danger focus:ring-danger/20'
+    : 'border-border focus:border-primary focus:ring-primary/20'
 }
 
 function Notice({ tone = 'error', title, children }) {
@@ -87,11 +87,11 @@ function Notice({ tone = 'error', title, children }) {
   const { border, bg } = tones[tone] ?? tones.error
   return (
     <div
-      className="rounded-xl border px-4 py-3 text-sm text-[#6B5C4E]"
+      className="rounded-xl border px-4 py-3 text-sm text-muted"
       style={{ borderColor: border, backgroundColor: bg }}
     >
       {title && (
-        <p className="flex items-center gap-2 font-semibold text-[#3B2314]">
+        <p className="flex items-center gap-2 font-semibold text-ink">
           <AlertTriangle size={14} />
           {title}
         </p>
@@ -426,7 +426,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
             type="button"
             onClick={close}
             disabled={publish.isPending}
-            className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB] disabled:opacity-50"
+            className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface disabled:opacity-50"
           >
             Cancel
           </button>
@@ -451,9 +451,9 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
         </>
       }
     >
-      <p className="mb-4 text-sm text-[#6B5C4E]">
-        Publish the finished <span className="font-semibold text-[#3B2314]">.glb</span> for{' '}
-        <strong className="text-[#3B2314]">{productName}</strong>
+      <p className="mb-4 text-sm text-muted">
+        Publish the finished <span className="font-semibold text-ink">.glb</span> for{' '}
+        <strong className="text-ink">{productName}</strong>
         {isReplace ? (
           <>
             {' '}as a new live version. The server checks the stored bytes before the model goes
@@ -470,10 +470,10 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
       {isReplace ? (
         /* The version this replaces, so the admin can see what the shelf holds before answering it. */
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2">
-            <Cuboid size={13} className="text-[#8B5A2B]" />
-            <span className="text-[11px] uppercase tracking-wider text-[#6B5C4E]">Currently live</span>
-            <span className="text-sm font-semibold text-[#3B2314]">
+          <span className="inline-flex items-center gap-2 rounded-xl border border-surface bg-card px-3 py-2">
+            <Cuboid size={13} className="text-primary" />
+            <span className="text-[11px] uppercase tracking-wider text-muted">Currently live</span>
+            <span className="text-sm font-semibold text-ink">
               Version {replaceTarget.version ?? '—'}
               {replaceTarget.authoredLengthMm != null
                 ? ` · ${Number(replaceTarget.authoredLengthMm).toFixed(1)} mm`
@@ -484,18 +484,18 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
       ) : (
         /* The ask, so the admin can see what was measured before answering it. */
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2">
-            <Ruler size={13} className="text-[#8B5A2B]" />
-            <span className="text-[11px] uppercase tracking-wider text-[#6B5C4E]">Seller measured</span>
-            <span className="text-sm font-semibold text-[#3B2314]">
+          <span className="inline-flex items-center gap-2 rounded-xl border border-surface bg-card px-3 py-2">
+            <Ruler size={13} className="text-primary" />
+            <span className="text-[11px] uppercase tracking-wider text-muted">Seller measured</span>
+            <span className="text-sm font-semibold text-ink">
               {request?.external_length_mm == null
                 ? '—'
                 : `${Number(request.external_length_mm).toFixed(1)} mm outside`}
             </span>
           </span>
           {request?.note && (
-            <span className="rounded-xl bg-[#F5F0EB] px-3 py-2 text-xs text-[#6B5C4E]">
-              <strong className="text-[#3B2314]">Their note:</strong> {request.note}
+            <span className="rounded-xl bg-surface px-3 py-2 text-xs text-muted">
+              <strong className="text-ink">Their note:</strong> {request.note}
             </span>
           )}
         </div>
@@ -515,11 +515,11 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
             className={`${fieldClass} ${borderFor(declarationMessageFor(declaration, DECLARATION_FIELD.EXTERNAL_LENGTH_MM))}`}
           />
           {declarationMessageFor(declaration, DECLARATION_FIELD.EXTERNAL_LENGTH_MM) ? (
-            <p className="mt-1 text-xs text-[#D64545]">
+            <p className="mt-1 text-xs text-danger">
               {declarationMessageFor(declaration, DECLARATION_FIELD.EXTERNAL_LENGTH_MM)}
             </p>
           ) : (
-            <p className="mt-1 text-xs text-[#6B5C4E]">
+            <p className="mt-1 text-xs text-muted">
               {isReplace
                 ? 'From the live model’s own declaration — update it if the new export was authored at a different size.'
                 : request?.external_length_mm == null
@@ -542,7 +542,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
             className={`${fieldClass} ${borderFor(declarationMessageFor(declaration, DECLARATION_FIELD.AUTHORED_SIZE_EU))}`}
           />
           {declarationMessageFor(declaration, DECLARATION_FIELD.AUTHORED_SIZE_EU) && (
-            <p className="mt-1 text-xs text-[#D64545]">
+            <p className="mt-1 text-xs text-danger">
               {declarationMessageFor(declaration, DECLARATION_FIELD.AUTHORED_SIZE_EU)}
             </p>
           )}
@@ -584,9 +584,9 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
               setPasses(0)
               compress.clear()
             }}
-            className="w-full rounded-xl border border-[#D9D0C7] bg-white px-3 py-2 text-sm text-[#3B2314] file:mr-3 file:rounded-lg file:border-0 file:bg-[#8B5A2B] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+            className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
           />
-        <p className="mt-1 text-xs text-[#6B5C4E]">
+        <p className="mt-1 text-xs text-muted">
           Under {formatBytes(BUCKET_CAP_BYTES)}, exported as glTF binary (.glb). This is the source
           that always works.
         </p>
@@ -605,11 +605,11 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
           CLI cannot do at all. The server still reads the stored bytes, and a
           green run here is not acceptance (guide §5.2). */}
       {showCompress && (
-        <div className="mt-3 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-4 py-3">
+        <div className="mt-3 rounded-xl border border-surface bg-card px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm font-semibold text-[#3B2314]">
-                <Sparkles size={14} className="text-[#8B5A2B]" />
+              <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+                <Sparkles size={14} className="text-primary" />
                 {!compressedMatchesFile
                   ? overBudget
                     ? 'This file is over the authoring budget'
@@ -620,7 +620,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
                       ? 'Compressed, but still over the contract'
                       : 'Compressed and ready to upload'}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-[#6B5C4E]">
+              <p className="mt-1 text-xs leading-relaxed text-muted">
                 {compressedMatchesFile
                   ? compressStale
                     ? 'The bytes in hand were scaled to a different length than the one above — ' +
@@ -656,7 +656,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
                 type="button"
                 onClick={handleCompress}
                 disabled={!compressReady}
-              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#8B5A2B] px-4 py-2 text-sm font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
                 <Sparkles size={14} />
                 Compress it
@@ -666,7 +666,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
               <button
                 type="button"
                 disabled
-                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#8B5A2B] px-4 py-2 text-sm font-semibold text-[#8B5A2B] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Loader2 size={14} className="animate-spin" />
                 Compressing… (pass {passes + 1} of {MAX_EXTRA_PASSES + 1})
@@ -675,14 +675,14 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
           </div>
 
           {compress.isRunning && compress.stageSentence && (
-            <p className="mt-2 text-xs text-[#8B5A2B]">{compress.stageSentence}</p>
+            <p className="mt-2 text-xs text-primary">{compress.stageSentence}</p>
           )}
 
           {compressScale.error && !compress.isRunning && (
-            <p className="mt-2 text-xs text-[#D64545]">{compressScale.error}</p>
+            <p className="mt-2 text-xs text-danger">{compressScale.error}</p>
           )}
           {!compressScale.error && compressScale.externalLengthMm === null && !compress.isRunning && !compressedMatchesFile && (
-            <p className="mt-2 text-xs text-[#6B5C4E]">
+            <p className="mt-2 text-xs text-muted">
               No declared length yet — compressing still works. The mesh keeps its authored
               scale for now; fill in the length and run Compress again so it is scaled to
               the ruler figure before publishing.
@@ -697,7 +697,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
 
           {useCompressed && !compress.isRunning && (
             <div className="mt-2">
-              <p className="text-xs font-semibold text-[#3B2314]">
+              <p className="text-xs font-semibold text-ink">
                 {compressed.summary}
                 {/* Reachable only when the loop gave up: anything else fits the
                     contract and lands on Publish instead. */}
@@ -720,10 +720,10 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
                   end and the sole cut line are decisions the file cannot make
                   for itself, and the reviewer still has to confirm both. */}
               <details className="mt-2">
-                <summary className="cursor-pointer text-xs font-semibold text-[#8B5A2B]">
+                <summary className="cursor-pointer text-xs font-semibold text-primary">
                   What it changed ({compressed.changes.length})
                 </summary>
-                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] leading-relaxed text-[#6B5C4E]">
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] leading-relaxed text-muted">
                   {compressed.changes.map((change, index) => (
                     <li key={index}>{change}</li>
                   ))}
@@ -748,7 +748,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
           placeholder="https://…"
           className={`${fieldClass} ${borderFor(null)}`}
         />
-        <p className="mt-1 text-xs text-[#6B5C4E]">
+        <p className="mt-1 text-xs text-muted">
           A direct https link, the way the app takes one. A file is used instead when both are given.
         </p>
       </div>
@@ -767,9 +767,9 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder="Anything they should know about the model…"
-          className={`w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20`}
+          className={`w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20`}
         />
-        <p className="mt-1 text-xs text-[#6B5C4E]">{noteReachesSeller()}</p>
+        <p className="mt-1 text-xs text-muted">{noteReachesSeller()}</p>
       </div>
       )}
 
@@ -820,7 +820,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
           notice, a "try again". Nothing was written, and that is the news.
           Request-scoped, so the replace flow omits it. */}
       {error && !isReplace && (
-        <div className="mt-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2 text-[11px] leading-relaxed text-[#6B5C4E]">
+        <div className="mt-2 rounded-xl border border-surface bg-card px-3 py-2 text-[11px] leading-relaxed text-muted">
           {deliverySentence(MODELLING_ENDING.NOT_LIVE)}
         </div>
       )}
@@ -839,8 +839,8 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
         </div>
       )}
 
-      <p className="mt-4 flex items-start gap-2 text-[11px] leading-relaxed text-[#6B5C4E]">
-        <Cuboid size={13} className="mt-0.5 shrink-0 text-[#8B5A2B]" />
+      <p className="mt-4 flex items-start gap-2 text-[11px] leading-relaxed text-muted">
+        <Cuboid size={13} className="mt-0.5 shrink-0 text-primary" />
         A green run means the file is buildable, not that it looks right: the toe direction, the
         de-lit colour and the likeness still need a human eye (guide §5.2).{' '}
         {isReplace

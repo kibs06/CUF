@@ -39,7 +39,7 @@ function Delta({ value, children }) {
 
 function Metric({ label, value, footer, loading = false }) {
   return (
-    <div className="bg-white p-4">
+    <div className="bg-card p-4">
       <p className="text-[12px] font-medium text-muted">{label}</p>
       {loading ? (
         <div className="mt-2 h-6 w-20 animate-pulse rounded bg-canvas" />
@@ -298,7 +298,7 @@ export default function Dashboard() {
         />
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-border bg-white">
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-3.5">
           <div>
             <h2 className="text-[15px] font-bold text-ink">Order workflow</h2>
@@ -372,7 +372,7 @@ export default function Dashboard() {
           hasSellerQueue ? 'xl:grid-cols-[minmax(0,1.65fr)_minmax(310px,1fr)]' : ''
         }`}
       >
-        <section className="overflow-hidden rounded-xl border border-border bg-white">
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="flex items-center justify-between gap-3 px-4 py-3.5">
             <div>
               <h2 className="text-[15px] font-bold text-ink">Latest orders</h2>
@@ -497,7 +497,7 @@ export default function Dashboard() {
         </section>
 
         {hasSellerQueue && (
-          <aside className="overflow-hidden rounded-xl border border-border bg-white">
+          <aside className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between gap-3 px-4 py-3.5">
             <div>
               <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-ink">

@@ -95,7 +95,7 @@ export default function MfaCard() {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex items-center gap-2 border-b border-border px-6 py-4">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-canvas">
           {verified ? (
@@ -126,7 +126,7 @@ export default function MfaCard() {
                   enrollment.totp?.qr_code ?? '',
                 )}`}
                 alt="Authenticator QR code"
-                className="h-48 w-48 rounded-xl border border-border bg-white p-2"
+                className="h-48 w-48 rounded-xl border border-border bg-card p-2"
               />
             </div>
             <div>
@@ -154,7 +154,7 @@ export default function MfaCard() {
                     setConfirmCode(e.target.value.replace(/\D/g, ''))
                   }
                   placeholder="123456"
-                  className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-center text-xl font-bold tracking-[0.4em] text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+                  className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-center text-xl font-bold tracking-[0.4em] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                 />
               </div>
               {confirmError && (

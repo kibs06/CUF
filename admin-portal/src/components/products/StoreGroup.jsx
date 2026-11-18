@@ -17,7 +17,7 @@ export default function StoreGroup({
   const visibleProducts = showAll ? products : products.slice(0, 4)
 
   return (
-    <div className="mb-6 overflow-hidden rounded-xl border border-border bg-white">
+    <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card">
       {/* Store Header Banner — h-64 (256px) */}
       <div
         className="relative flex h-64 items-end p-6"

@@ -2,6 +2,82 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Palette ───────────────────────────────────────────────────────────
+   One set of tokens, two skins. Tailwind reads these through
+   tailwind.config.js, so the pages only ever name a role (surface, ink,
+   muted, border) and the dark theme changes nothing in their markup.
+   Values are "r g b" so `/20`-style alpha modifiers still work. */
+:root {
+  --c-primary: 139 90 43;
+  --c-primary-deep: 111 69 32;
+  --c-secondary: 59 35 20;
+  --c-ink: 31 27 22;
+  --c-muted: 107 92 78;
+  --c-faint: 237 229 219;
+  --c-accent: 14 124 123;
+  --c-accent-soft: 224 242 241;
+  --c-surface: 245 240 235;
+  --c-canvas: 250 247 242;
+  --c-border: 217 208 199;
+  --c-error: 179 38 30;
+  --c-error-soft: 253 236 234;
+  --c-pending: 154 107 10;
+  --c-pending-soft: 255 244 214;
+  --c-pending-ink: 122 86 0;
+  --c-danger: 214 69 69;
+  --c-sand: 232 221 213;
+  --c-card: 255 255 255;
+  --c-info: 43 75 203;
+  --c-info-soft: 228 235 255;
+  --c-violet: 91 61 240;
+  --c-violet-soft: 233 228 251;
+  --c-warning: 138 74 0;
+  --c-warning-soft: 255 238 219;
+}
+
+/* Dark: the same warm brand, read by lamplight. Chocolate canvas, cream ink,
+   and the accents lifted so they still carry on a dark surface. */
+.dark {
+  --c-primary: 214 172 120;
+  --c-primary-deep: 198 154 100;
+  --c-secondary: 76 48 28;
+  --c-ink: 241 233 223;
+  --c-muted: 174 157 140;
+  --c-faint: 48 37 28;
+  --c-accent: 96 208 202;
+  --c-accent-soft: 24 48 46;
+  --c-surface: 34 25 19;
+  --c-canvas: 21 15 11;
+  --c-border: 77 62 50;
+  --c-error: 234 124 116;
+  --c-error-soft: 60 30 27;
+  --c-pending: 232 180 92;
+  --c-pending-soft: 56 43 20;
+  --c-pending-ink: 240 202 132;
+  --c-danger: 232 132 132;
+  --c-sand: 53 41 32;
+  --c-card: 37 28 21;
+  --c-info: 158 180 255;
+  --c-info-soft: 27 35 67;
+  --c-violet: 184 166 255;
+  --c-violet-soft: 39 31 71;
+  --c-warning: 232 182 124;
+  --c-warning-soft: 59 43 23;
+  color-scheme: dark;
+}
+
+/* A lifted accent is a light surface in dark mode, so its label has to be the
+   dark ink — white on tan is unreadable. */
+.dark :is(.bg-primary, .bg-accent) {
+  color: rgb(var(--c-canvas));
+}
+
+/* `secondary` is the dark brown used on pills (a fill) and on labels (a
+   colour). In dark mode the fill stays brown, the label must be ink. */
+.dark .text-secondary {
+  color: rgb(var(--c-ink));
+}
+
 body {
   @apply bg-canvas text-ink;
   font-feature-settings: 'cv05', 'ss01';
@@ -104,15 +180,15 @@ body {
 
 .admin-3d-surface,
 .admin-3d-shell main :is(
-  section.rounded-xl.bg-white,
-  section.rounded-2xl.bg-white,
-  aside.rounded-xl.bg-white,
-  div.overflow-hidden.rounded-xl.border.border-border.bg-white:not(.shadow-pop),
-  div.rounded-xl.border.border-border.bg-white.p-3:not(.shadow-pop),
-  div.rounded-xl.border.border-border.bg-white.p-4:not(.admin-list-card):not(.shadow-pop),
-  div.rounded-xl.border.border-border.bg-white.p-5:not(.admin-list-card):not(.shadow-pop),
-  div.rounded-xl.border.border-border.bg-white.p-6:not(.shadow-pop),
-  div.rounded-xl.border.border-border.bg-white.p-8:not(.shadow-pop)
+  section.rounded-xl.bg-card,
+  section.rounded-2xl.bg-card,
+  aside.rounded-xl.bg-card,
+  div.overflow-hidden.rounded-xl.border.border-border.bg-card:not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-3:not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-4:not(.admin-list-card):not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-5:not(.admin-list-card):not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-6:not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-8:not(.shadow-pop)
 ) {
   background-image: linear-gradient(155deg, #ffffff 0%, #fffdfa 58%, #f7f1e9 100%);
   box-shadow:
@@ -126,15 +202,15 @@ body {
 @media (hover: hover) {
   .admin-3d-surface:hover,
   .admin-3d-shell main :is(
-    section.rounded-xl.bg-white,
-    section.rounded-2xl.bg-white,
-    aside.rounded-xl.bg-white,
-    div.overflow-hidden.rounded-xl.border.border-border.bg-white:not(.shadow-pop),
-    div.rounded-xl.border.border-border.bg-white.p-3:not(.shadow-pop),
-    div.rounded-xl.border.border-border.bg-white.p-4:not(.admin-list-card):not(.shadow-pop),
-    div.rounded-xl.border.border-border.bg-white.p-5:not(.admin-list-card):not(.shadow-pop),
-    div.rounded-xl.border.border-border.bg-white.p-6:not(.shadow-pop),
-    div.rounded-xl.border.border-border.bg-white.p-8:not(.shadow-pop)
+    section.rounded-xl.bg-card,
+    section.rounded-2xl.bg-card,
+    aside.rounded-xl.bg-card,
+    div.overflow-hidden.rounded-xl.border.border-border.bg-card:not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-3:not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-4:not(.admin-list-card):not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-5:not(.admin-list-card):not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-6:not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-8:not(.shadow-pop)
   ):hover {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.98),
@@ -408,5 +484,223 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .gcash-rise {
     animation: none;
+  }
+}
+
+/* ── Dark skin for the 3D layer ─────────────────────────────────────────
+   The rules above are cut paper and warm light: white gradients, cream
+   bevels, a hard `0 2px 0` edge. On a chocolate canvas those read as glowing
+   holes, so dark mode keeps the depth but turns the light down — a soft top
+   highlight, a dark shelf edge, and a deeper drop shadow. Selectors mirror
+   the light ones exactly, including the card list, because that is what the
+   pages actually render. */
+.dark .admin-3d-shell {
+  background-color: #140e0a;
+  background-image:
+    radial-gradient(1100px 620px at 12% -8%, rgba(214, 172, 120, 0.09), transparent 62%),
+    radial-gradient(900px 620px at 100% 2%, rgba(96, 208, 202, 0.07), transparent 60%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.03), transparent 45%);
+}
+
+.dark .admin-3d-shell header h1 {
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+
+.dark .admin-3d-rail {
+  background-image: linear-gradient(180deg, #2a1b12 0%, #1e130c 42%, #150d08 100%);
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    16px 0 40px -30px rgba(0, 0, 0, 0.95);
+}
+
+.dark .admin-3d-surface,
+.dark .admin-3d-shell main :is(
+  section.rounded-xl.bg-card,
+  section.rounded-2xl.bg-card,
+  aside.rounded-xl.bg-card,
+  div.overflow-hidden.rounded-xl.border.border-border.bg-card:not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-3:not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-4:not(.admin-list-card):not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-5:not(.admin-list-card):not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-6:not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-card.p-8:not(.shadow-pop)
+) {
+  background-image: linear-gradient(155deg, #251b13 0%, #201811 58%, #1b140e 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 2px 0 #100a06,
+    0 18px 34px -24px rgba(0, 0, 0, 0.9);
+}
+
+@media (hover: hover) {
+  .dark .admin-3d-surface:hover,
+  .dark .admin-3d-shell main :is(
+    section.rounded-xl.bg-card,
+    section.rounded-2xl.bg-card,
+    aside.rounded-xl.bg-card,
+    div.overflow-hidden.rounded-xl.border.border-border.bg-card:not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-3:not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-4:not(.admin-list-card):not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-5:not(.admin-list-card):not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-6:not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-card.p-8:not(.shadow-pop)
+  ):hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+      0 2px 0 #100a06,
+      0 24px 42px -24px rgba(0, 0, 0, 0.95);
+  }
+}
+
+.dark .admin-3d-shell main thead {
+  background-image: linear-gradient(180deg, #241a12 0%, #1c140e 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 #372a20;
+}
+
+.dark .admin-3d-shell main :is(
+  section[aria-label='Marketplace summary'],
+  section[aria-label='Transaction summaries'],
+  section[aria-label='Order pipeline']
+) {
+  border-color: #3d2e23;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 0 #100a06,
+    0 18px 32px -24px rgba(0, 0, 0, 0.9);
+}
+
+.dark .admin-3d-shell main :is(
+  section[aria-label='Marketplace summary'],
+  section[aria-label='Transaction summaries']
+) > * {
+  background-image: linear-gradient(180deg, #241b13 0%, #1e1710 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.dark .admin-3d-shell main section[aria-label='Order pipeline'] > button {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.dark .admin-3d-shell :is(header, main, aside) .shadow-pop {
+  background-image: linear-gradient(155deg, #2a2018 0%, #221a13 100%);
+  border-color: #46362a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 3px 0 #100a06,
+    0 26px 48px -20px rgba(0, 0, 0, 0.9);
+}
+
+.dark .admin-3d-float {
+  background-image: linear-gradient(155deg, #2a2018 0%, #211913 100%);
+  border-color: #46362a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 3px 0 #100a06,
+    0 32px 60px -24px rgba(0, 0, 0, 0.92);
+}
+
+.dark .admin-3d-pressable {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 0 #100a06,
+    0 10px 18px -16px rgba(0, 0, 0, 0.85);
+}
+
+@media (hover: hover) {
+  .dark .admin-3d-pressable:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 3px 0 #100a06,
+      0 14px 22px -16px rgba(0, 0, 0, 0.9);
+  }
+}
+
+.dark .admin-3d-pressable:active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 0 #100a06,
+    0 5px 10px -8px rgba(0, 0, 0, 0.8);
+}
+
+.dark .admin-3d-listcard {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 2px 0 #100a06,
+    0 18px 34px -24px rgba(0, 0, 0, 0.9);
+}
+
+@media (hover: hover) {
+  .dark .admin-3d-listcard:hover {
+    box-shadow:
+      inset 3px 0 0 rgb(var(--c-primary)),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+      0 2px 0 #100a06,
+      0 22px 38px -24px rgba(0, 0, 0, 0.92);
+  }
+}
+
+.dark .admin-3d-listcard:focus-within {
+  box-shadow:
+    inset 3px 0 0 rgb(var(--c-primary)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 2px 0 #100a06,
+    0 18px 34px -24px rgba(0, 0, 0, 0.9);
+}
+
+.dark .admin-3d-product {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 2px 0 #100a06,
+    0 18px 32px -24px rgba(0, 0, 0, 0.9);
+}
+
+@media (hover: hover) {
+  .dark .admin-3d-product:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 3px 0 #100a06,
+      0 26px 44px -24px rgba(0, 0, 0, 0.95);
+  }
+}
+
+@media (hover: hover) {
+  .dark .admin-list-item:hover {
+    background-color: rgb(255 255 255 / 0.04);
+  }
+}
+
+.dark .admin-list-item:focus-within {
+  background-color: rgb(255 255 255 / 0.03);
+}
+
+.dark .admin-3d-listcard:hover,
+.dark .admin-3d-listcard:focus-within {
+  background-color: #231a13;
+}
+
+.dark ::selection {
+  background: rgba(214, 172, 120, 0.28);
+}
+
+.dark :where(input, textarea, select) {
+  color-scheme: dark;
+}
+
+.dark :where(input, textarea)::placeholder {
+  color: rgb(var(--c-muted) / 0.75);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark .admin-3d-pressable:active,
+  .dark .admin-3d-product:hover {
+    transform: none;
   }
 }

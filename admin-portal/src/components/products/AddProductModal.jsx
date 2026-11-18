@@ -68,37 +68,37 @@ export default function AddProductModal({ open, stores, onClose, onSuccess, onEr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#3B2314]/40" onClick={handleClose} />
-      <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+      <div className="absolute inset-0 bg-secondary/40" onClick={handleClose} />
+      <div className="relative z-10 w-full max-w-lg rounded-2xl bg-card shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#F5F0EB] p-6">
-          <h2 className="font-display text-xl font-bold text-[#3B2314]">Add Product</h2>
+        <div className="flex items-center justify-between border-b border-surface p-6">
+          <h2 className="font-display text-xl font-bold text-ink">Add Product</h2>
           <button
             type="button"
             onClick={handleClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[#F5F0EB]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface"
           >
-            <X size={16} className="text-[#6B5C4E]" />
+            <X size={16} className="text-muted" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 p-6">
           {/* Error message */}
           {error && (
-            <div className="rounded-xl border border-[#D64545]/30 bg-[#D64545]/10 px-4 py-3 text-sm text-[#D64545]">
+            <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
               {error}
             </div>
           )}
 
           {/* Store selector */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">
               Store *
             </label>
             <select
               value={storeId}
               onChange={(e) => setStoreId(e.target.value)}
-              className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
             >
               <option value="">Select a store...</option>
               {stores.map((s) => (
@@ -111,14 +111,14 @@ export default function AddProductModal({ open, stores, onClose, onSuccess, onEr
 
           {/* Product name */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">
               Product Name *
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
               placeholder="e.g. Handcrafted Leather Sandal"
             />
           </div>
@@ -126,7 +126,7 @@ export default function AddProductModal({ open, stores, onClose, onSuccess, onEr
           {/* Price + Category */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">
                 Price (₱) *
               </label>
               <input
@@ -135,18 +135,18 @@ export default function AddProductModal({ open, stores, onClose, onSuccess, onEr
                 step="0.01"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 font-mono text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+                className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 font-mono text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                 placeholder="0.00"
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">
                 Category *
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+                className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
               >
                 <option>Casual</option>
                 <option>Formal</option>
@@ -159,14 +159,14 @@ export default function AddProductModal({ open, stores, onClose, onSuccess, onEr
 
           {/* Description */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">
               Description
             </label>
             <textarea
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full resize-none rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full resize-none rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
               placeholder="Describe the product..."
             />
           </div>
@@ -176,14 +176,14 @@ export default function AddProductModal({ open, stores, onClose, onSuccess, onEr
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 rounded-xl border border-[#D9D0C7] py-2.5 text-sm font-semibold text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB]"
+              className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold text-muted transition-colors hover:bg-surface"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 rounded-xl bg-[#8B5A2B] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
+              className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save Product'}
             </button>

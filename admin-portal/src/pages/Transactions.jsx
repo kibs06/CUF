@@ -251,15 +251,15 @@ function TransactionDetail({ transaction, feeColumnsAvailable, onClose }) {
         <div className="space-y-4 text-sm">
           {/* Amount summary */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-border bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-[12px] font-medium text-muted">Amount charged</p>
               <p className="mt-1 font-mono text-lg font-bold text-ink">{formatCurrency(transaction.amount)}</p>
             </div>
-            <div className="rounded-xl border border-border bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-[12px] font-medium text-muted">Model B fee</p>
               <p className="mt-1 font-mono text-lg font-bold text-ink">{formatCurrency(transaction.fee_amount)}</p>
             </div>
-            <div className="rounded-xl border border-border bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-[12px] font-medium text-muted">PayMongo fee</p>
               <p className="mt-1 font-mono text-lg font-bold text-ink">
                 {transaction.paymongo_fee_amount != null
@@ -267,7 +267,7 @@ function TransactionDetail({ transaction, feeColumnsAvailable, onClose }) {
                   : '—'}
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-[12px] font-medium text-muted">Net</p>
               <p className="mt-1 font-mono text-lg font-bold text-ink">
                 {transaction.net_amount != null ? formatCurrency(transaction.net_amount) : '—'}
@@ -276,14 +276,14 @@ function TransactionDetail({ transaction, feeColumnsAvailable, onClose }) {
           </div>
 
           {!feeColumnsAvailable && (
-            <p className="rounded-xl border border-[#E8A020]/40 bg-[#E8A020]/10 px-4 py-2.5 text-xs text-[#8a6100]">
+            <p className="rounded-xl border border-pending/40 bg-pending/10 px-4 py-2.5 text-xs text-[#8a6100]">
               Fee and net columns are not in the database yet — apply the admin-transactions
               migration (20260810000000_admin_transactions_view.sql) to populate them.
             </p>
           )}
 
           {/* Order context */}
-          <div className="rounded-xl border border-border bg-white p-4">
+          <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-semibold text-ink">{transaction.customer_name}</p>
@@ -312,7 +312,7 @@ function TransactionDetail({ transaction, feeColumnsAvailable, onClose }) {
           </div>
 
           {/* References */}
-          <div className="rounded-xl border border-border bg-white p-4">
+          <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="mb-2 text-[12px] font-medium text-muted">References</h3>
             <div className="grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
               <div className="flex justify-between gap-3"><span className="text-muted">PayMongo payment</span><span className="font-mono text-ink">{transaction.paymongo_payment_intent_id ?? '—'}</span></div>
@@ -323,7 +323,7 @@ function TransactionDetail({ transaction, feeColumnsAvailable, onClose }) {
           </div>
 
           {/* Event timeline */}
-          <div className="rounded-xl border border-border bg-white p-4">
+          <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="mb-3 text-[12px] font-medium text-muted">
               Webhook event timeline ({transaction.events_count})
             </h3>
@@ -505,7 +505,7 @@ export default function Transactions() {
       <section aria-label="Transaction summaries" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border xl:grid-cols-4">
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white p-5">
+            <div key={i} className="bg-card p-5">
               <Skeleton className="mb-3 h-9 w-9 rounded-xl" />
               <Skeleton className="mb-2 h-8 w-20" />
               <Skeleton className="h-4 w-28" />
@@ -515,7 +515,7 @@ export default function Transactions() {
           cards.map((card, i) => (
             <motion.div
               key={card.key}
-              className="bg-white"
+              className="bg-card"
               initial={reduce ? false : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: i * 0.06 }}
@@ -536,7 +536,7 @@ export default function Transactions() {
       </section>
 
       {/* Filter panel */}
-      <div className="rounded-xl border border-border bg-white p-4">
+      <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-center gap-3">
           {/* Status segmented control */}
           <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-canvas p-1">
@@ -550,7 +550,7 @@ export default function Transactions() {
                   aria-pressed={active}
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                     active
-                      ? 'bg-white text-secondary'
+                      ? 'bg-card text-secondary'
                       : 'text-muted hover:text-secondary'
                   }`}
                 >
@@ -566,7 +566,7 @@ export default function Transactions() {
               value={storeFilter}
               onChange={(e) => setStoreFilter(e.target.value)}
               aria-label="Filter by store"
-              className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink outline-none transition-colors focus:border-primary"
+              className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-ink outline-none transition-colors focus:border-primary"
             >
               <option value="all">All stores</option>
               {stores.map((s) => (
@@ -601,7 +601,7 @@ export default function Transactions() {
             placeholder="Search order, customer, store, ref…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-border bg-canvas py-2.5 pl-10 pr-10 text-sm text-ink placeholder-muted outline-none transition-all focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-xl border border-border bg-canvas py-2.5 pl-10 pr-10 text-sm text-ink placeholder-muted outline-none transition-all focus:border-primary focus:bg-card focus:ring-2 focus:ring-primary/20"
           />
           {search && (
             <button
@@ -641,14 +641,14 @@ export default function Transactions() {
         </motion.div>
       )}
       {isError && (
-        <div className="rounded-xl border border-border bg-white p-8 text-center">
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
           <p className="text-sm text-error">{error.message}</p>
         </div>
       )}
 
       {!isLoading && !isError && (
         <>
-          <div className="overflow-x-auto rounded-xl border border-border bg-white">
+          <div className="overflow-x-auto rounded-xl border border-border bg-card">
             <table className="min-w-full text-left text-sm">
               <caption className="sr-only">Payment transactions with date, customer, order, amount and status</caption>
               <thead className="bg-canvas">

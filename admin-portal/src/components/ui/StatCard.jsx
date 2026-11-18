@@ -48,7 +48,7 @@ export default function StatCard({
     <Tag
       type={clickable ? 'button' : undefined}
       onClick={onClick}
-      className={`flex h-full flex-col text-left transition-colors ${bare ? 'bg-white px-4 py-3.5' : 'admin-3d-surface rounded-xl border border-border bg-white px-4 py-3.5'} ${
+      className={`flex h-full flex-col text-left transition-colors ${bare ? 'bg-card px-4 py-3.5' : 'admin-3d-surface rounded-xl border border-border bg-card px-4 py-3.5'} ${
         clickable ? 'w-full cursor-pointer hover:border-primary/40' : ''
       } ${active ? 'border-primary ring-1 ring-primary/40' : ''}`}
     >

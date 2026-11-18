@@ -123,7 +123,7 @@ export default function DateRangePicker({ from = null, to = null, onChange }) {
         onClick={openPicker}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-border bg-white px-3 text-[12.5px] font-medium text-ink outline-none transition-colors duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] hover:border-primary/40 hover:bg-canvas focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15"
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 text-[12.5px] font-medium text-ink outline-none transition-colors duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] hover:border-primary/40 hover:bg-canvas focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15"
       >
         <CalendarDays size={14} strokeWidth={1.7} className="shrink-0 text-primary" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate text-center">{formatRangeLabel(from, to)}</span>
@@ -141,7 +141,7 @@ export default function DateRangePicker({ from = null, to = null, onChange }) {
         <div
           role="dialog"
           aria-label="Choose a date range"
-          className="absolute right-0 z-30 mt-2 w-[336px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-white p-4 shadow-pop"
+          className="absolute right-0 z-30 mt-2 w-[336px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card p-4 shadow-pop"
         >
           <div className="mb-3 flex flex-wrap gap-1.5">
             {PRESETS.map((preset) => {
@@ -227,7 +227,7 @@ export default function DateRangePicker({ from = null, to = null, onChange }) {
                     <span
                       aria-hidden="true"
                       className={`absolute inset-x-2 bottom-0.5 h-[2px] rounded-full ${
-                        selected ? 'bg-white' : 'bg-primary'
+                        selected ? 'bg-card' : 'bg-primary'
                       }`}
                     />
                   )}

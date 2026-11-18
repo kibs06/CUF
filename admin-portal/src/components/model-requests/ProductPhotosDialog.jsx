@@ -44,13 +44,13 @@ export default function ProductPhotosDialog({ request, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#3B2314]/60" onClick={onClose} />
-      <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white">
-        <div className="flex items-center justify-between border-b border-[#F5F0EB] px-5 py-4">
+      <div className="absolute inset-0 bg-secondary/60" onClick={onClose} />
+      <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-card">
+        <div className="flex items-center justify-between border-b border-surface px-5 py-4">
           <div className="min-w-0">
-            <h2 className="truncate font-display text-lg font-bold text-[#3B2314]">{title}</h2>
+            <h2 className="truncate font-display text-lg font-bold text-ink">{title}</h2>
             {photos.length > 1 && (
-              <p className="text-xs tabular-nums text-[#6B5C4E]">
+              <p className="text-xs tabular-nums text-muted">
                 {index + 1} of {photos.length}
               </p>
             )}
@@ -59,9 +59,9 @@ export default function ProductPhotosDialog({ request, onClose }) {
             type="button"
             onClick={onClose}
             aria-label="Close photos"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[#F5F0EB]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-surface"
           >
-            <X size={16} className="text-[#6B5C4E]" />
+            <X size={16} className="text-muted" />
           </button>
         </div>
 
@@ -74,7 +74,7 @@ export default function ProductPhotosDialog({ request, onClose }) {
                   onClick={() => setIndex((i) => Math.max(i - 1, 0))}
                   disabled={index === 0}
                   aria-label="Previous photo"
-                  className="absolute left-1 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-[#3B2314] shadow transition-opacity hover:bg-white disabled:opacity-30"
+                  className="absolute left-1 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-ink shadow transition-opacity hover:bg-card disabled:opacity-30"
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -91,7 +91,7 @@ export default function ProductPhotosDialog({ request, onClose }) {
                   onClick={() => setIndex((i) => Math.min(i + 1, photos.length - 1))}
                   disabled={index === photos.length - 1}
                   aria-label="Next photo"
-                  className="absolute right-1 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-[#3B2314] shadow transition-opacity hover:bg-white disabled:opacity-30"
+                  className="absolute right-1 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-card/90 text-ink shadow transition-opacity hover:bg-card disabled:opacity-30"
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -103,7 +103,7 @@ export default function ProductPhotosDialog({ request, onClose }) {
         </div>
 
         {photos.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto border-t border-[#F5F0EB] p-3">
+          <div className="flex gap-2 overflow-x-auto border-t border-surface p-3">
             {photos.map((p, i) => (
               <button
                 key={p.image_url || i}
@@ -113,8 +113,8 @@ export default function ProductPhotosDialog({ request, onClose }) {
                 aria-pressed={i === index}
                 className={
                   i === index
-                    ? 'h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 border-[#8B5A2B]'
-                    : 'h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 border-transparent hover:border-[#D9D0C7]'
+                    ? 'h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 border-primary'
+                    : 'h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 border-transparent hover:border-border'
                 }
               >
                 <img src={p.image_url} alt="" className="h-full w-full object-cover" />
