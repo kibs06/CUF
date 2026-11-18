@@ -1,5 +1,16 @@
 [
   {
+    "latest_version": "1.0.84",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.84/app-release-1.0.84.apk",
+    "released_at": "2026-11-18",
+    "notes": [
+      "GCash: the reference and amount fill themselves in from a pasted or scanned receipt",
+      "Cancel a GCash order while it is still waiting for the money",
+      "Sellers can ask for their payout as soon as the admin confirms the money, instead of waiting for the nightly batch",
+      "Admin portal: Payment verification, Payouts and Platform GCash now match the rest of the portal, and every transfer shows the store's GCash number to copy"
+    ]
+  },
+  {
     "latest_version": "1.0.83",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.83/app-release-1.0.83.apk",
     "released_at": "2026-11-17",
