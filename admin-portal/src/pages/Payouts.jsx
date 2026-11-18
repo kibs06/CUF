@@ -14,14 +14,35 @@ import EmptyState from '../components/ui/EmptyState.jsx'
 const today = () => new Date().toISOString().slice(0, 10)
 
 const BTN =
-  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 text-[12px] font-semibold text-secondary transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[12px] font-semibold text-secondary transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50'
 const BTN_PRIMARY =
   'inline-flex h-8 items-center gap-1.5 rounded-lg bg-secondary px-2.5 text-[12px] font-semibold text-white transition-colors hover:bg-primaryDeep disabled:cursor-not-allowed disabled:opacity-50'
 const BTN_SUCCESS =
   'inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#4F6B35] px-2.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#445C2D] disabled:cursor-not-allowed disabled:opacity-50'
 
 const INPUT =
-  'h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors placeholder:text-muted/60 focus:border-primary focus:ring-2 focus:ring-primary/15'
+  'h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors placeholder:text-muted/60 focus:border-primary focus:ring-2 focus:ring-primary/15'
+
+/**
+ * The seller's payout account, split into what gets copied and what gets
+ * checked. The seller app writes `payout_details` as "09171234567 · JUAN CRUZ"
+ * (number first — see lib/utils/payout_account.dart), so the number is the part
+ * that belongs in the GCash field and the name is the account holder it must
+ * match. Values written before the seller had a field on file are a bare number
+ * or free text (bank rail), and both still read correctly here.
+ */
+function payoutAccount(payout) {
+  const details = String(payout?.payout_details ?? '').trim()
+  const method = String(payout?.payout_method ?? '').trim().toLowerCase()
+  if (!details) return { number: '', name: '', method }
+  if (method === 'bank') return { number: details, name: '', method }
+  const [rawNumber, ...rest] = details.split('·')
+  return {
+    number: rawNumber.trim(),
+    name: rest.join('·').trim(),
+    method,
+  }
+}
 
 /**
  * "GCash · 09171234567" — the destination the admin actually types into the
@@ -29,10 +50,9 @@ const INPUT =
  * nothing is, instead of showing an empty block that looks like a zero.
  */
 function destination(payout) {
-  const details = String(payout?.payout_details ?? '').trim()
-  const method = String(payout?.payout_method ?? '').trim()
-  if (details) {
-    return method === 'bank' ? `Bank · ${details}` : `GCash · ${details}`
+  const { number, method } = payoutAccount(payout)
+  if (number) {
+    return method === 'bank' ? `Bank · ${number}` : `GCash · ${number}`
   }
   const phone = String(payout?.seller_phone ?? '').trim()
   return phone || 'No payout details on file'
@@ -63,7 +83,10 @@ export default function Payouts() {
 
   const copyDestination = async (payout) => {
     try {
-      await navigator.clipboard.writeText(destination(payout))
+      // Only the number: the account name is for reading, and pasting it into
+      // the GCash "send to" field would fail.
+      const { number } = payoutAccount(payout)
+      await navigator.clipboard.writeText(number || destination(payout))
       setCopiedId(payout.id)
       window.setTimeout(() => setCopiedId(null), 1600)
     } catch {
@@ -122,7 +145,7 @@ export default function Payouts() {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-xl border border-border bg-white">
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3.5">
           <div>
             <h2 className="text-[15px] font-bold text-ink">Store balances</h2>
@@ -184,7 +207,7 @@ export default function Payouts() {
         )}
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-border bg-white">
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3.5">
           <div>
             <h2 className="text-[15px] font-bold text-ink">Payout batches</h2>
@@ -246,6 +269,11 @@ export default function Payouts() {
                         <Copy size={12} strokeWidth={1.8} aria-hidden="true" />
                       )}
                     </button>
+                    {payoutAccount(payout).name ? (
+                      <span className="text-[11.5px] text-muted">
+                        · {payoutAccount(payout).name}
+                      </span>
+                    ) : null}
                     {payout.seller_name ? (
                       <span className="text-[11.5px] text-muted">· {payout.seller_name}</span>
                     ) : null}
@@ -281,7 +309,7 @@ export default function Payouts() {
           aria-labelledby="payout-transfer-title"
           className="fixed inset-0 z-50 flex items-end justify-center bg-secondary/45 p-4 backdrop-blur-sm sm:items-center"
         >
-          <div className="w-full max-w-md rounded-xl border border-border bg-white p-5 shadow-[0_24px_60px_-24px_rgba(59,35,20,0.55)]">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-[0_24px_60px_-24px_rgba(59,35,20,0.55)]">
             <h3 id="payout-transfer-title" className="text-[15px] font-bold text-ink">
               Record the transfer
             </h3>
@@ -301,10 +329,15 @@ export default function Payouts() {
                   <span className="text-[13px] font-semibold text-ink">
                     {destination(openPayout)}
                   </span>
+                  {payoutAccount(openPayout).name ? (
+                    <span className="text-[11.5px] text-muted">
+                      {payoutAccount(openPayout).name}
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => copyDestination(openPayout)}
-                    className="inline-flex h-7 items-center gap-1 rounded-lg border border-border bg-white px-2 text-[11.5px] font-semibold text-secondary transition-colors hover:bg-canvas"
+                    className="inline-flex h-7 items-center gap-1 rounded-lg border border-border bg-card px-2 text-[11.5px] font-semibold text-secondary transition-colors hover:bg-canvas"
                   >
                     {copiedId === openPayout.id ? (
                       <Check size={12} strokeWidth={2} aria-hidden="true" />
@@ -354,7 +387,7 @@ export default function Payouts() {
                   id="payout-receipt"
                   type="file"
                   accept="image/*,application/pdf"
-                  className="w-full text-[11.5px] text-muted file:mr-2 file:rounded-md file:border-0 file:bg-white file:px-2 file:py-1 file:text-[11px] file:font-semibold file:text-ink"
+                  className="w-full text-[11.5px] text-muted file:mr-2 file:rounded-md file:border-0 file:bg-card file:px-2 file:py-1 file:text-[11px] file:font-semibold file:text-ink"
                   onChange={(e) => setReceipt(e.target.files?.[0] ?? null)}
                 />
               </label>

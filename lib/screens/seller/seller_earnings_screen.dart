@@ -3,7 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
+import '../../utils/payout_account.dart';
 import '../../widgets/gcash_flow_kit.dart';
+import '../../widgets/sole_text_field.dart';
 
 /// What the platform owes this store, and what it has already paid.
 ///
@@ -28,6 +30,11 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
   String? _storeId;
   bool _requesting = false;
 
+  /// Where the money goes, read from the same profile columns the admin
+  /// portal prints on a payout batch (`payout_method` / `payout_details`).
+  PayoutAccount? _payoutAccount;
+  String _payoutMethod = 'gcash';
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +48,25 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
     });
     try {
       final client = Supabase.instance.client;
+      final uid = client.auth.currentUser?.id;
+
+      // The payout destination is a profile column, not a store one — the
+      // admin reads these same two fields when preparing the transfer.
+      final profile = uid == null
+          ? null
+          : await client
+              .from('profiles')
+              .select('payout_method, payout_details')
+              .eq('id', uid)
+              .maybeSingle();
+      final payoutAccount = parsePayoutAccount(
+        profile?['payout_method']?.toString(),
+        profile?['payout_details']?.toString(),
+      );
+      final method = profile?['payout_method']?.toString().trim().toLowerCase();
+      final payoutMethod =
+          (method == null || method.isEmpty) ? 'gcash' : method;
+
       final store = await client
           .from('stores')
           .select('id')
@@ -52,6 +78,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
           _loading = false;
           _payouts = [];
           _storeId = null;
+          _payoutAccount = payoutAccount;
+          _payoutMethod = payoutMethod;
         });
         return;
       }
@@ -79,6 +107,8 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
             .toList();
         _pendingNet = (payable?['net_amount'] as num?)?.toDouble() ?? 0;
         _pendingOrders = (payable?['order_count'] as num?)?.toInt() ?? 0;
+        _payoutAccount = payoutAccount;
+        _payoutMethod = payoutMethod;
         _loading = false;
       });
     } catch (e) {
@@ -239,9 +269,11 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
             color: AppConstants.secondary.withValues(alpha: 0.55),
           ),
         ),
+        const SizedBox(height: 16),
+        GcashRiseIn(order: 3, child: _payoutAccountCard()),
         const SizedBox(height: 20),
         GcashRiseIn(
-          order: 3,
+          order: 4,
           child: Row(
             children: [
               Expanded(
@@ -363,6 +395,213 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
         ],
       ),
     );
+  }
+
+  /// The one place a seller can say where the money goes. It sits above the
+  /// history because a batch cannot be sent without it: the admin's Payouts
+  /// row reads the same two columns and shows "No payout details on file"
+  /// until this is filled in.
+  Widget _payoutAccountCard() {
+    final account = _payoutAccount;
+    final isSet = account?.isSet ?? false;
+    return GcashPanel(
+      eyebrow: 'PAYOUT ACCOUNT',
+      trailing: GcashStatusPill(
+        label: isSet ? 'On file' : 'Missing',
+        color: isSet ? AppConstants.success : SellerTheme.amber,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            payoutDestinationLabel(account, method: _payoutMethod),
+            style: AppConstants.monoStyle(
+              fontSize: isSet ? 18 : 13,
+              fontWeight: FontWeight.w700,
+              color: isSet
+                  ? AppConstants.primary
+                  : AppConstants.secondary.withValues(alpha: 0.55),
+            ),
+          ),
+          if (isSet && account!.name.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              account.name,
+              style: AppConstants.bodyStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Text(
+            isSet
+                ? 'CUFMAI transfers your earnings to this account. Keep the '
+                    'number and the name exactly as GCash shows them.'
+                : 'A payout can only be sent once a GCash number is on file — '
+                    'until then the admin has nowhere to send your earnings.',
+            style: AppConstants.bodyStyle(
+              fontSize: 11.5,
+              height: 1.4,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(height: 12),
+          GcashPrimaryButton(
+            label: isSet ? 'Edit payout account' : 'Add payout account',
+            icon: Icons.edit_outlined,
+            showIcon: false,
+            onPressed: _editPayoutAccount,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Writes `profiles.payout_method` / `profiles.payout_details` — the seller
+  /// owns this row, so the update goes through the ordinary own-profile policy
+  /// (the column guard only protects role and suspension fields).
+  Future<void> _editPayoutAccount() async {
+    final client = Supabase.instance.client;
+    final uid = client.auth.currentUser?.id;
+    if (uid == null) return;
+
+    final numberCtrl = TextEditingController(text: _payoutAccount?.number ?? '');
+    final nameCtrl = TextEditingController(text: _payoutAccount?.name ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        var saving = false;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> save() async {
+              if (!formKey.currentState!.validate()) return;
+              setSheetState(() => saving = true);
+              final number = normalizeGcashNumber(numberCtrl.text);
+              final holder = nameCtrl.text.trim();
+              try {
+                await client.from('profiles').update({
+                  'payout_method': 'gcash',
+                  'payout_details':
+                      encodePayoutDetails(number: number, name: holder),
+                }).eq('id', uid);
+                if (!mounted) return;
+                setState(() {
+                  _payoutAccount = PayoutAccount(number: number, name: holder);
+                  _payoutMethod = 'gcash';
+                });
+                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Payout account saved — the next batch is sent here.',
+                    ),
+                  ),
+                );
+              } catch (e) {
+                // Says which side failed: a Postgrest error is the server
+                // refusing, anything else is the connection. Either way the
+                // seller must know the account was NOT saved.
+                debugPrint('[EARNINGS] payout account save failed: $e');
+                if (!context.mounted) return;
+                setSheetState(() => saving = false);
+                final detail = e is PostgrestException ? e.message : 'check your connection';
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Could not save the payout account — $detail'),
+                  ),
+                );
+              }
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppConstants.surfaceLight,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  16,
+                  20,
+                  MediaQuery.of(context).viewPadding.bottom + 20,
+                ),
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Payout account',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'CUFMAI transfers your earnings to this GCash '
+                          'account. Both the number and the name must match '
+                          'your wallet — a wrong number sends the money to a '
+                          'stranger and it cannot be recalled.',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11.5,
+                            height: 1.4,
+                            color: AppConstants.secondary.withValues(alpha: 0.65),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SoleTextField(
+                          labelText: 'GCash number',
+                          hintText: '09XXXXXXXXX',
+                          controller: numberCtrl,
+                          keyboardType: TextInputType.phone,
+                          prefixIcon: Icons.phone_iphone,
+                          validator: gcashNumberError,
+                        ),
+                        const SizedBox(height: 14),
+                        SoleTextField(
+                          labelText: 'Account name',
+                          hintText: 'Name shown in your GCash app',
+                          controller: nameCtrl,
+                          validator: payoutAccountNameError,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                        ),
+                        const SizedBox(height: 18),
+                        GcashPrimaryButton(
+                          label: 'Save payout account',
+                          showIcon: false,
+                          loading: saving,
+                          onPressed: saving ? null : save,
+                        ),
+                        TextButton(
+                          onPressed:
+                              saving ? null : () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    numberCtrl.dispose();
+    nameCtrl.dispose();
   }
 
   Widget _payoutCard(Map<String, dynamic> p) {

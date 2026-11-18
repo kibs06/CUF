@@ -313,9 +313,12 @@ session exists).
 `id_document_url`, `selfie_url`, `cufmai_member_id`, `barangay_proof_url`,
 `store_front_url` (PUBLIC `store-assets` path — reused as the store banner
 by `StoreService.createStore`), `product_photo_urls` (private `TEXT[]`,
-all 5 required), `store_name`, `store_description`. (The former `payout_method` /
-`payout_details` columns still exist but are no longer written — payout
-setup is out of scope for the application flow.)
+all 5 required), `store_name`, `store_description`. (The `payout_method` / `payout_details`
+columns are written from the seller's own Earnings screen — "Payout account",
+which stores `'gcash'` and `"09171234567 · JUAN CRUZ"` via
+`lib/utils/payout_account.dart`. The admin portal reads the same two columns on
+a payout batch, which is what stops a batch saying "No payout details on
+file". Payout *setup* in the application flow is still not part of signup.)
 
 **`seller_business_docs`:** `profile_id` (FK, unique), `dti_cert_url`,
 `bir_cor_url`, `permit_url`, `verification_status`, `submitted_at`,
