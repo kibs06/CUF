@@ -1,5 +1,17 @@
 [
   {
+    "latest_version": "1.0.85",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.85/app-release-1.0.85.apk",
+    "released_at": "2026-11-18",
+    "notes": [
+      "Submitted GCash proofs now clear the purchased item from your cart",
+      "Your receipt is the record: the reference and amount are read from your screenshot and can no longer be typed over",
+      "The proof arrival time is stamped by the server, so a receipt cannot be backdated",
+      "One GCash reference can only pay once",
+      "Tapping the 'awaiting confirmation' error takes you straight to that pending order"
+    ]
+  },
+  {
     "latest_version": "1.0.84",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.84/app-release-1.0.84.apk",
     "released_at": "2026-11-18",
