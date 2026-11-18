@@ -26,6 +26,12 @@ select plan(51);
 -- ── clear any JWT context ─────────────────────────────────────────
 select set_config('request.jwt.claims', '{"sub":null,"role":null}', true);
 
+-- 20261118120000 shares the per-customer proof window with the order flow.
+-- This suite files several deposits in a row to exercise the deposit rules,
+-- so the window is closed here — it has its own suite
+-- (bulk_deposit_proof_cooldown.test.sql).
+update public.platform_settings set gcash_proof_cooldown_seconds = 0 where id = 1;
+
 -- ── fixtures (as postgres; RLS bypassed) ──────────────────────────
 insert into auth.users (instance_id, id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values

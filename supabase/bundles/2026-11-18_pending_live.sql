@@ -2,35 +2,46 @@
 -- PENDING LIVE MIGRATIONS — 2026-11-18 (project psczvbfoybqhjeqssimw)
 --
 -- Paste this whole file into the Supabase SQL Editor and run it once.
--- It is five unapplied migrations, in version order, copied verbatim:
+-- It is eight unapplied migrations, in version order, copied verbatim:
 --
---   1/5  20261118051000  admins can read payment proofs (the queue said
+--   1/8  20261118051000  admins can read payment proofs (the queue said
 --                        "no proof submitted" for orders that had one)
---   2/5  20261118060000  sellers can request a payout; one helper now owns
+--   2/8  20261118060000  sellers can request a payout; one helper now owns
 --                        the per-order payout maths
---   3/5  20261118070000  a proof's arrival time is stamped by the server
+--   3/8  20261118070000  a proof's arrival time is stamped by the server
 --                        and can never be moved
---   4/5  20261118080000  one GCash reference can only pay once, across
+--   4/8  20261118080000  one GCash reference can only pay once, across
 --                        orders, proofs and reservation deposits
---   5/5  20261118090000  a submitted proof deletes its own cart lines, in
+--   5/8  20261118090000  a submitted proof deletes its own cart lines, in
 --                        the same transaction as the order update
+--   6/8  20261118100000  a retried cash checkout reuses one order instead
+--                        of creating a second one (idempotency key)
+--   7/8  20261118110000  one GCash proof file per minute per customer, so
+--                        attempts cannot be filed back to back
+--   8/8  20261118120000  the same window now covers bulk reservation
+--                        deposits — one clock for both proof families
 --
 -- Section 1 is the file's PART 1 (the policy) only. Its PART 2 is a
 -- read-only self-check that impersonates an admin and ends in ROLLBACK —
 -- left out here so this file only applies. Run it separately afterwards if
 -- you want the proof it prints.
 --
--- Order matters: 5/5 redefines submit_gcash_proof from 20261118040000, 3/5
--- installs the trigger that RPC's insert runs under, and 4/5's guards must
--- exist before any proof is written carrying a reused reference.
+-- Order matters: 5/8 redefines submit_gcash_proof from 20261118040000, 3/8
+-- installs the trigger that RPC's insert runs under, and 4/8's guards must
+-- exist before any proof is written carrying a reused reference. 6/8 is
+-- independent of all of them — it only adds a nullable column and a partial
+-- index on public.orders. 7/8 adds the proof window; 8/8 replaces BOTH
+-- submit_gcash_proof and submit_bulk_reservation_deposit_proof and moves that
+-- window into one shared helper, so it must follow 7/8 (the version it
+-- extends), and no later file may copy the inline version instead.
 --
 -- Both apply paths were measured on a fresh local database, not argued:
--- `supabase db reset` replays the lineage from empty with all five files in
+-- `supabase db reset` replays the lineage from empty with all eight files in
 -- this order (exit 0), and `supabase test db` is green afterwards.
 -- ══════════════════════════════════════════════════════════════════
 
 -- ──────────────────────────────────────────────────────────────────
--- 1/5  20261118051000_admin_read_payment_proofs   (PART 1 only)
+-- 1/8  20261118051000_admin_read_payment_proofs   (PART 1 only)
 -- ──────────────────────────────────────────────────────────────────
 -- ══════════════════════════════════════════════════════════════════
 -- Migration + self-check: Admin read access to manual-GCash payment proofs
@@ -90,7 +101,7 @@ commit;
 
 
 -- ──────────────────────────────────────────────────────────────────
--- 2/5  20261118060000_seller_payout_requests
+-- 2/8  20261118060000_seller_payout_requests
 -- ──────────────────────────────────────────────────────────────────
 -- ══════════════════════════════════════════════════════════════════
 -- Migration: One owner for the payout math + seller payout requests
@@ -554,7 +565,7 @@ GRANT  EXECUTE ON FUNCTION public.request_my_payout() TO authenticated;
 
 
 -- ──────────────────────────────────────────────────────────────────
--- 3/5  20261118070000_gcash_proof_server_time
+-- 3/8  20261118070000_gcash_proof_server_time
 -- ──────────────────────────────────────────────────────────────────
 -- ═══════════════════════════════════════════════════════════════════════
 -- 20261118070000_gcash_proof_server_time.sql
@@ -707,7 +718,7 @@ COMMIT;
 
 
 -- ──────────────────────────────────────────────────────────────────
--- 4/5  20261118080000_gcash_reference_single_use
+-- 4/8  20261118080000_gcash_reference_single_use
 -- ──────────────────────────────────────────────────────────────────
 -- ═══════════════════════════════════════════════════════════════════════
 -- 20261118080000_gcash_reference_single_use.sql
@@ -948,7 +959,7 @@ COMMIT;
 
 
 -- ──────────────────────────────────────────────────────────────────
--- 5/5  20261118090000_cart_clears_on_proof
+-- 5/8  20261118090000_cart_clears_on_proof
 -- ──────────────────────────────────────────────────────────────────
 -- ════════════════════════════════════════════════════════════════════
 -- A submitted proof clears its own lines from the customer's cart
@@ -1253,3 +1264,747 @@ $$;
 
 -- No grant statements: CREATE OR REPLACE keeps the privileges 20261118040000
 -- set on this exact signature, and a fresh database applies that file first.
+
+
+-- ──────────────────────────────────────────────────────────────────
+-- 6/8  20261118100000_cash_order_idempotency
+-- ──────────────────────────────────────────────────────────────────
+
+-- ══════════════════════════════════════════════════════════════════
+-- Cash / COD orders: one submission, one order.
+--
+-- Placing a cash order is a plain client INSERT into public.orders, so a
+-- submit that timed out after the row landed was indistinguishable from a
+-- submit that never arrived: the customer retried and got a second order,
+-- stock and all. Nothing on the row identified the attempt.
+--
+-- The app now sends a key it keeps for the life of one checkout screen
+-- (rotated once an order exists), and this index makes a second insert with
+-- that key impossible. The client reads the 23505 as "the first attempt
+-- succeeded" and opens the order it already has instead of writing another.
+--
+-- GCash is untouched: its checkout goes through create_gcash_checkout and is
+-- already capped by uq_orders_one_awaiting_payment_confirmation_per_customer,
+-- which allows one open awaiting-payment order per customer. Cash orders are
+-- status 'pending', so the two guards never overlap.
+-- ══════════════════════════════════════════════════════════════════
+
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS idempotency_key text;
+
+COMMENT ON COLUMN public.orders.idempotency_key IS
+  'Client-generated key for one checkout submission. A retried submit reuses it, so an insert that timed out after it landed cannot become a second order. NULL on POS and GCash orders and on rows written before this column existed.';
+
+-- 8–64 characters: a UUID today, open enough to swap identifier later without
+-- another migration, and bounded so a client cannot park text on the row.
+ALTER TABLE public.orders
+  DROP CONSTRAINT IF EXISTS orders_idempotency_key_len;
+ALTER TABLE public.orders
+  ADD CONSTRAINT orders_idempotency_key_len
+  CHECK (idempotency_key IS NULL OR char_length(idempotency_key) BETWEEN 8 AND 64);
+
+-- Partial, like every other guard on this table: POS rows, GCash rows and the
+-- whole pre-change history carry no key, and NULLs must not collide.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_orders_customer_idempotency_key
+  ON public.orders (customer_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
+COMMENT ON INDEX public.uq_orders_customer_idempotency_key IS
+  'One order per (customer, checkout key). A retried submit after a timeout hits this index and the app answers with the order the first attempt created.';
+
+
+-- ──────────────────────────────────────────────────────────────────
+-- 7/8  20261118110000_gcash_proof_cooldown
+
+-- ════════════════════════════════════════════════════════════════════
+-- One GCash proof file per minute, per customer
+--
+-- The uniqueness indexes already stop the harmful duplicates: the same
+-- reference, the same screenshot, one pending proof per order, one attempt
+-- number per order. They say nothing about a customer who files attempt
+-- after attempt with fresh material — each one becomes a seller notification,
+-- an admin bell, an order_payment_events row and a review somebody has to
+-- read. That is persistence, not duplication, and no index can refuse it.
+--
+-- So the RPC carries a cooldown: if this customer filed any proof within the
+-- last 60 seconds, the submission is refused before a row is written and the
+-- message says how long is left. The clock is submitted_at, which
+-- trg_pin_gcash_proof_time stamps from the server and pins on update, so a
+-- client cannot wait out its own cooldown by editing the row.
+--
+-- 60 seconds is deliberately short: the proof goes to a human for review, so
+-- a real customer has no reason to file twice inside a minute, while a legit
+-- correction after a mistyped reference costs one minute, not a lockout.
+-- Follows the existing attempt rules rather than replacing them — the 3-attempt
+-- cap and the one-pending-proof index still decide how many attempts an order
+-- may have.
+--
+-- The window is a platform setting, not a constant in the function, because the
+-- right number belongs to the operator (a busy store may want 30s) and because
+-- the suites that are about OTHER rules file several proofs in a row and would
+-- otherwise be testing this clock instead of their own subject. 0 disables it.
+--
+-- Depends on: 20261118090000 (the function replaced here, which added the cart
+-- cleanup call) and 20261118070000 (the proof-time trigger). Body otherwise
+-- identical to 20261118090000; signature unchanged, so the grants set by
+-- 20261118040000 still apply.
+-- ════════════════════════════════════════════════════════════════════
+
+ALTER TABLE public.platform_settings
+  ADD COLUMN IF NOT EXISTS gcash_proof_cooldown_seconds int NOT NULL DEFAULT 60;
+
+ALTER TABLE public.platform_settings
+  DROP CONSTRAINT IF EXISTS platform_settings_gcash_proof_cooldown_check;
+ALTER TABLE public.platform_settings
+  ADD CONSTRAINT platform_settings_gcash_proof_cooldown_check
+  CHECK (gcash_proof_cooldown_seconds BETWEEN 0 AND 3600);
+
+COMMENT ON COLUMN public.platform_settings.gcash_proof_cooldown_seconds IS
+  'Minimum seconds between two GCash proof files from the same customer. 0 disables the cooldown. Enforced inside submit_gcash_proof against the server-stamped submitted_at, so it cannot be waited out from the client.';
+
+CREATE OR REPLACE FUNCTION public.submit_gcash_proof(
+  p_order_id         uuid,
+  p_reference_number text,
+  p_sender_name      text,
+  p_amount_paid      numeric,
+  p_screenshot_url   text,
+  p_screenshot_hash  text,
+  p_paid_at          timestamptz
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  c_default_cooldown constant int := 60;
+  v_status    text;
+  v_store_id  uuid;
+  v_customer  uuid;
+  v_deadline  timestamptz;
+  v_total     numeric;
+  v_ref       text;
+  v_sender    text;
+  v_hash      text;
+  v_attempt   int;
+  v_short_id  text;
+  v_code      text;
+  v_last_file timestamptz;
+  v_wait      int;
+  v_cooldown  int;
+BEGIN
+  SELECT status, store_id, customer_id, payment_confirmation_deadline,
+         total_amount, order_code
+    INTO v_status, v_store_id, v_customer, v_deadline, v_total, v_code
+    FROM public.orders
+   WHERE id = p_order_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found';
+  END IF;
+  IF v_customer IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'You can only submit proof for your own orders';
+  END IF;
+  IF v_status <> 'awaiting_payment_confirmation' THEN
+    IF v_status = 'payment_under_review' THEN
+      RAISE EXCEPTION 'Your proof is already with the store for review';
+    END IF;
+    RAISE EXCEPTION 'This order is no longer awaiting payment confirmation';
+  END IF;
+  IF v_deadline IS NOT NULL AND v_deadline < now() THEN
+    RAISE EXCEPTION 'The payment window for this order has expired';
+  END IF;
+
+  -- ── Per-customer cooldown ────────────────────────────────────────
+  -- Checked after the order's own state, so a customer who already filed for
+  -- THIS order is told that (a more useful sentence) rather than the clock.
+  -- Across every order the customer owns: filing for a second order is still
+  -- filing, and the seller and admin bells ring the same way.
+  SELECT COALESCE(max(s.gcash_proof_cooldown_seconds), c_default_cooldown)
+    INTO v_cooldown
+    FROM public.platform_settings s
+   WHERE s.id = 1;
+
+  IF COALESCE(v_cooldown, c_default_cooldown) > 0 THEN
+    v_cooldown := COALESCE(v_cooldown, c_default_cooldown);
+    SELECT max(pr.submitted_at) INTO v_last_file
+      FROM public.gcash_payment_proofs pr
+      JOIN public.orders o ON o.id = pr.order_id
+     WHERE o.customer_id = v_customer;
+
+    IF v_last_file IS NOT NULL
+       AND v_last_file > now() - make_interval(secs => v_cooldown) THEN
+      v_wait := GREATEST(
+        1,
+        CEIL(EXTRACT(EPOCH FROM
+          (v_last_file + make_interval(secs => v_cooldown) - now())))::int
+      );
+      RAISE EXCEPTION 'You just filed a GCash proof. Try again in % second(s).',
+        v_wait;
+    END IF;
+  END IF;
+
+  IF p_screenshot_url IS NULL OR p_screenshot_url = '' THEN
+    RAISE EXCEPTION 'A payment screenshot is required';
+  END IF;
+  IF split_part(p_screenshot_url, '/', 1) <> p_order_id::text THEN
+    RAISE EXCEPTION 'The screenshot does not match this order';
+  END IF;
+
+  v_ref := regexp_replace(COALESCE(p_reference_number, ''), '\D', '', 'g');
+  IF length(v_ref) NOT IN (12, 13) THEN
+    RAISE EXCEPTION 'Enter a valid GCash reference number (12-13 digits)';
+  END IF;
+
+  v_sender := btrim(COALESCE(p_sender_name, ''));
+  IF length(v_sender) < 2 THEN
+    RAISE EXCEPTION 'Enter the GCash account name that sent the payment';
+  END IF;
+
+  IF p_amount_paid IS NULL OR abs(p_amount_paid - v_total) > 0.009 THEN
+    RAISE EXCEPTION 'The amount you entered (₱%) does not match the order total (₱%). Send exactly ₱% and enter that amount.',
+      COALESCE(to_char(p_amount_paid, 'FM999999990.00'), '0.00'),
+      to_char(v_total, 'FM999999990.00'),
+      to_char(v_total, 'FM999999990.00');
+  END IF;
+
+  v_hash := NULLIF(btrim(COALESCE(p_screenshot_hash, '')), '');
+  IF v_hash IS NULL OR length(v_hash) < 32 THEN
+    RAISE EXCEPTION 'The screenshot could not be verified. Please attach the image again.';
+  END IF;
+
+  SELECT count(*) + 1 INTO v_attempt
+    FROM public.gcash_payment_proofs
+   WHERE order_id = p_order_id;
+  IF v_attempt > 3 THEN
+    RAISE EXCEPTION 'You have used all 3 payment attempts for this order';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.gcash_payment_proofs
+     WHERE order_id = p_order_id AND status = 'pending'
+  ) THEN
+    RAISE EXCEPTION 'A proof is already awaiting review';
+  END IF;
+
+  BEGIN
+    INSERT INTO public.gcash_payment_proofs (
+      order_id, reference_number, screenshot_url, submitted_by,
+      sender_name, amount_paid, paid_at, screenshot_hash, attempt_no, status
+    ) VALUES (
+      p_order_id, v_ref, p_screenshot_url, auth.uid(),
+      v_sender, p_amount_paid, COALESCE(p_paid_at, now()), v_hash,
+      v_attempt, 'pending'
+    );
+  EXCEPTION WHEN unique_violation THEN
+    IF EXISTS (
+      SELECT 1 FROM public.gcash_payment_proofs
+       WHERE reference_number = v_ref AND order_id <> p_order_id
+    ) THEN
+      RAISE EXCEPTION 'That GCash reference number has already been used for another order';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM public.gcash_payment_proofs
+       WHERE screenshot_hash = v_hash AND order_id <> p_order_id
+    ) THEN
+      RAISE EXCEPTION 'That screenshot has already been used for another order. Attach this payment''s own receipt.';
+    END IF;
+    RAISE EXCEPTION 'This payment could not be recorded. Please try again.';
+  END;
+
+  -- Paid-looking order: stop the pay-window clock, start the review SLA.
+  UPDATE public.orders
+     SET status = 'payment_under_review',
+         review_deadline = now() + interval '24 hours'
+   WHERE id = p_order_id
+     AND status = 'awaiting_payment_confirmation';
+
+  -- The purchase is complete, so its lines leave the cart here, in this same
+  -- transaction: the cart is right on every device, not just the one that
+  -- submitted. Wrapped like the admin bell below — a cart quirk must never
+  -- reject a real payment, and the client's own clear still covers the case
+  -- where this is skipped.
+  BEGIN
+    PERFORM public.clear_purchased_cart_items(p_order_id, v_customer);
+  EXCEPTION WHEN others THEN
+    RAISE WARNING 'cart cleanup failed for order %: %', p_order_id, SQLERRM;
+  END;
+
+  INSERT INTO public.order_payment_events (order_id, event_type, actor_id, notes)
+  VALUES (
+    p_order_id,
+    CASE WHEN v_attempt = 1 THEN 'proof_submitted' ELSE 'resubmitted' END,
+    auth.uid(),
+    'Attempt ' || v_attempt || ' — reference ' || v_ref ||
+      ', ₱' || to_char(p_amount_paid, 'FM999999990.00') ||
+      ' from ' || v_sender
+  );
+
+  v_short_id := left(p_order_id::text, 8);
+
+  -- Seller bell (guarded: orders.store_id is nullable).
+  IF v_store_id IS NOT NULL THEN
+    INSERT INTO public.seller_notifications
+      (store_id, type, title, body, reference_id)
+    VALUES (
+      v_store_id, 'new_order',
+      'Payment awaiting verification',
+      'Order #' || v_short_id || ' — ₱' || to_char(v_total, 'FM999999990.00') ||
+        ' (code ' || COALESCE(v_code, '—') || '). Verify the reference, name and amount.',
+      p_order_id
+    );
+  END IF;
+
+  -- Admin bell: the money lands in the platform account, so the admin must
+  -- see every proof even before the seller acts.
+  --
+  -- Wrapped: a notification must never be able to reject a REAL payment. If
+  -- the admin_notifications type CHECK is behind (or a future migration
+  -- changes it), the proof still lands and the seller bell still rings.
+  BEGIN
+  INSERT INTO public.admin_notifications (user_id, type, title, body, reference_id, metadata)
+  SELECT p.id,
+         'payment_proof_submitted',
+         'GCash proof submitted',
+         'Order #' || v_short_id || ' — ₱' || to_char(v_total, 'FM999999990.00') ||
+           ' from ' || v_sender || ' (ref ' || v_ref || ', code ' || COALESCE(v_code, '—') || ')',
+         p_order_id,
+         jsonb_build_object(
+           'order_id', p_order_id,
+           'reference_number', v_ref,
+           'amount_paid', p_amount_paid,
+           'attempt_no', v_attempt,
+           'store_id', v_store_id
+         )
+    FROM public.profiles p
+   WHERE p.role = 'admin'
+     AND NOT COALESCE(p.suspended, false);
+  EXCEPTION WHEN others THEN
+    NULL;  -- best-effort: never fail a submitted payment over a bell
+  END;
+
+  RETURN jsonb_build_object(
+    'order_id', p_order_id,
+    'status', 'payment_under_review',
+    'attempt_no', v_attempt
+  );
+END;
+$$;
+
+-- No grant statements: CREATE OR REPLACE keeps the privileges 20261118040000
+-- set on this exact signature, and a fresh database applies that file first.
+
+-- ──────────────────────────────────────────────────────────────────
+-- 8/8  20261118120000_bulk_deposit_proof_cooldown
+-- ──────────────────────────────────────────────────────────────────
+
+-- ════════════════════════════════════════════════════════════════════
+-- One GCash proof file per minute — now across both proof families
+--
+-- 20261118110000 put the cooldown in submit_gcash_proof. The bulk
+-- reservation deposit RPC, submit_bulk_reservation_deposit_proof, has the
+-- same shape and the same hole: its unique indexes stop a reused reference
+-- and a second proof for one reservation, and nothing stops a customer
+-- filing attempts for reservation after reservation with fresh material.
+--
+-- Rather than grow a second copy of the same rule (two clocks that can drift,
+-- and a customer who can alternate between families to double their rate),
+-- the window now lives in one helper, public.gcash_proof_cooldown_remaining(),
+-- which reads the newest file of EITHER kind for that customer. Both RPCs call
+-- it. It takes a customer id, so it is not a client RPC.
+--
+-- Unchanged on purpose:
+--   • the window still comes from platform_settings.gcash_proof_cooldown_seconds
+--     (default 60, 0 disables, admin-only write);
+--   • the clock is still the server's submitted_at, which nothing client-side
+--     can move (order proofs are pinned by trg_pin_gcash_proof_time; deposits
+--     are stamped by the column default inside the RPC, which never accepts a
+--     client time);
+--   • each RPC keeps its own error voice — the order flow raises a sentence
+--     with the seconds left, the deposit flow raises the short code
+--     'PROOF_COOLDOWN' that lib/services/reservation_service.dart already
+--     translates for the customer;
+--   • every other rule in both functions is byte-identical to the versions
+--     they replace (20261118110000 and 20260913140000).
+-- ════════════════════════════════════════════════════════════════════
+
+-- ────────────────────────────────────────────────────────────────
+-- 1. The one rule: seconds left before this customer may file again
+--    (0 = may file now).
+--
+--    Not callable by clients: it takes a customer id, so exposing it would
+--    let anyone probe another customer's activity timing.
+-- ────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.gcash_proof_cooldown_remaining(
+  p_customer uuid
+) RETURNS int
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  c_default_cooldown constant int := 60;
+  v_cooldown int;
+  v_last     timestamptz;
+BEGIN
+  IF p_customer IS NULL THEN
+    RETURN 0;
+  END IF;
+
+  SELECT COALESCE(s.gcash_proof_cooldown_seconds, c_default_cooldown)
+    INTO v_cooldown
+    FROM public.platform_settings s
+   WHERE s.id = 1;
+
+  v_cooldown := COALESCE(v_cooldown, c_default_cooldown);
+  IF v_cooldown <= 0 THEN
+    RETURN 0;
+  END IF;
+
+  -- The newest file of either kind. GREATEST ignores NULLs, which is what we
+  -- want: a customer with only order proofs, or only deposits, still works.
+  SELECT GREATEST(
+           (SELECT max(pr.submitted_at)
+              FROM public.gcash_payment_proofs pr
+              JOIN public.orders o ON o.id = pr.order_id
+             WHERE o.customer_id = p_customer),
+           (SELECT max(d.submitted_at)
+              FROM public.bulk_reservation_deposits d
+             WHERE d.submitted_by = p_customer)
+         )
+    INTO v_last;
+
+  IF v_last IS NULL OR v_last <= now() - make_interval(secs => v_cooldown) THEN
+    RETURN 0;
+  END IF;
+
+  RETURN GREATEST(
+    1,
+    CEIL(EXTRACT(EPOCH FROM
+      (v_last + make_interval(secs => v_cooldown) - now())))::int
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.gcash_proof_cooldown_remaining(uuid) IS
+  'Seconds a customer must still wait before filing another GCash proof — order proof or bulk reservation deposit, whichever they filed last. 0 means they may file now. The window comes from platform_settings.gcash_proof_cooldown_seconds and the clock from the server-stamped submitted_at.';
+
+REVOKE ALL ON FUNCTION public.gcash_proof_cooldown_remaining(uuid)
+  FROM PUBLIC, anon, authenticated;
+
+-- ────────────────────────────────────────────────────────────────
+-- 2. submit_gcash_proof — the inline window from 20261118110000 replaced by
+--    the shared helper, so it now also respects a deposit filed a moment ago.
+--    Everything else is unchanged.
+-- ────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.submit_gcash_proof(
+  p_order_id         uuid,
+  p_reference_number text,
+  p_sender_name      text,
+  p_amount_paid      numeric,
+  p_screenshot_url   text,
+  p_screenshot_hash  text,
+  p_paid_at          timestamptz
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_status    text;
+  v_store_id  uuid;
+  v_customer  uuid;
+  v_deadline  timestamptz;
+  v_total     numeric;
+  v_ref       text;
+  v_sender    text;
+  v_hash      text;
+  v_attempt   int;
+  v_short_id  text;
+  v_code      text;
+  v_wait      int;
+BEGIN
+  SELECT status, store_id, customer_id, payment_confirmation_deadline,
+         total_amount, order_code
+    INTO v_status, v_store_id, v_customer, v_deadline, v_total, v_code
+    FROM public.orders
+   WHERE id = p_order_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found';
+  END IF;
+  IF v_customer IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'You can only submit proof for your own orders';
+  END IF;
+  IF v_status <> 'awaiting_payment_confirmation' THEN
+    IF v_status = 'payment_under_review' THEN
+      RAISE EXCEPTION 'Your proof is already with the store for review';
+    END IF;
+    RAISE EXCEPTION 'This order is no longer awaiting payment confirmation';
+  END IF;
+  IF v_deadline IS NOT NULL AND v_deadline < now() THEN
+    RAISE EXCEPTION 'The payment window for this order has expired';
+  END IF;
+
+  -- Per-customer cooldown, shared with the bulk deposit flow.
+  v_wait := public.gcash_proof_cooldown_remaining(v_customer);
+  IF v_wait > 0 THEN
+    RAISE EXCEPTION 'You just filed a GCash proof. Try again in % second(s).',
+      v_wait;
+  END IF;
+
+  IF p_screenshot_url IS NULL OR p_screenshot_url = '' THEN
+    RAISE EXCEPTION 'A payment screenshot is required';
+  END IF;
+  IF split_part(p_screenshot_url, '/', 1) <> p_order_id::text THEN
+    RAISE EXCEPTION 'The screenshot does not match this order';
+  END IF;
+
+  v_ref := regexp_replace(COALESCE(p_reference_number, ''), '\D', '', 'g');
+  IF length(v_ref) NOT IN (12, 13) THEN
+    RAISE EXCEPTION 'Enter a valid GCash reference number (12-13 digits)';
+  END IF;
+
+  v_sender := btrim(COALESCE(p_sender_name, ''));
+  IF length(v_sender) < 2 THEN
+    RAISE EXCEPTION 'Enter the GCash account name that sent the payment';
+  END IF;
+
+  IF p_amount_paid IS NULL OR abs(p_amount_paid - v_total) > 0.009 THEN
+    RAISE EXCEPTION 'The amount you entered (₱%) does not match the order total (₱%). Send exactly ₱% and enter that amount.',
+      COALESCE(to_char(p_amount_paid, 'FM999999990.00'), '0.00'),
+      to_char(v_total, 'FM999999990.00'),
+      to_char(v_total, 'FM999999990.00');
+  END IF;
+
+  v_hash := NULLIF(btrim(COALESCE(p_screenshot_hash, '')), '');
+  IF v_hash IS NULL OR length(v_hash) < 32 THEN
+    RAISE EXCEPTION 'The screenshot could not be verified. Please attach the image again.';
+  END IF;
+
+  SELECT count(*) + 1 INTO v_attempt
+    FROM public.gcash_payment_proofs
+   WHERE order_id = p_order_id;
+  IF v_attempt > 3 THEN
+    RAISE EXCEPTION 'You have used all 3 payment attempts for this order';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.gcash_payment_proofs
+     WHERE order_id = p_order_id AND status = 'pending'
+  ) THEN
+    RAISE EXCEPTION 'A proof is already awaiting review';
+  END IF;
+
+  BEGIN
+    INSERT INTO public.gcash_payment_proofs (
+      order_id, reference_number, screenshot_url, submitted_by,
+      sender_name, amount_paid, paid_at, screenshot_hash, attempt_no, status
+    ) VALUES (
+      p_order_id, v_ref, p_screenshot_url, auth.uid(),
+      v_sender, p_amount_paid, COALESCE(p_paid_at, now()), v_hash,
+      v_attempt, 'pending'
+    );
+  EXCEPTION WHEN unique_violation THEN
+    IF EXISTS (
+      SELECT 1 FROM public.gcash_payment_proofs
+       WHERE reference_number = v_ref AND order_id <> p_order_id
+    ) THEN
+      RAISE EXCEPTION 'That GCash reference number has already been used for another order';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM public.gcash_payment_proofs
+       WHERE screenshot_hash = v_hash AND order_id <> p_order_id
+    ) THEN
+      RAISE EXCEPTION 'That screenshot has already been used for another order. Attach this payment''s own receipt.';
+    END IF;
+    RAISE EXCEPTION 'This payment could not be recorded. Please try again.';
+  END;
+
+  -- Paid-looking order: stop the pay-window clock, start the review SLA.
+  UPDATE public.orders
+     SET status = 'payment_under_review',
+         review_deadline = now() + interval '24 hours'
+   WHERE id = p_order_id
+     AND status = 'awaiting_payment_confirmation';
+
+  -- The purchase is complete, so its lines leave the cart here, in this same
+  -- transaction: the cart is right on every device, not just the one that
+  -- submitted. Wrapped like the admin bell below — a cart quirk must never
+  -- reject a real payment, and the client's own clear still covers the case
+  -- where this is skipped.
+  BEGIN
+    PERFORM public.clear_purchased_cart_items(p_order_id, v_customer);
+  EXCEPTION WHEN others THEN
+    RAISE WARNING 'cart cleanup failed for order %: %', p_order_id, SQLERRM;
+  END;
+
+  INSERT INTO public.order_payment_events (order_id, event_type, actor_id, notes)
+  VALUES (
+    p_order_id,
+    CASE WHEN v_attempt = 1 THEN 'proof_submitted' ELSE 'resubmitted' END,
+    auth.uid(),
+    'Attempt ' || v_attempt || ' — reference ' || v_ref ||
+      ', ₱' || to_char(p_amount_paid, 'FM999999990.00') ||
+      ' from ' || v_sender
+  );
+
+  v_short_id := left(p_order_id::text, 8);
+
+  -- Seller bell (guarded: orders.store_id is nullable).
+  IF v_store_id IS NOT NULL THEN
+    INSERT INTO public.seller_notifications
+      (store_id, type, title, body, reference_id)
+    VALUES (
+      v_store_id, 'new_order',
+      'Payment awaiting verification',
+      'Order #' || v_short_id || ' — ₱' || to_char(v_total, 'FM999999990.00') ||
+        ' (code ' || COALESCE(v_code, '—') || '). Verify the reference, name and amount.',
+      p_order_id
+    );
+  END IF;
+
+  -- Admin bell: the money lands in the platform account, so the admin must
+  -- see every proof even before the seller acts.
+  --
+  -- Wrapped: a notification must never be able to reject a REAL payment. If
+  -- the admin_notifications type CHECK is behind (or a future migration
+  -- changes it), the proof still lands and the seller bell still rings.
+  BEGIN
+  INSERT INTO public.admin_notifications (user_id, type, title, body, reference_id, metadata)
+  SELECT p.id,
+         'payment_proof_submitted',
+         'GCash proof submitted',
+         'Order #' || v_short_id || ' — ₱' || to_char(v_total, 'FM999999990.00') ||
+           ' from ' || v_sender || ' (ref ' || v_ref || ', code ' || COALESCE(v_code, '—') || ')',
+         p_order_id,
+         jsonb_build_object(
+           'order_id', p_order_id,
+           'reference_number', v_ref,
+           'amount_paid', p_amount_paid,
+           'attempt_no', v_attempt,
+           'store_id', v_store_id
+         )
+    FROM public.profiles p
+   WHERE p.role = 'admin'
+     AND NOT COALESCE(p.suspended, false);
+  EXCEPTION WHEN others THEN
+    NULL;  -- best-effort: never fail a submitted payment over a bell
+  END;
+
+  RETURN jsonb_build_object(
+    'order_id', p_order_id,
+    'status', 'payment_under_review',
+    'attempt_no', v_attempt
+  );
+END;
+$$;
+
+-- ────────────────────────────────────────────────────────────────
+-- 3. submit_bulk_reservation_deposit_proof — cooldown added after the
+--    reservation's own state and deadline, before anything is written.
+--    Raises the short code the app already translates. Every other rule
+--    (ownership, status, deadline, folder, 12–13 digits, cross-family
+--    reference dedupe, one-proof-per-reservation, seller notification) is
+--    copied unchanged from 20260913140000.
+-- ────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.submit_bulk_reservation_deposit_proof(
+    p_reservation_id   UUID,
+    p_reference_number TEXT,
+    p_screenshot_url   TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    v_reservation public.bulk_reservations%ROWTYPE;
+    v_customer UUID := auth.uid();
+    v_store_owner UUID;
+    v_ref TEXT;
+BEGIN
+    IF v_customer IS NULL THEN
+        RAISE EXCEPTION 'NOT_AUTHENTICATED';
+    END IF;
+
+    SELECT * INTO v_reservation FROM public.bulk_reservations
+    WHERE id = p_reservation_id
+    FOR UPDATE;                          -- serialize vs confirm/reject/sweep
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'NOT_FOUND';
+    END IF;
+    IF v_reservation.customer_id <> v_customer THEN
+        RAISE EXCEPTION 'FORBIDDEN';
+    END IF;
+    IF v_reservation.status <> 'awaiting_deposit' THEN
+        RAISE EXCEPTION 'ALREADY_RESOLVED';
+    END IF;
+    IF v_reservation.deposit_deadline IS NOT NULL
+       AND v_reservation.deposit_deadline <= timezone('utc'::text, now()) THEN
+        RAISE EXCEPTION 'DEPOSIT_DEADLINE_PASSED';
+    END IF;
+
+    -- Per-customer cooldown, shared with the order proof flow. A short code
+    -- rather than a sentence because this RPC's errors are translated by
+    -- friendlyReservationError() in lib/services/reservation_service.dart.
+    IF public.gcash_proof_cooldown_remaining(v_customer) > 0 THEN
+        RAISE EXCEPTION 'PROOF_COOLDOWN';
+    END IF;
+
+    IF p_screenshot_url IS NULL OR p_screenshot_url = '' THEN
+        RAISE EXCEPTION 'INVALID_PROOF_SCREENSHOT';
+    END IF;
+    -- The screenshot must live in THIS reservation's folder
+    -- ({reservation_id}/{file}) — same anti-mixing rule as order proofs.
+    IF split_part(p_screenshot_url, '/', 1) <> p_reservation_id::text THEN
+        RAISE EXCEPTION 'INVALID_PROOF_SCREENSHOT';
+    END IF;
+
+    -- Normalize to digits-only; GCash refs are 13 digits (12 tolerated —
+    -- matches lib/utils/gcash_ref_extractor and the order-flow rule).
+    v_ref := regexp_replace(COALESCE(p_reference_number, ''), '\D', '', 'g');
+    IF length(v_ref) NOT IN (12, 13) THEN
+        RAISE EXCEPTION 'INVALID_PROOF_REFERENCE';
+    END IF;
+
+    -- Platform-wide dedupe ACROSS proof families: a reference already
+    -- used for an order proof cannot confirm a deposit too. (The reverse
+    -- direction — the dormant order flow checking deposits — is not
+    -- added; the order flow is legacy and out of scope here.) Guarded on
+    -- to_regclass so the migration is safe even where the dormant
+    -- order-proof table was never created.
+    IF to_regclass('public.gcash_payment_proofs') IS NOT NULL THEN
+        IF EXISTS (SELECT 1 FROM public.gcash_payment_proofs
+                   WHERE reference_number = v_ref) THEN
+            RAISE EXCEPTION 'REFERENCE_ALREADY_USED';
+        END IF;
+    END IF;
+
+    BEGIN
+        INSERT INTO public.bulk_reservation_deposits
+            (reservation_id, reference_number, screenshot_url, submitted_by)
+        VALUES (p_reservation_id, v_ref, p_screenshot_url, v_customer);
+    EXCEPTION WHEN unique_violation THEN
+        -- Distinguish the concurrent double-submit race (reservation_id
+        -- UNIQUE) from a genuinely reused reference (platform UNIQUE).
+        IF EXISTS (SELECT 1 FROM public.bulk_reservation_deposits
+                   WHERE reservation_id = p_reservation_id) THEN
+            RAISE EXCEPTION 'DEPOSIT_ALREADY_SUBMITTED';
+        END IF;
+        RAISE EXCEPTION 'REFERENCE_ALREADY_USED';
+    END;
+
+    -- Notify the seller that a proof awaits verification.
+    SELECT s.owner_id INTO v_store_owner
+    FROM public.stores s WHERE s.id = v_reservation.store_id;
+    IF v_store_owner IS NOT NULL THEN
+        INSERT INTO public.notifications (user_id, category, title, message)
+        VALUES (
+            v_store_owner, 'reservations',
+            'Deposit proof submitted',
+            'A customer submitted a GCash deposit proof (₱' ||
+            COALESCE(v_reservation.deposit_amount, 0)::int || ', ref ' ||
+            v_ref || ') for their ' || v_reservation.quantity ||
+            '-unit reservation. Verify it in your GCash app and confirm to hold the stock.'
+        );
+    END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.submit_bulk_reservation_deposit_proof FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.submit_bulk_reservation_deposit_proof TO authenticated;

@@ -202,6 +202,10 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
   }
 
   Future<void> _submitProof() async {
+    // The button is disabled while submitting; this is the code-level twin, so
+    // a tap that lands before the rebuild cannot upload the same screenshot
+    // twice and leave a rejected attempt behind.
+    if (_submitting) return;
     if (!_formKey.currentState!.validate()) return;
     if (_pickedImagePath == null) {
       setState(() {

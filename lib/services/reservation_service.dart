@@ -200,6 +200,11 @@ String friendlyReservationError(Object error) {
       return 'The 24-hour deposit window for this reservation has closed.';
     case 'DEPOSIT_PROOF_REQUIRED':
       return 'Submit your GCash payment proof first — then the store can confirm it.';
+    case 'PROOF_COOLDOWN':
+      // One file per minute per customer, shared with the order payment flow:
+      // a second submission is refused before anything is written, so the
+      // customer retries rather than the store reviewing a duplicate.
+      return 'You just filed a GCash proof. Give it a minute before trying again.';
     case 'DEPOSIT_ALREADY_SUBMITTED':
       return 'A payment proof was already submitted for this reservation.';
     case 'INVALID_PROOF_REFERENCE':

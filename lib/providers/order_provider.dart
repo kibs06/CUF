@@ -147,6 +147,7 @@ class OrderProvider extends ChangeNotifier {
     double? amountTendered,
     String? gcashReference,
     String? voucherCode,
+    String? idempotencyKey,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -167,6 +168,9 @@ class OrderProvider extends ChangeNotifier {
         // Voucher CODE only — the server looks it up, validates it and
         // recomputes total_amount inside the insert (orders_apply_voucher).
         'voucher_code': ?voucherCode,
+        // Cash/COD only: the checkout screen's key for this one submission, so
+        // a retry after a timeout resolves to the same order.
+        'idempotency_key': ?idempotencyKey,
       });
       await loadOrders();
       _isLoading = false;

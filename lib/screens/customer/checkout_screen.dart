@@ -13,6 +13,7 @@ import '../../utils/delivery_date.dart';
 import '../../utils/size_key.dart';
 import '../../services/direct_gcash_service.dart';
 import '../../services/voucher_service.dart';
+import '../../utils/order_idempotency.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/order_confirmation_view.dart';
 import '../../widgets/sole_primary_button.dart';
@@ -66,6 +67,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _isValidatingCart = false;
   List<_CartItemValidation> _itemValidations = [];
   bool _isSubmitting = false;
+
+  /// The key for one cash/COD checkout submission. It survives a failed submit
+  /// on purpose — a request that timed out after the row landed must resolve to
+  /// that order, not create a second one — and is rotated as soon as an order
+  /// exists, so the next purchase is a new order.
+  String _orderIdempotencyKey = newOrderIdempotencyKey();
 
   // Voucher (ANQUI item #5). The client only ever sends the CODE — the
   // discount shown here comes from the server-side quote, and the orders
@@ -429,6 +436,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // ═══════════════════════════════════════════════════════════════
 
   Future<void> _submitCheckout() async {
+    // The button is disabled while submitting; this is the code-level twin, so
+    // a second tap that slips in before the rebuild cannot start a second
+    // order (or a second GCash checkout) in parallel.
+    if (_isSubmitting) return;
     if (_isValidatingCart) return;
     if (!_formKey.currentState!.validate()) return;
 
@@ -511,17 +522,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         )
         .toList();
 
-    final order = await orderProvider.placeOrder(
-      customerId: auth.profile?['id'] ?? '',
-      items: orderItems,
-      totalAmount: orderTotal,
-      deliveryAddress: _selectedAddress!.formattedAddress,
-      paymentMethod: _paymentMethod,
-      shippingAddress: _selectedAddress!.toSnapshot(),
-      voucherCode: _appliedVoucher?.code,
-    );
+    setState(() => _isSubmitting = true);
+    Map<String, dynamic>? order;
+    try {
+      order = await orderProvider.placeOrder(
+        customerId: auth.profile?['id'] ?? '',
+        items: orderItems,
+        totalAmount: orderTotal,
+        deliveryAddress: _selectedAddress!.formattedAddress,
+        paymentMethod: _paymentMethod,
+        shippingAddress: _selectedAddress!.toSnapshot(),
+        voucherCode: _appliedVoucher?.code,
+        idempotencyKey: _orderIdempotencyKey,
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
 
-    if (order != null && mounted) {
+    final placed = order;
+    if (placed != null && mounted) {
       // Clear ordered items from the server AND local state. In Buy Now
       // direct mode nothing was ever added to the cart, so there's
       // nothing to remove.
@@ -545,12 +564,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       setState(() {
         _itemValidations = [];
         _checkoutStep = 1;
-        _placedOrderId = order['id']?.toString();
-        _placedOrder = order;
+        _placedOrderId = placed['id']?.toString();
+        _placedOrder = placed;
         // The server owns the money — with a voucher the trigger has
         // already rewritten total_amount, so display what it returned.
         _placedTotal =
-            (order['total_amount'] as num?)?.toDouble() ?? orderTotal;
+            (placed['total_amount'] as num?)?.toDouble() ?? orderTotal;
+        // This key now belongs to the order that exists. A retry of *this*
+        // submit would be answered with it; the next checkout needs its own.
+        _orderIdempotencyKey = newOrderIdempotencyKey();
       });
     } else if (mounted) {
       final stockErr = orderProvider.stockError;

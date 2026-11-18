@@ -8,6 +8,7 @@ import '../exceptions/stock_unavailable_exception.dart';
 import 'deep_link_service.dart';
 import '../utils/cart_helpers.dart';
 import '../utils/nav_perf.dart';
+import '../utils/order_idempotency.dart';
 import '../utils/product_stock.dart';
 import 'seller_notification_service.dart';
 
@@ -520,6 +521,27 @@ class SupabaseService {
   /// Called when order_items insert fails after the orders row was committed.
   /// Requires the DELETE RLS policy from migration 20260704_add_orders_delete_policy.sql.
   /// If the migration hasn't been applied yet, this will silently fail (RLS blocks it).
+  /// The order an earlier attempt already created with this checkout key.
+  /// Read back through the customer's own RLS policy, so a key cannot be used
+  /// to reach somebody else's row.
+  Future<Map<String, dynamic>?> _orderByIdempotencyKey(
+    String customerId,
+    String key,
+  ) async {
+    try {
+      final row = await _client
+          .from('orders')
+          .select()
+          .eq('customer_id', customerId)
+          .eq('idempotency_key', key)
+          .maybeSingle();
+      return row == null ? null : Map<String, dynamic>.from(row);
+    } catch (e) {
+      debugPrint('[ORDER-CREATE] Could not read the order for key $key: $e');
+      return null;
+    }
+  }
+
   Future<void> _cleanupOrphanedOrder(dynamic orderId) async {
     try {
       await _client.from('orders').delete().eq('id', orderId);
@@ -560,6 +582,8 @@ class SupabaseService {
 
     final method = _normalizePaymentMethod(orderData['payment_method']);
     final shippingAddress = orderData['shipping_address'];
+    final idempotencyKey =
+        orderData['idempotency_key']?.toString().trim();
 
     // STEP 1: Create the orders row (committed immediately — no transaction wrapper).
     // POS orders: status='received', payment_status='paid' (transaction is complete at checkout).
@@ -611,6 +635,12 @@ class SupabaseService {
       if (shippingAddress != null) {
         insertData['shipping_address'] = shippingAddress;
       }
+      // Only cash/COD checkouts send this. It is the one thing on the row that
+      // identifies the attempt, so a submit whose response timed out can be
+      // answered instead of repeated.
+      if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
+        insertData['idempotency_key'] = idempotencyKey;
+      }
       final order = await _client
           .from('orders')
           .insert(insertData)
@@ -619,6 +649,20 @@ class SupabaseService {
       orderMap = Map<String, dynamic>.from(order);
       debugPrint('[ORDER-CREATE] Orders row inserted: id=${orderMap["id"]}');
     } catch (e) {
+      // The unique index refused a key that already owns an order, which means
+      // the attempt whose response was lost did commit. Hand that order back
+      // and stop here: running on would insert the items a second time and
+      // reserve their stock twice.
+      if (idempotencyKey != null &&
+          idempotencyKey.isNotEmpty &&
+          isOrderIdempotencyConflict(e)) {
+        final existing = await _orderByIdempotencyKey(userId, idempotencyKey);
+        if (existing != null) {
+          debugPrint('[ORDER-CREATE] Replayed key $idempotencyKey → '
+              'order ${existing["id"]}');
+          return existing;
+        }
+      }
       throw Exception('Order insert failed: $e');
     }
 

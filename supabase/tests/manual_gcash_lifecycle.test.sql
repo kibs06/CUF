@@ -125,7 +125,8 @@ values
 
 -- Deterministic payout maths: 0 % commission, ₱100 flat delivery.
 update public.platform_settings
-   set platform_fee_bps = 0, delivery_fee_amount = 100
+   set platform_fee_bps = 0, delivery_fee_amount = 100,
+       gcash_proof_cooldown_seconds = 0
  where id = 1;
 
 -- Results of RPC calls are parked here and read through scalar subqueries.

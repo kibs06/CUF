@@ -99,7 +99,8 @@ values
   ('f0000000-0000-0000-0000-0000000000b1','41', 10);
 
 update public.platform_settings
-   set platform_fee_bps = 0, delivery_fee_amount = 100
+   set platform_fee_bps = 0, delivery_fee_amount = 100,
+       gcash_proof_cooldown_seconds = 0
  where id = 1;
 
 -- Platform account, opened the way the admin portal does it.

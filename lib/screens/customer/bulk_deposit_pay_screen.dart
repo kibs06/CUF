@@ -140,6 +140,8 @@ class _BulkDepositPayScreenState extends State<BulkDepositPayScreen> {
   }
 
   Future<void> _submitProof() async {
+    // Same code-level guard as the order proof screen: one deposit, one proof.
+    if (_submitting) return;
     if (!_formKey.currentState!.validate()) return;
     if (_pickedImagePath == null) {
       setState(() {

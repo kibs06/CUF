@@ -155,6 +155,17 @@ void main() {
       );
     });
 
+    test('maps PROOF_COOLDOWN', () {
+      // 20261118120000: the deposit RPC now shares the per-customer proof
+      // window with the order flow, so this code has to read as a wait, not
+      // as a failure the customer should retry immediately.
+      expect(
+        friendlyReservationError(
+            'PostgrestException(code: P0001, message: "PROOF_COOLDOWN")'),
+        contains('minute'),
+      );
+    });
+
     test('maps INVALID_PROOF_REFERENCE', () {
       expect(
         friendlyReservationError(

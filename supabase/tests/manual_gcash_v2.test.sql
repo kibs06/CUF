@@ -80,7 +80,8 @@ values
 
 -- Deterministic payout maths for the assertions below.
 update public.platform_settings
-   set platform_fee_bps = 0, delivery_fee_amount = 100
+   set platform_fee_bps = 0, delivery_fee_amount = 100,
+       gcash_proof_cooldown_seconds = 0
  where id = 1;
 
 -- Typed scratch table: every checkout result is read through a scalar
