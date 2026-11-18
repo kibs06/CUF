@@ -110,6 +110,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAddress();
       _validateCart();
+      // The delivery line is the platform's setting, so read it again here
+      // rather than trusting whatever the cart loaded at app start.
+      context.read<CartProvider>().refreshDeliveryFee();
     });
   }
 
@@ -492,7 +495,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     for (final item in items) {
       orderTotal += (item['price'] as double) * (item['quantity'] as int);
     }
-    orderTotal += orderTotal > 0 ? 100.0 : 0.0; // ₱100 delivery
+    // The platform's delivery setting — the same number the server charges.
+    orderTotal += orderTotal > 0 ? cart.deliveryFeeAmount : 0.0;
     orderTotal -= _voucherDiscount; // server re-applies this on insert
 
     // GCash (manual): the server creates the order in
@@ -808,7 +812,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       (sum, item) => sum + (item['quantity'] as int),
     );
     final selectedSubtotal = _checkoutSubtotal(selectedItems);
-    final selectedDeliveryFee = selectedSubtotal > 0 ? 100.0 : 0.0;
+    // The platform's setting, not a constant: the server charges this line.
+    final selectedDeliveryFee =
+        selectedSubtotal > 0 ? cart.deliveryFeeAmount : 0.0;
     final voucherDiscount = _voucherDiscount;
     final selectedTotal =
         selectedSubtotal + selectedDeliveryFee - voucherDiscount;

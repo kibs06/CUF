@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/cart_item_with_details.dart';
 import '../services/cart_service.dart';
+import '../services/platform_settings_service.dart';
 
 /// Hybrid persistent cart provider.
 ///
@@ -25,6 +26,10 @@ class CartProvider extends ChangeNotifier {
   String? _userId;
   StreamSubscription<AuthState>? _authSubscription;
   bool _hydrated = false;
+
+  /// The platform's delivery line. Loaded from `platform_settings`; see
+  /// [refreshDeliveryFee]. ₱100 only until the first read lands.
+  double _deliveryFeeAmount = PlatformSettingsService.fallbackDeliveryFee;
 
   /// Last error from a failed background sync. Cart screen can watch
   /// this and show a SnackBar, then call [clearError].
@@ -45,7 +50,10 @@ class CartProvider extends ChangeNotifier {
             sum + ((item['price'] as double) * (item['quantity'] as int)),
       );
 
-  double get deliveryFee => subtotal > 0 ? 100.0 : 0.0;
+  /// The per-order delivery line the server will charge.
+  double get deliveryFeeAmount => _deliveryFeeAmount;
+
+  double get deliveryFee => subtotal > 0 ? _deliveryFeeAmount : 0.0;
   double get total => subtotal + deliveryFee;
 
   // ── Selected-item computed getters ──────────────────────────────
@@ -64,7 +72,8 @@ class CartProvider extends ChangeNotifier {
         },
       );
 
-  double get selectedDeliveryFee => selectedSubtotal > 0 ? 100.0 : 0.0;
+  double get selectedDeliveryFee =>
+      selectedSubtotal > 0 ? _deliveryFeeAmount : 0.0;
   double get selectedTotal => selectedSubtotal + selectedDeliveryFee;
 
   bool get allSelected =>
@@ -122,6 +131,20 @@ class CartProvider extends ChangeNotifier {
       _hydrateFromCache(currentUserId);
       _syncFromServer(currentUserId);
     }
+
+    refreshDeliveryFee();
+  }
+
+  /// Re-read the platform delivery fee from `platform_settings`.
+  ///
+  /// The fee is an admin setting, not a constant: it is what the checkout RPC
+  /// charges, so the cart, the cart bar and the checkout total have to follow
+  /// it. A failed read keeps the current value (₱100 until the first success).
+  Future<void> refreshDeliveryFee() async {
+    final fee = await PlatformSettingsService.instance.fetchDeliveryFee();
+    if (fee == _deliveryFeeAmount) return;
+    _deliveryFeeAmount = fee;
+    notifyListeners();
   }
 
   @override
@@ -139,6 +162,7 @@ class CartProvider extends ChangeNotifier {
       _userId = userId;
       _hydrateFromCache(userId);
       _syncFromServer(userId);
+      refreshDeliveryFee();
     } else {
       // Signed out — clear local state + cache, but keep Supabase rows
       _userId = null;
@@ -609,6 +633,7 @@ class CartProvider extends ChangeNotifier {
 
   /// Force a re-sync from the server (e.g., pull-to-refresh).
   Future<void> refreshFromServer() async {
+    await refreshDeliveryFee();
     if (_userId != null) {
       await _syncFromServer(_userId!);
     }
