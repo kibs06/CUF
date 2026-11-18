@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   BadgeCheck,
   CheckCircle2,
   Image as ImageIcon,
   ShieldCheck,
+  X,
   XCircle,
 } from 'lucide-react'
 import {
@@ -68,6 +69,7 @@ export default function PaymentVerification() {
   const reconcile = useReconcileOrder()
   const [busyId, setBusyId] = useState(null)
   const [message, setMessage] = useState(null)
+  const [proofView, setProofView] = useState(null)
 
   const run = async (id, fn) => {
     setBusyId(id)
@@ -82,11 +84,30 @@ export default function PaymentVerification() {
     }
   }
 
-  const openProof = async (path) => {
-    const url = await proofSignedUrl(path)
-    if (url) window.open(url, '_blank', 'noopener,noreferrer')
-    else setMessage({ tone: 'error', text: 'Could not open the screenshot.' })
+  // The receipt stays inside the queue: verifying means reading the reference
+  // and the amount off the image while the row is still on screen, so a new tab
+  // only splits the admin's attention. Escape (or the backdrop) closes it.
+  const openProof = async (row) => {
+    const url = await proofSignedUrl(row.proof?.screenshot_url)
+    if (url) {
+      setProofView({
+        url,
+        reference: row.proof?.reference_number,
+        sender: row.proof?.sender_name,
+        amount: row.total_amount,
+        orderCode: row.order_code,
+      })
+    } else setMessage({ tone: 'error', text: 'Could not open the screenshot.' })
   }
+
+  useEffect(() => {
+    if (!proofView) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') setProofView(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [proofView])
 
   const onFlag = (row) => {
     const reason = window.prompt('Why is this payment flagged?', 'Not found in the GCash statement')
@@ -285,7 +306,7 @@ export default function PaymentVerification() {
                         <button
                           type="button"
                           className={BTN}
-                          onClick={() => openProof(proof.screenshot_url)}
+                          onClick={() => openProof(row)}
                         >
                           <ImageIcon size={13} strokeWidth={1.7} aria-hidden="true" />
                           Screenshot
@@ -349,6 +370,48 @@ export default function PaymentVerification() {
           </ul>
         )}
       </section>
+
+      {proofView ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Proof screenshot"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#3B2314]/80 p-4"
+          onClick={() => setProofView(null)}
+        >
+          <div
+            className="flex w-full max-w-4xl flex-wrap items-center justify-between gap-2 pb-3 text-[#F5F0EB]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="min-w-0">
+              <p className="font-mono text-[13px] font-semibold">
+                {proofView.reference || 'Reference not readable'}
+                <span className="ml-3 text-[#C4A882]">
+                  {formatCurrency(proofView.amount)}
+                </span>
+              </p>
+              <p className="mt-0.5 truncate text-[11.5px] text-[#C4A882]">
+                {proofView.sender || 'Sender not readable'}
+                {proofView.orderCode ? ` · ${proofView.orderCode}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setProofView(null)}
+              aria-label="Close screenshot"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <img
+            src={proofView.url}
+            alt={`Proof screenshot ${proofView.reference ?? ''}`.trim()}
+            className="max-h-[82vh] w-auto max-w-full rounded-lg bg-white object-contain shadow-pop"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }
