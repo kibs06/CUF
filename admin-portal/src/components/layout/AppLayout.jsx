@@ -21,6 +21,7 @@ const TITLES = {
   // falls back to 'Admin / CUFMAI admin workspace.' above their own heading.
   '/platform-payments': 'Platform GCash',
   '/payment-verification': 'Payment Verification',
+  '/refunds': 'Refunds Owed',
   '/payouts': 'Payouts',
 }
 
@@ -39,6 +40,7 @@ const DESCRIPTIONS = {
   '/settings': 'Your admin profile, password, and two-factor authentication.',
   '/platform-payments': 'The GCash account customers pay into, plus fees and payout rates.',
   '/payment-verification': 'Proofs from customers, and the money confirmed in the platform account.',
+  '/refunds': 'Money to send back after a proof was rejected, and the transfers that settle it.',
   '/payouts': 'What each store is owed, and the transfers that settle it.',
 }
 

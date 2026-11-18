@@ -10,6 +10,21 @@ const PRESETS = [
   { label: 'All time', days: null },
 ]
 
+/** `YYYY-MM-DD` (what the admin filters keep in state) → local Date at midnight. */
+export function parseISODate(value) {
+  if (!value) return null
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+/** local Date → `YYYY-MM-DD`, or '' for no bound. */
+export function toISODate(date) {
+  if (!date) return ''
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
 function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
@@ -43,7 +58,7 @@ function getMonthGrid(monthDate) {
   return cells
 }
 
-export default function DateRangePicker({ from = null, to = null, onChange }) {
+export default function DateRangePicker({ from = null, to = null, onChange, align = 'right' }) {
   const [open, setOpen] = useState(false)
   const [draftFrom, setDraftFrom] = useState(from)
   const [draftTo, setDraftTo] = useState(to)
@@ -141,7 +156,9 @@ export default function DateRangePicker({ from = null, to = null, onChange }) {
         <div
           role="dialog"
           aria-label="Choose a date range"
-          className="absolute right-0 z-30 mt-2 w-[336px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card p-4 shadow-pop"
+          className={`absolute z-30 mt-2 w-[336px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card p-4 shadow-pop ${
+            align === 'left' ? 'left-0' : 'right-0'
+          }`}
         >
           <div className="mb-3 flex flex-wrap gap-1.5">
             {PRESETS.map((preset) => {

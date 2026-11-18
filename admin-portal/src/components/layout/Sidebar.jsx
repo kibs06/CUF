@@ -23,6 +23,7 @@ import {
   Landmark,
   BadgeCheck,
   Banknote,
+  RotateCcw,
   Moon,
   Sun,
 } from 'lucide-react'
@@ -52,6 +53,7 @@ const GROUPS = [
       { to: '/transactions', label: 'Transactions', icon: Wallet },
       { to: '/payment-verification', label: 'GCash Verification', icon: BadgeCheck },
       { to: '/payouts', label: 'Payouts', icon: Banknote },
+      { to: '/refunds', label: 'Refunds owed', icon: RotateCcw },
     ],
   },
   {

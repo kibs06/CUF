@@ -19,6 +19,7 @@ import Banners from './pages/Banners.jsx'
 import PlatformPayments from './pages/PlatformPayments.jsx'
 import PaymentVerification from './pages/PaymentVerification.jsx'
 import Payouts from './pages/Payouts.jsx'
+import Refunds from './pages/Refunds.jsx'
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="platform-payments" element={<PlatformPayments />} />
           <Route path="payment-verification" element={<PaymentVerification />} />
           <Route path="payouts" element={<Payouts />} />
+          <Route path="refunds" element={<Refunds />} />
           <Route path="audit-logs" element={<AuditLogs />} />
           <Route path="reports" element={<Reports />} />
           <Route path="analytics" element={<Analytics />} />

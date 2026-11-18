@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import Badge from '../components/ui/Badge.jsx'
+import DateRangePicker, {
+  parseISODate,
+  toISODate,
+} from '../components/ui/DateRangePicker.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { formatDate, shortId } from '../lib/constants'
 import { Search, Flag, AlertTriangle, X, MessageSquare, Package, Store, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -268,7 +272,7 @@ export default function Reports() {
 
       {/* Filters */}
       <section aria-label="Filter reports" className="rounded-xl border border-border bg-card p-3">
-        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-[minmax(230px,1.6fr)_repeat(3,minmax(125px,1fr))_minmax(135px,1fr)_minmax(135px,1fr)]">
+        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-[minmax(230px,1.6fr)_repeat(3,minmax(125px,1fr))_minmax(180px,1fr)]">
           <label className="col-span-2 block xl:col-span-1">
             <span className="mb-1 block text-[12px] font-medium text-muted">Search</span>
             <span className="relative block">
@@ -345,31 +349,18 @@ export default function Reports() {
             </select>
           </label>
 
-          <label className="block">
-            <span className="mb-1 block text-[12px] font-medium text-muted">From</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => {
-                setDateFrom(e.target.value)
+          <div className="col-span-2 block sm:col-span-1">
+            <span className="mb-1 block text-[12px] font-medium text-muted">Date</span>
+            <DateRangePicker
+              from={parseISODate(dateFrom)}
+              to={parseISODate(dateTo)}
+              onChange={(nextFrom, nextTo) => {
+                setDateFrom(toISODate(nextFrom))
+                setDateTo(toISODate(nextTo))
                 setPage(1)
               }}
-              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-[12px] font-medium text-muted">To</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => {
-                setDateTo(e.target.value)
-                setPage(1)
-              }}
-              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
-            />
-          </label>
+          </div>
         </div>
 
         {hasFilters && (
