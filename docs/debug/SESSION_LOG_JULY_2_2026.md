@@ -1,4 +1,4 @@
-# SoleVision — Session Log: June 30 – July 2, 2026
+# CUFMAI — Session Log: June 30 – July 2, 2026
 
 ## Overview
 
@@ -739,5 +739,5 @@ across all colors) and inserts one row per unique size into `inventory`. Uses
 
 ---
 
-*SoleVision v1.1.0 — Session documented July 2, 2026*
+*CUFMAI v1.1.0 — Session documented July 2, 2026*
 *Covers development sessions: June 30 – July 2, 2026*

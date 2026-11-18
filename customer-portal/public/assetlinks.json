@@ -1,0 +1,16 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.solevision.app",
+      "sha256_cert_fingerprints": [
+        "0B:66:1B:D9:D5:57:2F:8D:2B:CE:30:37:F8:B5:B3:2B:76:3A:C2:B7:77:D5:BD:76:AA:3E:37:42:AF:BC:64:93",
+        "A7:0D:00:6F:0B:99:5D:15:86:BA:94:DA:4E:E0:68:B6:8C:23:EA:6D:CE:49:A2:E7:CA:E0:2F:E5:DF:CD:57:FD"
+      ]
+    }
+  }
+]

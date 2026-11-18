@@ -1,4 +1,4 @@
-# SoleVision — AR Virtual Try-On System Architecture
+# CUFMAI — AR Virtual Try-On System Architecture
 
 > **Generated:** July 30, 2026  
 > **Purpose:** Complete reference for AI agents and developers working on the AR/virtual try-on feature.

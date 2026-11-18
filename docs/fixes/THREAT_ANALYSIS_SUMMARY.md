@@ -1,4 +1,4 @@
-# SoleVision Threat Review — Executive Summary
+# CUFMAI Threat Review — Executive Summary
 
 **What this is:** A short, plain-language version of the security review, written so a client, stakeholder, engineer, or AI agent can understand the state of security in under 5 minutes.
 

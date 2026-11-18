@@ -1491,7 +1491,7 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
           .from('orders')
           .select('id')
           .eq('store_id', widget.storeId)
-          .eq('status', 'awaiting_payment_confirmation');
+          .eq('status', 'payment_under_review');
       if (!mounted) return;
       setState(() {
         _count = (data as List).length;
@@ -1507,11 +1507,10 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
   Widget build(BuildContext context) {
     final count = _count ?? 0;
     final has = count > 0;
-    // Legacy gate: PayMongo auto-confirms the live path, so this manual
-    // queue only surfaces while leftover `awaiting_payment_confirmation`
-    // rows exist. Hidden at zero keeps a dormant flow off the dashboard;
-    // the queue stays reachable via the notification bell / push tap.
-    if (!_loading && !has) return const SizedBox.shrink();
+    // Always visible: this is now the live payment path (customers pay the
+    // platform GCash account), and the seller must be able to reach the
+    // verification queue and their earnings even at zero.
+    if (_loading) return const SizedBox.shrink();
     return Material(
       color: SellerTheme.card,
       borderRadius: BorderRadius.circular(20),

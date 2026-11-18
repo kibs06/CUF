@@ -1,4 +1,4 @@
-# SoleVision — Product Reviews & Ratings Roadmap (v2, corrected)
+# CUFMAI — Product Reviews & Ratings Roadmap (v2, corrected)
 
 **Feature:** Product Reviews & Ratings
 **Status:** Planning — ready to implement

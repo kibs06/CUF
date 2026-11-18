@@ -1,7 +1,7 @@
-# SoleVision — Full App Test Report
+# CUFMAI — Full App Test Report
 **Date:** July 9, 2026  
 **Flutter version:** Stable channel  
-**Project:** SoleVision — Multi-role artisan footwear marketplace
+**Project:** CUFMAI — Multi-role artisan footwear marketplace
 
 ---
 
@@ -178,4 +178,4 @@ Tighten `products` INSERT/UPDATE/DELETE RLS to verify `store_id IN (SELECT id FR
 
 ---
 
-*Report generated July 9, 2026 — SoleVision AI Test Suite*
+*Report generated July 9, 2026 — CUFMAI AI Test Suite*

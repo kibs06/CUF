@@ -704,7 +704,7 @@ for _idx, (_domain, _cells) in enumerate(diagram_xml):
     page_heights[_domain] = 1169
 
 out = ['<?xml version="1.0" encoding="UTF-8"?>',
-       '<mxfile host="app.diagrams.net" agent="SoleVision ERD generator" version="24.7.17">']
+       '<mxfile host="app.diagrams.net" agent="CUFMAI ERD generator" version="24.7.17">']
 for page_idx, (domain, cells) in enumerate(diagram_xml):
     count = len(pages[domain])
     out.append(f'  <diagram id="page-{page_idx}" name="{page_idx+1} {domain} ({count} tables)">')

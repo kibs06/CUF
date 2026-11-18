@@ -5,10 +5,13 @@ import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/biometric_service.dart';
 import '../../services/mfa_service.dart';
+import '../../services/passkey_service.dart';
 import '../../widgets/sole_switch.dart';
 import '../auth/edit_profile_screen.dart';
+import 'change_password_screen.dart';
 import 'manage_login_device_screen.dart';
 import 'mfa_settings_screen.dart';
+import 'passkey_settings_screen.dart';
 
 /// Account & Security screen — Shopee-style settings layout with
 /// Account and Security sections.
@@ -23,12 +26,14 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
   bool? _mfaEnabled; // null = still loading
+  int? _passkeyCount; // null = still loading / unavailable
 
   @override
   void initState() {
     super.initState();
     _loadBiometricState();
     _loadMfaState();
+    _loadPasskeyState();
   }
 
   Future<void> _loadBiometricState() async {
@@ -57,11 +62,45 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   }
 
   Future<void> _openMfaSettings() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const MfaSettingsScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const MfaSettingsScreen()));
     // Refresh the row status when returning from the settings screen.
     _loadMfaState();
+  }
+
+  Future<void> _loadPasskeyState() async {
+    try {
+      final passkeys = await PasskeyService.instance.list();
+      if (mounted) setState(() => _passkeyCount = passkeys.length);
+    } catch (e) {
+      // Passkeys can be unavailable before the project is configured, or
+      // while the session needs a fresh MFA verification. Leave the row
+      // tappable so its screen can explain the real error.
+      debugPrint('[account_security] passkey status failed: $e');
+      if (mounted) setState(() => _passkeyCount = null);
+    }
+  }
+
+  Future<void> _openPasskeySettings() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PasskeySettingsScreen()));
+    _loadPasskeyState();
+  }
+
+  String get _passkeySubtitle {
+    if (_passkeyCount == null) {
+      return 'Use fingerprint, face or screen lock instead of a password';
+    }
+    if (_passkeyCount == 0) {
+      return 'Set up a passkey for passwordless sign-in';
+    }
+    return '$_passkeyCount passkey${_passkeyCount == 1 ? '' : 's'} registered';
+  }
+
+  String get _passkeyActionLabel {
+    return _passkeyCount == null || _passkeyCount == 0 ? 'Set Up' : 'Manage';
   }
 
   Future<void> _toggleBiometric(bool value) async {
@@ -95,18 +134,20 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     }
   }
 
-  Future<void> _sendResetPassword() async {
+  /// Set a new password right here, on the live session — no reset e-mail.
+  ///
+  /// The e-mail link is still the signed-OUT path (login screen's "Forgot
+  /// password?"), because proving an account without a session needs a
+  /// delivered link or OTP. This row is the signed-in one, where possession of
+  /// the session is already the proof.
+  Future<void> _openChangePassword() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final success = await auth.resetPassword(auth.displayEmail);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Password reset email sent to ${auth.displayEmail}'
-              : auth.errorMessage ?? 'Unable to send reset email.',
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChangePasswordScreen(
+          email: auth.displayEmail,
+          onSubmit: (newPassword) => auth.changePassword(newPassword),
         ),
-        backgroundColor: success ? AppConstants.success : AppConstants.error,
       ),
     );
   }
@@ -168,9 +209,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: AppConstants.primary,
-                    ),
+                    borderSide: const BorderSide(color: AppConstants.primary),
                   ),
                 ),
                 validator: (val) {
@@ -332,24 +371,19 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                 },
               ),
 
-              // Change Password
+              // Change Password — in-app, on the existing session
               _settingsRow(
                 title: 'Change Password',
-                onTap: _sendResetPassword,
+                subtitle: 'Set a new one here — no email needed',
+                onTap: _openChangePassword,
               ),
 
               // Passkeys
               _settingsRow(
                 title: 'Passkeys',
-                actionLabel: 'Set Now',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Passkeys coming soon'),
-                      backgroundColor: AppConstants.primary,
-                    ),
-                  );
-                },
+                subtitle: _passkeySubtitle,
+                actionLabel: _passkeyActionLabel,
+                onTap: _openPasskeySettings,
               ),
 
               // Fingerprint Authentication
@@ -369,7 +403,8 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
             _buildSection([
               _settingsRow(
                 title: 'Check Account Activity',
-                subtitle: 'Check your login and account changes in the last 30 days',
+                subtitle:
+                    'Check your login and account changes in the last 30 days',
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -381,7 +416,8 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
               ),
               _settingsRow(
                 title: 'Manage Login Device',
-                subtitle: 'Review the devices that you have logged in CUFMAI account',
+                subtitle:
+                    'Review the devices that you have logged in CUFMAI account',
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -392,7 +428,8 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
               ),
               _settingsRow(
                 title: 'Two-Factor Authentication (2FA)',
-                subtitle: 'Add a code from your authenticator app when signing in',
+                subtitle:
+                    'Add a code from your authenticator app when signing in',
                 value: _mfaEnabled == null
                     ? null
                     : (_mfaEnabled! ? 'On' : 'Off'),
@@ -431,19 +468,13 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   }
 
   // ── Info row (read-only, no chevron) ───────────────────────────
-  Widget _infoRow({
-    required String title,
-    required String value,
-  }) {
+  Widget _infoRow({required String title, required String value}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              title,
-              style: AppConstants.bodyStyle(fontSize: 15),
-            ),
+            child: Text(title, style: AppConstants.bodyStyle(fontSize: 15)),
           ),
           Text(
             value,
@@ -477,10 +508,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: AppConstants.bodyStyle(fontSize: 15),
-                    ),
+                    Text(title, style: AppConstants.bodyStyle(fontSize: 15)),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
                       Text(
@@ -539,10 +567,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: AppConstants.bodyStyle(fontSize: 15),
-                ),
+                Text(title, style: AppConstants.bodyStyle(fontSize: 15)),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
@@ -555,10 +580,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          SoleSwitch(
-            value: value,
-            onChanged: onChanged,
-          ),
+          SoleSwitch(value: value, onChanged: onChanged),
         ],
       ),
     );

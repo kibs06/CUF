@@ -1,4 +1,4 @@
-# SoleVision — Complete Project Documentation
+# CUFMAI — Complete Project Documentation
 
 **Version:** 2.0.0  
 **Last Updated:** July 4, 2026  
@@ -38,7 +38,7 @@
 
 ## 1. Project Overview
 
-SoleVision is a multi-role marketplace connecting **customers**, **sellers** (artisans), and **admins** for handcrafted shoe retail in Carcar City, Cebu.
+CUFMAI is a multi-role marketplace connecting **customers**, **sellers** (artisans), and **admins** for handcrafted shoe retail in Carcar City, Cebu.
 
 | Role | Primary Use |
 |------|-------------|
@@ -784,7 +784,7 @@ ALTER TABLE public.cart_items ADD COLUMN IF NOT EXISTS size TEXT;
 - Created `supabase/migrations/20260704_fix_trigger_security_definer.sql`
 - Created `supabase/migrations/20260704_add_orders_delete_policy.sql`
 - Created `docs/CLEANUP_orphaned_zero_item_orders.sql`
-- Created this document: `docs/SoleVision_Complete_Documentation.md`
+- Created this document: `docs/CUFMAI_Complete_Documentation.md`
 
 ---
 
@@ -926,7 +926,7 @@ npm run dev
 ### Documentation Files
 | File | Purpose |
 |------|---------|
-| `docs/SoleVision_Complete_Documentation.md` | **This document** — comprehensive project reference |
+| `docs/CUFMAI_Complete_Documentation.md` | **This document** — comprehensive project reference |
 | `docs/project_doc.md` | Project documentation v1.2.0 with fix history |
 | `docs/PROJECT_HANDOFF.md` | Project handoff with decisions, rationale, known issues |
 | `docs/SESSION_DOCUMENTATION_JULY_3_2026.md` | Full investigation narrative for checkout bugs |
@@ -1088,5 +1088,5 @@ await client.from('profiles').update({
 
 ---
 
-*SoleVision v2.0.0 — Complete project documentation compiled July 4, 2026.*  
+*CUFMAI v2.0.0 — Complete project documentation compiled July 4, 2026.*  
 *Sources: SESSION_LOG_JULY_2_3_2026.md, SESSION_DOCUMENTATION_JULY_3_2026.md, VERIFICATION_AUDIT_JULY_4_2026.md, PROJECT_HANDOFF.md, CHANGELOG.md, all FIX spec files, createOrder/addToCart/AR reference docs, project_doc.md v1.2.0, and codebase analysis.*

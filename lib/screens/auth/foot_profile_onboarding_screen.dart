@@ -147,7 +147,7 @@ class _FootProfileOnboardingScreenState
       title: 'Find your perfect fit',
       subtitle:
           'Most people wear the wrong shoe size without realizing it. '
-          'A 30-second scan means your SoleVision recommendations are built '
+          'A 30-second scan means your CUFMAI recommendations are built '
           'on your real foot — not a guess.',
       showBackButton: false,
       child: Column(

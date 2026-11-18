@@ -1,4 +1,4 @@
-# SoleVision — Local Backup & Restore
+# CUFMAI — Local Backup & Restore
 
 Because the Supabase **free tier has no automatic backups**, this project ships a
 local backup system that copies your database and storage files to your own
@@ -17,7 +17,7 @@ Windows laptop on a schedule. Everything runs client-side — no paid add-ons.
 | `manifest.json` | File list + metadata for this run | Restore script uses it |
 
 Each run creates a timestamped folder, e.g.
-`C:\Users\jeffh\Documents\SoleVisionBackups\20260813_091500\`.
+`C:\Users\jeffh\Documents\CUFMAIBackups\20260813_091500\`.
 
 ---
 
@@ -66,7 +66,7 @@ Optional flags: `-SkipStorage`, `-SkipJson`, `-SkipPrune`.
 The simplest reliable schedule is a daily task. From an **admin** PowerShell:
 
 ```powershell
-schtasks /Create /TN "SoleVision Backup" /SC DAILY /ST 02:30 `
+schtasks /Create /TN "CUFMAI Backup" /SC DAILY /ST 02:30 `
   /TR "powershell -ExecutionPolicy Bypass -File \"C:\path\to\backup\backup.ps1\"" `
   /F
 ```
@@ -96,7 +96,7 @@ service-role key (RLS bypassed):
 ```powershell
 cd backup
 powershell -ExecutionPolicy Bypass -File restore.ps1 `
-  -BackupFolder "C:\Users\jeffh\Documents\SoleVisionBackups\20260813_091500"
+  -BackupFolder "C:\Users\jeffh\Documents\CUFMAIBackups\20260813_091500"
 ```
 
 It restores buckets → storage files → table data in FK-safe order, merging

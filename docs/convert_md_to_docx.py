@@ -7,8 +7,8 @@ from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
 
-MD_PATH = Path("docs/SoleVision_Project_Documentation.md")
-DOCX_PATH = Path("docs/SoleVision_Project_Documentation.docx")
+MD_PATH = Path("docs/CUFMAI_Project_Documentation.md")
+DOCX_PATH = Path("docs/CUFMAI_Project_Documentation.docx")
 
 
 def parse_md_to_docx(md_text: str) -> Document:

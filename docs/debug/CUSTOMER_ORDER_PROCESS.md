@@ -1,4 +1,4 @@
-# SoleVision — Customer Order Process Architecture
+# CUFMAI — Customer Order Process Architecture
 
 > **Audience:** AI agents and developers working on the order pipeline.
 > **Last updated:** July 18, 2026

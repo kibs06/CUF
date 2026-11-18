@@ -1,4 +1,4 @@
-# SoleVision — Product Architecture AI Context
+# CUFMAI — Product Architecture AI Context
 
 > Condensed reference for AI agents working on the product system.
 > Derived from codebase analysis (July 16, 2026).

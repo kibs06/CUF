@@ -12,7 +12,8 @@
    - The LIVE webhook was created **Sep 3** at URL `https://psczvbfoybqhjeqssimw.supabase.co/functions/v1/gcash-webhook`. Confirm it exists on the LIVE environment and is subscribed to **`checkout_session.payment.paid`** (and ideally `payment.paid` + `payment.failed` as defensive events).
    - Confirm the project secret **`PAYMONGO_SECRET_KEY` is the LIVE key (`sk_live_…`)** and `PAYMONGO_LIVEMODE=true`. ⚠️ The only recorded payment intent (`pi_BA8zVibfwg16E4qhkfG1bnEi`, Aug 19) was created with a **TEST** key (`livemode: false`) — if the secret is still test, live checkouts will create test sessions or fail.
    - Do a **real end-to-end live test** before launch: place a small real GCash order → pay → confirm `gcash-webhook` returns 200 and the order finalizes (`status: pending`, `payment_status: paid`, `payment_verified_at` set, seller notified). PayMongo's dashboard "Send test webhook" only exercises delivery, not a real payment.
-   - `PAYMONGO_WEBHOOK_SECRET` is now a project-wide secret (verified: bad signature → 401). Keep it project-wide, not function-scoped.
+      - `PAYMONGO_WEBHOOK_SECRET` is now a project-wide secret (verified: bad signature → 401). Keep it project-wide, not function-scoped.
+   - **Mode guard (code, Nov 17, 2026 — takes effect on the next `functions deploy`).** `create-gcash-payment-intent` now refuses to create a session when the secret key's mode (`sk_test_`/`sk_live_`) disagrees with `PAYMONGO_LIVEMODE`, auditing `payment_webhook_events.event_type = 'checkout_session.blocked_key_mode_mismatch'` and returning 503 **before any order row exists**; `gcash-webhook` rejects any event whose own `livemode` disagrees with ours (`webhook.blocked_key_mode_mismatch`, order untouched) and splits the two directions: a **test** event in a live config is acknowledged (200, leftover sandbox can never be valid), while a **live** event in a test config returns 500 so PayMongo keeps retrying — a rollback must never silently drop a real payment. Audit rows are keyed `mode-<event id>`, so retries record once, and the retry processes normally once the config is restored. ⚠️ Consequence for the steps above: the live key and `PAYMONGO_LIVEMODE=true` must land in the **same** `supabase secrets set` call, or checkout stays blocked — that is the guard working as intended, not an outage to work around.
 
 2. **MapTiler tiles are broken through the proxy**
    - Geocoding works via `geocode-proxy`, but **raster tiles return 403** from Supabase's servers with the current key (MapTiler error tile). Real users' map pickers will show error tiles.
@@ -92,11 +93,16 @@ gate intact.
 >   route to re-run after a rotation, and it needs a personal access token
 >   with `auth:write`.
 >
-> The two templates are already verified in-repo: both
+> The two CODE templates are already verified in-repo: both
 > `supabase/templates/confirmation.html` and
 > `supabase/templates/magic_link.html` carry `{{ .Token }}`, and
 > `otp_length = 6` / `otp_expiry = 3600` still match `EmailOtpPolicy`
 > (`test/services/email_otp_service_test.dart` passes).
+
+> `supabase/templates/recovery.html` is the reset mail, and the one template
+> that must carry `{{ .ConfirmationURL }}` rather than a code — the link is
+> what opens the reset screen. The tool writes all three and refuses a reset
+> template that lost its link, so this cannot regress silently.
 
 ### Steps 1–3b as one command (optional)
 
@@ -118,7 +124,7 @@ What it sets, all in one `PATCH /v1/projects/{ref}/config/auth`: custom SMTP
 (`smtp.gmail.com`, port `465` **as a string**, sender + envelope sender =
 `GMAIL_SENDER`, sender name `CUFMAI`), `rate_limit_email_sent` **(100/h)**, the
 confirmations/OTP numbers (`mailer_autoconfirm: false`, `mailer_otp_length: 6`,
-`mailer_otp_exp: 3600`), both templates' bodies **and** subjects, the redirect
+`mailer_otp_exp: 3600`), all three templates' bodies **and** subjects, the redirect
 allow list with `solvision://auth/confirm`, `solvision://auth/recovery`, the
 portal's `/account` page and the portal's dev origin **appended to whatever is
 already there** (a PATCH replaces
@@ -127,7 +133,8 @@ silently drop the existing entries), and the **Site URL** (`--site-url`, default
 the deployed customer portal) that a reset call with no `redirectTo` falls back
 to.
 
-It refuses to send a template that has lost `{{ .Token }}`, and it strips the
+It refuses to send a code template that has lost `{{ .Token }}` or a reset
+template that has lost `{{ .ConfirmationURL }}`, and it strips the
 authoring `<!-- … -->` note from both files, so neither mistake can reach a
 customer's inbox. With no flags it prints a ✅/❌ line per field at the end and
 exits non-zero if any field did not read back.

@@ -1,4 +1,4 @@
-# SoleVision Project Policies
+# CUFMAI Project Policies
 
 **Version:** 1.0.0  
 **Last Updated:** September 9, 2026  

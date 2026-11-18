@@ -137,8 +137,8 @@ Sideloading an APK requires the downloading app (browser, file manager) to have 
 
 | Document | What it covers |
 |----------|----------------|
-| `docs/ABOUT_SOLEVISION.md` | What the app is, the problem it solves, who it's for |
-| `docs/SoleVision_Complete_Documentation.md` | Master reference — schema, RLS, services, history |
+| `docs/ABOUT_CUFMAI.md` | What the app is, the problem it solves, who it's for |
+| `docs/CUFMAI_Complete_Documentation.md` | Master reference — schema, RLS, services, history |
 | `docs/AI_PROJECT_SUMMARY.md` | Quick reference for the whole project |
 | `docs/PROJECT_HANDOFF.md` | Decisions, known issues, what's next |
 | `docs/RELEASE_SIGNING.md` | The Android release key, why in-app updates require it, the one-time reinstall |

@@ -258,10 +258,10 @@ class _CUFMAIAppState extends State<CUFMAIApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final ThemeMode mode = _themeProvider.mode;
-    final bool isDark = mode == ThemeMode.dark ||
+    final bool isDark =
+        mode == ThemeMode.dark ||
         (mode == ThemeMode.system && _platformBrightness == Brightness.dark);
-    final Brightness brightness =
-        isDark ? Brightness.dark : Brightness.light;
+    final Brightness brightness = isDark ? Brightness.dark : Brightness.light;
 
     // Publish the resolved brightness for the token layer, then repaint what
     // is already on screen. The app paints from static tokens rather than
@@ -286,45 +286,58 @@ class _CUFMAIAppState extends State<CUFMAIApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => AdminNotificationProvider()),
         ChangeNotifierProvider(create: (_) => MessageProvider()),
         ChangeNotifierProvider(create: (_) => ChatAttachmentProvider()),
-        ChangeNotifierProvider(create: (_) => FollowProvider(StoreService.instance)),
+        ChangeNotifierProvider(
+          create: (_) => FollowProvider(StoreService.instance),
+        ),
         ChangeNotifierProvider(create: (_) => ReviewProvider()),
         ChangeNotifierProvider(create: (_) => FootMeasurementProvider()),
         ChangeNotifierProvider(create: (_) => UpdateProvider()),
         ChangeNotifierProvider(create: (_) => SaleTagProvider()),
         ChangeNotifierProvider(create: (_) => BannerProvider()),
       ],
-      child: MaterialApp(
-        title: 'CUFMAI',
-        debugShowCheckedModeBanner: false,
-        builder: (context, child) {
-          ErrorWidget.builder = (FlutterErrorDetails details) {
-            return Scaffold(
-              backgroundColor: AppConstants.surfaceLight,
-              body: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Something went wrong:\n${details.exceptionAsString()}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppConstants.error),
+      // The link host wraps the MaterialApp, NOT its `home`. It used to be the
+      // splash route's parent, but SplashScreen replaces that route with
+      // AuthGate after 900 ms — which disposed the host, cancelled its
+      // `uriLinkStream` subscription, and left every later deep link to
+      // supabase_flutter's own observer. That is exactly how a password-reset
+      // link signed the customer in and dropped them on Home instead of the
+      // set-new-password screen: the session was adopted, but the handler that
+      // marks it as a recovery had already been torn down. Above the navigator
+      // it survives every route change for the life of the app.
+      child: DeepLinkHost(
+        child: MaterialApp(
+          title: 'CUFMAI',
+          debugShowCheckedModeBanner: false,
+          builder: (context, child) {
+            ErrorWidget.builder = (FlutterErrorDetails details) {
+              return Scaffold(
+                backgroundColor: AppConstants.surfaceLight,
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'Something went wrong:\n${details.exceptionAsString()}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppConstants.error),
+                    ),
                   ),
                 ),
-              ),
-            );
-          };
-          // Wrap with ConnectivityBanner for mid-session connection loss
-          return ConnectivityBanner(child: child ?? const SizedBox.shrink());
-        },
-        // Both themes are always built; `themeMode` picks between them for
-        // Material widgets, and the same resolved brightness drives the token
-        // layer, so the two can never disagree.
-        theme: buildAppTheme(Brightness.light),
-        darkTheme: buildAppTheme(Brightness.dark),
-        themeMode: mode,
+              );
+            };
+            // Wrap with ConnectivityBanner for mid-session connection loss
+            return ConnectivityBanner(child: child ?? const SizedBox.shrink());
+          },
+          // Both themes are always built; `themeMode` picks between them for
+          // Material widgets, and the same resolved brightness drives the token
+          // layer, so the two can never disagree.
+          theme: buildAppTheme(Brightness.light),
+          darkTheme: buildAppTheme(Brightness.dark),
+          themeMode: mode,
 
-        // Start screen is Splash, which auto-navigates to AuthGate
-        home: const DeepLinkHost(child: SplashScreen()),
-        navigatorKey: _navigatorKey,
+          // Start screen is Splash, which auto-navigates to AuthGate
+          home: const SplashScreen(),
+          navigatorKey: _navigatorKey,
+        ),
       ),
     );
   }
@@ -362,7 +375,12 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
   @override
   void initState() {
     super.initState();
-    DeepLinkService.instance.init(onLink: _onLink);
+    // After the first frame: this host now sits ABOVE MaterialApp, so in
+    // initState there is no Navigator to push a product or GCash link into
+    // yet. `getInitialLink()` keeps the cold-start link available until then.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) DeepLinkService.instance.init(onLink: _onLink);
+    });
   }
 
   @override
@@ -381,7 +399,8 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
     // destination is the same screen a shared link opens. Checked alongside the
     // share link rather than in a branch of its own, because the two differ in who
     // produced the link, not in where it should land.
-    final productId = DeepLinkService.productIdFromLink(uri) ??
+    final productId =
+        DeepLinkService.productIdFromLink(uri) ??
         DeepLinkService.productIdFromAppLink(uri);
     if (productId != null) {
       await _openSharedProduct(productId);
@@ -410,7 +429,16 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
       if (!mounted) return;
       final handled = await context
           .read<AuthProvider>()
-          .completePasswordRecoveryFromEmailLink();
+          .completePasswordRecoveryFromEmailLink(uri);
+      if (!mounted) return;
+      // The gate swaps UNDER any pushed route, so a link tapped from a product
+      // page would otherwise change state invisibly. A reset is a deliberate
+      // action: bring the gate to the front.
+      if (handled) {
+        _navigatorKey.currentState?.popUntil(
+          (Route<dynamic> route) => route.isFirst,
+        );
+      }
       // A link GoTrue REFUSED still arrives here — same URL, `error_code`
       // instead of a session (an expired or already-used token) — and the
       // handler correctly opens nothing. Say so: a tap that does nothing at all
@@ -467,8 +495,9 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
         await Future<void>.delayed(const Duration(milliseconds: 250));
       }
 
-      final product =
-          await SupabaseService.instance.fetchProductById(productId);
+      final product = await SupabaseService.instance.fetchProductById(
+        productId,
+      );
       if (!mounted) return;
       if (product != null) {
         await _pushDeferred((_) => ProductDetailScreen(product: product));
@@ -515,8 +544,9 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
   void _showLinkNotice(String message) {
     final navigator = _navigatorKey.currentState;
     if (navigator == null || !navigator.context.mounted) return;
-    ScaffoldMessenger.of(navigator.context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      navigator.context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

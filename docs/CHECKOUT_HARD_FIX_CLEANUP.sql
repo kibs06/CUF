@@ -1,5 +1,5 @@
 -- ============================================================
--- SoleVision — Hard Fix Cleanup: Duplicate variants + orphaned inventory
+-- CUFMAI — Hard Fix Cleanup: Duplicate variants + orphaned inventory
 -- Date: July 3, 2026
 -- Purpose: Clean up data integrity issues that may be contributing
 --   to the false "no longer available" checkout error.

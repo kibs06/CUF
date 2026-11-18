@@ -31,7 +31,7 @@ set -euo pipefail
 KEYSTORE_REL="android/app/cufmai-release.jks"
 KEY_ALIAS="cufmai"
 VALIDITY_DAYS=10000
-DN="CN=CUFMAI, OU=Mobile, O=SoleVision, L=Manila, C=PH"
+DN="CN=CUFMAI, OU=Mobile, O=CUFMAI, L=Manila, C=PH"
 
 CONFIRMED=0
 for arg in "$@"; do

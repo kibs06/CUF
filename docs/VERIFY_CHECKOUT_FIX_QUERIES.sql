@@ -1,5 +1,5 @@
 -- ============================================================
--- SoleVision — Checkout Fix Verification Queries
+-- CUFMAI — Checkout Fix Verification Queries
 -- Run these in the Supabase SQL Editor to verify the fix.
 -- Last updated: July 3, 2026 (v6 — post-fix verification)
 -- ============================================================

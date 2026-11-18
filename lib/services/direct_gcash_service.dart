@@ -11,6 +11,11 @@ class GcashCheckoutResult {
   final double totalAmount;
   final DateTime? deadline;
   final String storeName;
+
+  /// Short code the customer puts in the GCash note, so one shared platform
+  /// inbox can be matched to this order unambiguously.
+  final String? orderCode;
+  final String? paymentAccountId;
   final String? gcashQrUrl;
   final String? gcashNumber;
   final String? gcashAccountName;
@@ -21,6 +26,8 @@ class GcashCheckoutResult {
     required this.totalAmount,
     this.deadline,
     this.storeName = '',
+    this.orderCode,
+    this.paymentAccountId,
     this.gcashQrUrl,
     this.gcashNumber,
     this.gcashAccountName,
@@ -37,6 +44,8 @@ class GcashCheckoutResult {
             )
           : null,
       storeName: json['store_name']?.toString() ?? '',
+      orderCode: json['order_code']?.toString(),
+      paymentAccountId: json['payment_account_id']?.toString(),
       gcashQrUrl: json['gcash_qr_url']?.toString(),
       gcashNumber: json['gcash_number']?.toString(),
       gcashAccountName: json['gcash_account_name']?.toString(),
@@ -111,6 +120,10 @@ class PendingGcashOrder {
   final DateTime? deadline;
   final DateTime? createdAt;
   final bool proofSubmitted;
+  final String? orderCode;
+  final String status;
+  final int attemptsUsed;
+  final String? rejectionReason;
   final List<PendingGcashItem> items;
 
   const PendingGcashOrder({
@@ -120,8 +133,34 @@ class PendingGcashOrder {
     this.deadline,
     this.createdAt,
     this.proofSubmitted = false,
+    this.orderCode,
+    this.status = 'awaiting_payment_confirmation',
+    this.attemptsUsed = 0,
+    this.rejectionReason,
     this.items = const [],
   });
+
+  /// True while a proof is with the store (or the admin) for review.
+  bool get underReview => status == 'payment_under_review';
+
+  /// Remaining attempts (max 3 per order).
+  int get attemptsLeft => 3 - attemptsUsed;
+
+  PendingGcashOrder copyWithProofs({int? attemptsUsed, String? rejectionReason}) {
+    return PendingGcashOrder(
+      id: id,
+      storeId: storeId,
+      totalAmount: totalAmount,
+      deadline: deadline,
+      createdAt: createdAt,
+      proofSubmitted: proofSubmitted,
+      orderCode: orderCode,
+      status: status,
+      attemptsUsed: attemptsUsed ?? this.attemptsUsed,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      items: items,
+    );
+  }
 
   /// Total number of physical items across all lines (qty summed).
   int get itemCount =>
@@ -144,6 +183,8 @@ class PendingGcashOrder {
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
       proofSubmitted: proofSubmitted,
+      orderCode: json['order_code']?.toString(),
+      status: json['status']?.toString() ?? 'awaiting_payment_confirmation',
       items: rawItems is List
           ? rawItems
               .whereType<Map>()
@@ -174,7 +215,7 @@ class DirectGcashException implements Exception {
 /// Every state transition is a Postgres RPC (SECURITY DEFINER) — this
 /// service NEVER writes payment status to the orders table directly.
 /// The server is the only source of truth; the seller's confirmation tap
-/// (confirm_gcash_payment) is the security control.
+/// (verify_gcash_payment) is the security control.
 class DirectGcashService {
   final SupabaseClient _client;
 
@@ -209,19 +250,32 @@ class DirectGcashService {
     }
   }
 
-  /// Step 2 (customer): submit the proof of payment — reference number +
-  /// screenshot (already uploaded to the private bucket; [screenshotPath]
-  /// is the storage path `{order_id}/{file}`).
+  /// Step 2 (customer): submit the proof of payment.
+  ///
+  /// [screenshotHash] is the SHA-256 of the image bytes (computed by the
+  /// caller before upload). The server keys a platform-wide unique index on
+  /// it, so the same screenshot can never substantiate two orders.
+  ///
+  /// An attempt that is rejected does not kill the order: this may be called
+  /// up to 3 times per order, each with a fresh reference and screenshot.
   Future<void> submitProof({
     required String orderId,
     required String referenceNumber,
+    required String senderName,
+    required double amountPaid,
     required String screenshotPath,
+    required String screenshotHash,
+    DateTime? paidAt,
   }) async {
     try {
       await _client.rpc('submit_gcash_proof', params: {
         'p_order_id': orderId,
         'p_reference_number': referenceNumber,
+        'p_sender_name': senderName,
+        'p_amount_paid': amountPaid,
         'p_screenshot_url': screenshotPath,
+        'p_screenshot_hash': screenshotHash,
+        'p_paid_at': (paidAt ?? DateTime.now()).toUtc().toIso8601String(),
       });
     } catch (e) {
       throw _toException(
@@ -231,24 +285,30 @@ class DirectGcashService {
     }
   }
 
-  /// Step 3 (seller): confirm receipt → order enters the normal pipeline.
-  Future<void> confirmPayment(String orderId) async {
+  /// Step 3 (seller): accept the proof → the order enters the normal
+  /// pipeline. The money is in the PLATFORM account; the admin still has to
+  /// confirm it in the statement before any payout, which is why this is not
+  /// the last step of the money trail.
+  Future<void> verifyPayment(String orderId) async {
     try {
-      await _client.rpc('confirm_gcash_payment', params: {
+      await _client.rpc('verify_gcash_payment', params: {
         'p_order_id': orderId,
       });
     } catch (e) {
       throw _toException(
         e,
-        fallback: 'We could not confirm this payment. Please try again.',
+        fallback: 'We could not verify this payment. Please try again.',
       );
     }
   }
 
-  /// Step 3 (seller): reject receipt → order cancelled, stock released.
-  Future<void> rejectPayment(String orderId, String reason) async {
+  /// Step 3 (seller): reject the proof with a reason.
+  ///
+  /// Attempts 1 and 2 return the order to the customer with a fresh payment
+  /// window; the third rejection cancels the order and releases the stock.
+  Future<void> rejectProof(String orderId, String reason) async {
     try {
-      await _client.rpc('reject_gcash_payment', params: {
+      await _client.rpc('reject_gcash_proof', params: {
         'p_order_id': orderId,
         'p_reason': reason,
       });
@@ -333,24 +393,43 @@ class DirectGcashService {
       final row = await _client
           .from('orders')
           .select(
-            'id, store_id, total_amount, '
+            'id, store_id, total_amount, order_code, '
             'payment_confirmation_deadline, created_at, status, '
             'order_items(id, product_id, size, quantity, unit_price, '
             'products(name, product_images(image_url, display_order)))',
           )
           .eq('customer_id', uid)
-          .eq('status', 'awaiting_payment_confirmation')
+          .inFilter('status', const [
+            'awaiting_payment_confirmation',
+            'payment_under_review',
+          ])
           .maybeSingle();
       if (row == null) return null;
       final order = Map<String, dynamic>.from(row);
-      final proof = await _client
+      final proofs = await _client
           .from('gcash_payment_proofs')
-          .select('id')
+          .select('id, status, rejection_reason, attempt_no')
           .eq('order_id', order['id'])
-          .maybeSingle();
+          .order('attempt_no', ascending: false)
+          .limit(3);
+      final rows = (proofs as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final pending =
+          rows.any((p) => p['status']?.toString() == 'pending');
+      String? latestReason;
+      for (final p in rows) {
+        if (p['status']?.toString() == 'rejected') {
+          latestReason = p['rejection_reason']?.toString();
+          break;
+        }
+      }
       return PendingGcashOrder.fromJson(
         order,
-        proofSubmitted: proof != null,
+        proofSubmitted: pending,
+      ).copyWithProofs(
+        attemptsUsed: rows.length,
+        rejectionReason: latestReason,
       );
     } catch (e) {
       debugPrint('[GCASH] fetch pending checkout failed: $e');
@@ -362,7 +441,9 @@ class DirectGcashService {
   /// Fire-and-forget (never blocks the UI).
   Future<void> expireOverdue() async {
     try {
-      await _client.rpc('expire_overdue_gcash_orders');
+      // Only orders with NO proof are ever expired — a submitted proof means
+      // the money may already be in the platform account.
+      await _client.rpc('expire_unpaid_gcash_orders');
     } catch (e) {
       debugPrint('[GCASH] expiry sweep failed (non-fatal): $e');
     }

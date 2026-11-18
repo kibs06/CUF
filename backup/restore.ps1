@@ -1,12 +1,12 @@
 # ============================================================
-# SoleVision - Restore Script  (Windows / PowerShell 5.1+)
+# CUFMAI - Restore Script  (Windows / PowerShell 5.1+)
 # ============================================================
 # Restores a backup folder created by backup.ps1 into the SAME
 # Supabase project (or a new one). Uses the service-role key + REST
 # APIs, so it works without psql / Docker.
 #
 #   powershell -ExecutionPolicy Bypass -File restore.ps1 `
-#       -BackupFolder "C:\Users\jeffh\Documents\SoleVisionBackups\20260813_091500"
+#       -BackupFolder "C:\Users\jeffh\Documents\CUFMAIBackups\20260813_091500"
 #
 # WHAT IT RESTORES (in this order):
 #   1. Storage buckets  (recreates missing buckets with their public flag)

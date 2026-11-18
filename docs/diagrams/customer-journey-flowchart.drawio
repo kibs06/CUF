@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" agent="SoleVision journey generator" version="24.7.17">
+<mxfile host="app.diagrams.net" agent="CUFMAI journey generator" version="24.7.17">
     <diagram id="page-1" name="1 Open the app">
       <mxGraphModel dx="0" dy="0" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
         <root>
@@ -68,7 +68,7 @@
         <mxCell id="p1-title" value="1 · Open the app" style="text;html=1;fontSize=15.9;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="60" y="26" width="507" height="22" as="geometry" />
         </mxCell>
-        <mxCell id="p1-subtitle" value="SoleVision — what the customer does · page 1 of 14" style="text;html=1;fontSize=8.7;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p1-subtitle" value="CUFMAI — what the customer does · page 1 of 14" style="text;html=1;fontSize=8.7;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="60" y="51" width="507" height="17" as="geometry" />
         </mxCell>
         <mxCell id="e1-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p1-start" target="p1-open">
@@ -244,7 +244,7 @@
         <mxCell id="p2-title" value="2 · Create an account" style="text;html=1;fontSize=13.2;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="120" y="26" width="421" height="18" as="geometry" />
         </mxCell>
-        <mxCell id="p2-subtitle" value="SoleVision — what the customer does · page 2 of 14" style="text;html=1;fontSize=7.2;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p2-subtitle" value="CUFMAI — what the customer does · page 2 of 14" style="text;html=1;fontSize=7.2;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="120" y="46" width="421" height="14" as="geometry" />
         </mxCell>
         <mxCell id="e2-1" value="Fill in the form" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p2-entry-1" target="p2-method">
@@ -465,7 +465,7 @@
         <mxCell id="p3-title" value="3 · Confirm the email" style="text;html=1;fontSize=16.5;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="48" y="63" width="524" height="22" as="geometry" />
         </mxCell>
-        <mxCell id="p3-subtitle" value="SoleVision — what the customer does · page 3 of 14" style="text;html=1;fontSize=9;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p3-subtitle" value="CUFMAI — what the customer does · page 3 of 14" style="text;html=1;fontSize=9;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="48" y="89" width="524" height="18" as="geometry" />
         </mxCell>
         <mxCell id="e3-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p3-entry-2" target="p3-send">
@@ -619,7 +619,7 @@
         <mxCell id="p4-title" value="4 · Add their foot size" style="text;html=1;fontSize=16.5;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="48" y="180" width="524" height="22" as="geometry" />
         </mxCell>
-        <mxCell id="p4-subtitle" value="SoleVision — what the customer does · page 4 of 14" style="text;html=1;fontSize=9;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p4-subtitle" value="CUFMAI — what the customer does · page 4 of 14" style="text;html=1;fontSize=9;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="48" y="206" width="524" height="18" as="geometry" />
         </mxCell>
         <mxCell id="e4-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p4-entry-3-2" target="p4-ask">
@@ -818,7 +818,7 @@
         <mxCell id="p5-title" value="5 · Sign in" style="text;html=1;fontSize=10.4;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="182" y="26" width="332" height="14" as="geometry" />
         </mxCell>
-        <mxCell id="p5-subtitle" value="SoleVision — what the customer does · page 5 of 14" style="text;html=1;fontSize=5.7;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p5-subtitle" value="CUFMAI — what the customer does · page 5 of 14" style="text;html=1;fontSize=5.7;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="182" y="42" width="332" height="11" as="geometry" />
         </mxCell>
         <mxCell id="e5-1" value="With email" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-entry-1-3" target="p5-method">
@@ -1133,7 +1133,7 @@
         <mxCell id="p6-title" value="6 · Home" style="text;html=1;fontSize=13.7;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="110" y="26" width="436" height="19" as="geometry" />
         </mxCell>
-        <mxCell id="p6-subtitle" value="SoleVision — what the customer does · page 6 of 14" style="text;html=1;fontSize=7.5;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p6-subtitle" value="CUFMAI — what the customer does · page 6 of 14" style="text;html=1;fontSize=7.5;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="110" y="47" width="436" height="15" as="geometry" />
         </mxCell>
         <mxCell id="e6-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.26;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-entry-1" target="p6-home">
@@ -1383,7 +1383,7 @@
         <mxCell id="p7-title" value="7 · Browse the shops" style="text;html=1;fontSize=12.5;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="136" y="26" width="399" height="17" as="geometry" />
         </mxCell>
-        <mxCell id="p7-subtitle" value="SoleVision — what the customer does · page 7 of 14" style="text;html=1;fontSize=6.8;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p7-subtitle" value="CUFMAI — what the customer does · page 7 of 14" style="text;html=1;fontSize=6.8;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="136" y="45" width="399" height="14" as="geometry" />
         </mxCell>
         <mxCell id="e7-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p7-entry-6-14" target="p7-shops">
@@ -1595,7 +1595,7 @@
         <mxCell id="p8-title" value="8 · Try the shoes on" style="text;html=1;fontSize=15.2;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="69" y="26" width="485" height="21" as="geometry" />
         </mxCell>
-        <mxCell id="p8-subtitle" value="SoleVision — what the customer does · page 8 of 14" style="text;html=1;fontSize=8.3;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p8-subtitle" value="CUFMAI — what the customer does · page 8 of 14" style="text;html=1;fontSize=8.3;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="69" y="50" width="485" height="17" as="geometry" />
         </mxCell>
         <mxCell id="e8-1" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p8-entry-7" target="p8-allow">
@@ -1812,7 +1812,7 @@
         <mxCell id="p9-title" value="9 · Cart and payment" style="text;html=1;fontSize=10.8;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="174" y="26" width="344" height="15" as="geometry" />
         </mxCell>
-        <mxCell id="p9-subtitle" value="SoleVision — what the customer does · page 9 of 14" style="text;html=1;fontSize=5.9;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p9-subtitle" value="CUFMAI — what the customer does · page 9 of 14" style="text;html=1;fontSize=5.9;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="174" y="43" width="344" height="12" as="geometry" />
         </mxCell>
         <mxCell id="e9-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p9-entry-6-7-8" target="p9-cart">
@@ -2070,7 +2070,7 @@
         <mxCell id="p10-title" value="10 · Track the order" style="text;html=1;fontSize=11.2;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="166" y="26" width="356" height="15" as="geometry" />
         </mxCell>
-        <mxCell id="p10-subtitle" value="SoleVision — what the customer does · page 10 of 14" style="text;html=1;fontSize=6.1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p10-subtitle" value="CUFMAI — what the customer does · page 10 of 14" style="text;html=1;fontSize=6.1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="166" y="43" width="356" height="12" as="geometry" />
         </mxCell>
         <mxCell id="e10-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-entry-6-9" target="p10-list">
@@ -2302,7 +2302,7 @@
         <mxCell id="p11-title" value="11 · Talk to the shop" style="text;html=1;fontSize=12.9;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="127" y="26" width="411" height="18" as="geometry" />
         </mxCell>
-        <mxCell id="p11-subtitle" value="SoleVision — what the customer does · page 11 of 14" style="text;html=1;fontSize=7;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p11-subtitle" value="CUFMAI — what the customer does · page 11 of 14" style="text;html=1;fontSize=7;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="127" y="46" width="411" height="14" as="geometry" />
         </mxCell>
         <mxCell id="e11-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p11-entry-6" target="p11-list">
@@ -2489,7 +2489,7 @@
         <mxCell id="p12-title" value="12 · Profile and settings" style="text;html=1;fontSize=15;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="75" y="26" width="476" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="p12-subtitle" value="SoleVision — what the customer does · page 12 of 14" style="text;html=1;fontSize=8.2;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p12-subtitle" value="CUFMAI — what the customer does · page 12 of 14" style="text;html=1;fontSize=8.2;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="75" y="49" width="476" height="16" as="geometry" />
         </mxCell>
         <mxCell id="e12-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p12-entry-6" target="p12-who">
@@ -2664,7 +2664,7 @@
         <mxCell id="p13-title" value="13 · Settings in detail" style="text;html=1;fontSize=12.8;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="124" y="26" width="407" height="17" as="geometry" />
         </mxCell>
-        <mxCell id="p13-subtitle" value="SoleVision — what the customer does · page 13 of 14" style="text;html=1;fontSize=7;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p13-subtitle" value="CUFMAI — what the customer does · page 13 of 14" style="text;html=1;fontSize=7;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="124" y="46" width="407" height="14" as="geometry" />
         </mxCell>
         <mxCell id="e13-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p13-entry-12" target="p13-account">
@@ -2875,7 +2875,7 @@
         <mxCell id="p14-title" value="14 · Bulk holds" style="text;html=1;fontSize=10.6;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="180" y="26" width="336" height="14" as="geometry" />
         </mxCell>
-        <mxCell id="p14-subtitle" value="SoleVision — what the customer does · page 14 of 14" style="text;html=1;fontSize=5.8;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
+        <mxCell id="p14-subtitle" value="CUFMAI — what the customer does · page 14 of 14" style="text;html=1;fontSize=5.8;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" vertex="1" parent="1">
           <mxGeometry x="180" y="42" width="336" height="12" as="geometry" />
         </mxCell>
         <mxCell id="e14-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-entry-7" target="p14-ask">

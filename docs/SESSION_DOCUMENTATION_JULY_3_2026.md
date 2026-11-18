@@ -1,7 +1,7 @@
-# SoleVision — Session Documentation: Checkout / "Complete Order" Investigation
+# CUFMAI — Session Documentation: Checkout / "Complete Order" Investigation
 
 **Date:** July 3, 2026
-**Purpose:** Full record of a debugging session that traced and resolved the "Complete Order fails / no longer available" bug family in the SoleVision checkout flow. Written for another AI (or engineer) to pick up context quickly without re-doing the investigation.
+**Purpose:** Full record of a debugging session that traced and resolved the "Complete Order fails / no longer available" bug family in the CUFMAI checkout flow. Written for another AI (or engineer) to pick up context quickly without re-doing the investigation.
 **Companion files:** This session produced five incremental fix specs (`FIX_complete_order_stock_mismatch.md`, `_v2.md`, `FIX_checkout_validation_stock_source_v3.md`, `FIX_ar_fitting_variant_id_v4.md`, `FIX_false_error_and_cart_clear_v5.md`). This document is the narrative summary tying them together — read this first, then reference the specific spec file for implementation detail on whichever piece you're working on.
 
 ---

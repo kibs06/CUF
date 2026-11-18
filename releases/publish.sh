@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ════════════════════════════════════════════════════════════════════════
-# publish.sh — one-command release for SoleVision
+# publish.sh — one-command release for CUFMAI
 #
 #   ./releases/publish.sh <new-version> ["note1|note2"]
 #   e.g. ./releases/publish.sh 1.0.1 "Fixed login crash|Improved startup time"

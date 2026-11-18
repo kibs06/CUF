@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * SoleVision — customer journey flowchart generator (client-facing, plain English).
+ * CUFMAI — customer journey flowchart generator (client-facing, plain English).
  *
  * Writes docs/diagrams/customer-journey-flowchart.drawio (multi-page) and one
  * SVG preview per page into docs/diagrams/previews/.
@@ -1080,7 +1080,7 @@ for (const p of pages) {
 // flow across pages with off-page connectors instead of shrinking further.
 const pageExtras = (p) => [
   { id: `p${p.meta.n}-title`, kind: 'title', lines: [`${p.meta.n} · ${p.meta.name}`], x: 60, y: 42, w: 700, h: 30 },
-  { id: `p${p.meta.n}-subtitle`, kind: 'subtitle', lines: [`SoleVision — what the customer does · page ${p.meta.n} of ${META.length}`], x: 60, y: 76, w: 700, h: 24 },
+  { id: `p${p.meta.n}-subtitle`, kind: 'subtitle', lines: [`CUFMAI — what the customer does · page ${p.meta.n} of ${META.length}`], x: 60, y: 76, w: 700, h: 24 },
 ];
 
 function fitPageA4(p) {
@@ -1178,7 +1178,7 @@ ${cells.join('\n')}
 }
 
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" agent="SoleVision journey generator" version="24.7.17">
+<mxfile host="app.diagrams.net" agent="CUFMAI journey generator" version="24.7.17">
 ${sheets.map(pageXml).join('\n')}
 </mxfile>
 `;

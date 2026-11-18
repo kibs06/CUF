@@ -1,4 +1,4 @@
-# Threat Analysis Review — SoleVision / CUFMAI
+# Threat Analysis Review — CUFMAI
 
 > **Short version:** For a client-friendly, ~5-minute read, see [THREAT_ANALYSIS_SUMMARY.md](./THREAT_ANALYSIS_SUMMARY.md). This file is the deep dive (code paths, migrations, verification evidence).
 

@@ -2,7 +2,7 @@
 
 **Version:** 1.1.0  
 **Last Updated:** July 20, 2026  
-**Target:** AI assistants working on SoleVision (Flutter + Supabase)
+**Target:** AI assistants working on CUFMAI (Flutter + Supabase)
 
 ---
 

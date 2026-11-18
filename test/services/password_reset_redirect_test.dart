@@ -63,7 +63,8 @@ void main() {
       expect(
         DeepLinkService.authRecoveryRedirect,
         isNot(DeepLinkService.authConfirmRedirect),
-        reason: 'the two e-mail links share a host; routing a reset into the '
+        reason:
+            'the two e-mail links share a host; routing a reset into the '
             'sign-up completion (or the reverse) is the silent failure this '
             'pair of constants exists to prevent',
       );
@@ -81,27 +82,31 @@ void main() {
       expect(
         occurrences(authService, call),
         2,
-        reason: 'resetPassword (the sign-in screen) and '
+        reason:
+            'resetPassword (the sign-in screen) and '
             'sendLockoutNotificationEmail (the lockout overlay) are the two '
             'senders in AuthService',
       );
       expect(
         occurrences(authService, redirect),
         2,
-        reason: 'BOTH AuthService senders must carry the app redirect — the '
+        reason:
+            'BOTH AuthService senders must carry the app redirect — the '
             'lockout overlay is a different screen, hence a separate place to '
             'forget it',
       );
       expect(
         occurrences(supabaseService, call),
         1,
-        reason: 'the path the sign-in screen actually takes '
+        reason:
+            'the path the sign-in screen actually takes '
             '(AuthProvider.resetPassword → SupabaseService.resetPassword)',
       );
       expect(
         occurrences(supabaseService, redirect),
         1,
-        reason: 'SupabaseService.resetPassword must carry the app redirect, or '
+        reason:
+            'SupabaseService.resetPassword must carry the app redirect, or '
             'the customer is sent to a browser instead of the reset screen',
       );
     });
@@ -112,7 +117,8 @@ void main() {
       expect(
         tool,
         contains("'${AppConstants.customerPortalUrl}'"),
-        reason: 'the tool writes the live Site URL and the allow list; its '
+        reason:
+            'the tool writes the live Site URL and the allow list; its '
             'origin literal must be the origin the runbook and the portal '
             'deployment agree on',
       );
@@ -121,14 +127,16 @@ void main() {
         contains(
           r"const String authRecoveryRedirect = 'solvision://auth/recovery';",
         ),
-        reason: 'the allow-list entry has to be the EXACT deep link the app '
+        reason:
+            'the allow-list entry has to be the EXACT deep link the app '
             'sends; GoTrue drops an unknown redirect and falls back to the '
             'site URL',
       );
       expect(
         tool,
         contains('add(authRecoveryRedirect);'),
-        reason: 'declaring the constant is not enough — it must be merged into '
+        reason:
+            'declaring the constant is not enough — it must be merged into '
             'uri_allow_list, which is what actually lets GoTrue honour it',
       );
       expect(
@@ -136,16 +144,60 @@ void main() {
         contains(
           r"customerPortalResetRedirect = '$customerPortalOrigin/account'",
         ),
-        reason: 'the portal half must stay allow-listed: a reset started on the '
+        reason:
+            'the portal half must stay allow-listed: a reset started on the '
             'website returns to /account, and that page is also the fallback '
             'when an app redirect cannot be honoured',
       );
       expect(
         tool,
         contains("'site_url'"),
-        reason: 'the Site URL is GoTrue’s fallback destination for a reset call '
+        reason:
+            'the Site URL is GoTrue’s fallback destination for a reset call '
             'with no redirectTo (an older build). Leaving the project default '
             'is what made the mailed link open localhost:3000',
+      );
+    });
+
+    test('the reset mail itself carries a link, not a code', () {
+            final template = read('supabase/templates/recovery.html');
+      // Only the part the tool actually sends: the opening comment explains
+      // why NOT to use `{{ .Token }}`, and matching that word would make this
+      // test fail on its own documentation.
+      final body = template.substring(template.indexOf('<div'));
+      expect(
+        body,
+        contains('{{ .ConfirmationURL }}'),
+        reason: 'the reset is completed by OPENING the link: it carries the '
+            'short-lived session ResetPasswordScreen uses to set the password',
+      );
+      expect(
+        body,
+        isNot(contains('{{ .Token }}')),
+        reason: 'a code-only reset mail looks fine in the dashboard and leaves '
+            'the reset screen with nothing to accept',
+      );
+
+      final tool = read(toolPath);
+      expect(
+        tool,
+        contains("'mailer_templates_recovery_content'"),
+        reason:
+            'versioning the template is not enough — the deploy PATCH has '
+            'to write it to the live project',
+      );
+      expect(
+        tool,
+        contains("'recovery.html'"),
+        reason: 'the template file has to be the one the tool actually reads',
+      );
+      expect(tool, contains("'mailer_subjects_recovery'"));
+      expect(
+        read('supabase/config.toml'),
+        contains('[auth.email.template.recovery]'),
+        reason:
+            'local Supabase should send the same reset mail the live tool '
+            'writes, or a local test of the flow checks a different e-mail',
       );
     });
 
@@ -158,7 +210,8 @@ void main() {
       expect(
         portalAuth,
         contains('updateUser({ password: newPassword })'),
-        reason: 'the page a recovery link lands on must be able to set the new '
+        reason:
+            'the page a recovery link lands on must be able to set the new '
             'password with the session that link establishes',
       );
     });
@@ -170,14 +223,16 @@ void main() {
       expect(
         runbook,
         contains(AppConstants.customerPortalUrl),
-        reason: 'if the portal (the Site URL) changes, the runbook step changes '
+        reason:
+            'if the portal (the Site URL) changes, the runbook step changes '
             'with it — and that step is the only place these fields are written '
             'down for a human',
       );
       expect(
         runbook,
         contains(DeepLinkService.authRecoveryRedirect),
-        reason: 'the app deep link is the entry that makes the reset button '
+        reason:
+            'the app deep link is the entry that makes the reset button '
             'open CUFMAI; a runbook that omits it sends the reader to the '
             'dashboard without the one value the app now depends on',
       );

@@ -1,6 +1,6 @@
-# 🏠 SoleVision — Home
+# 🏠 CUFMAI — Home
 
-> **Start here.** This is the front door to the SoleVision knowledge base. Pick an area below, or jump to the onboarding path if you're new.
+> **Start here.** This is the front door to the CUFMAI knowledge base. Pick an area below, or jump to the onboarding path if you're new.
 
 **#moc** **#project/solevision**
 
@@ -41,10 +41,10 @@
 
 ## 🗂️ Reference
 
-- [[docs/SoleVision_Complete_Documentation|📘 Master documentation]] (22 sections)
+- [[docs/CUFMAI_Complete_Documentation|📘 Master documentation]] (22 sections)
 - [[obsidian/Release Checklist|✅ Release Checklist]] — run before stamping any version
 - [[obsidian/Decision Log|📜 Decision Log]] — why the code is the way it is
 - [[obsidian/Glossary|📖 Glossary]] — project-specific terms in one place
 - [[docs/PROJECT_HANDOFF|📄 Project handoff v1.1.0]]
 - [[docs/CHANGELOG|📝 Changelog]]
-- [[docs/RoadMap/SOLEVISION_ROADMAP|🧭 Roadmap]]
+- [[docs/RoadMap/CUFMAI_ROADMAP|🧭 Roadmap]]

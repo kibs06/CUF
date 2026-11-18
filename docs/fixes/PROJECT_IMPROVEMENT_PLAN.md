@@ -1,4 +1,4 @@
-# SoleVision — Project Improvement Plan
+# CUFMAI — Project Improvement Plan
 
 **Date:** August 4, 2026  
 **Status:** In progress — 8 product improvements complete ✅  
@@ -20,7 +20,7 @@
 
 ## 1. Project Snapshot
 
-**SoleVision** — Flutter marketplace (customer/seller/admin) + React admin portal + Supabase backend, with POS, chat, reviews, AR foot sizing (ML Kit), push notifications, and GCash/PayMongo QR payments.
+**CUFMAI** — Flutter marketplace (customer/seller/admin) + React admin portal + Supabase backend, with POS, chat, reviews, AR foot sizing (ML Kit), push notifications, and GCash/PayMongo QR payments.
 
 | Layer | Technology |
 |-------|-----------|
@@ -70,7 +70,7 @@
 - `flutter analyze` reports **961 issues** on `main`
 - `flutter test` has **4 failing tests**:
   - `cart_provider_test.dart`, `cart_service_test.dart`, `order_service_test.dart` **fail to load** — they `import 'package:mocktail/mocktail.dart'` but **mocktail is not in `pubspec.yaml` dev_dependencies**
-  - `widget_test.dart` throws 3 exceptions — the smoke test calls `SoleVisionApp()` which initializes Supabase/Firebase in `main()`, crashing in a bare test environment
+  - `widget_test.dart` throws 3 exceptions — the smoke test calls `CUFMAIApp()` which initializes Supabase/Firebase in `main()`, crashing in a bare test environment
 
 **Impact:** Every push to `main` fails the CI check. The test suite is non-functional.
 
@@ -384,7 +384,7 @@ Current status of the original list (Aug 4):
 | `lib/constants/app_constants.dart` | Supabase creds, colors, typography (contains hardcoded secrets) |
 | `supabase/functions/_shared/paymongo.ts` | PayMongo API helpers (HMAC verification stub) |
 | `supabase/functions/gcash-webhook/index.ts` | Webhook handler (uses stub verification) |
-| `test/widget_test.dart` | Failing smoke test (expects 'SoleVision', hits 3 exceptions) |
+| `test/widget_test.dart` | Failing smoke test (expects 'CUFMAI', hits 3 exceptions) |
 | `test/services/order_service_test.dart` | Fails to compile (missing mocktail) |
 | `test/providers/cart_provider_test.dart` | Tests own logic, not CartProvider |
 | `.github/workflows/ci.yml` | CI pipeline (analyze + test) — currently red |

@@ -62,16 +62,24 @@ void main() {
       // The scheme alone is NOT the link: the app owns several, and each has
       // its own handler. A predicate that matched on scheme only would route a
       // confirmation into the payment flow.
-      expect(DeepLinkService.isAuthConfirmLink(uri('solvision://checkout/gcash')),
-          isFalse);
-      expect(DeepLinkService.isAuthConfirmLink(uri('solvision://auth/reset')),
-          isFalse);
       expect(
-        DeepLinkService.isAuthConfirmLink(uri('https://example.com/auth/confirm')),
+        DeepLinkService.isAuthConfirmLink(uri('solvision://checkout/gcash')),
         isFalse,
       );
-      expect(DeepLinkService.isGcashReturn(uri('solvision://auth/confirm')),
-          isFalse);
+      expect(
+        DeepLinkService.isAuthConfirmLink(uri('solvision://auth/reset')),
+        isFalse,
+      );
+      expect(
+        DeepLinkService.isAuthConfirmLink(
+          uri('https://example.com/auth/confirm'),
+        ),
+        isFalse,
+      );
+      expect(
+        DeepLinkService.isGcashReturn(uri('solvision://auth/confirm')),
+        isFalse,
+      );
     });
 
     test('the auth recovery link is only the auth/recovery path', () {
@@ -99,8 +107,10 @@ void main() {
       // the inbox past its hour: the link, with `error_code` and no session.
       expect(
         DeepLinkService.recoveryLinkRefusal(
-          uri('solvision://auth/recovery?error=access_denied'
-              '&error_code=otp_expired&error_description=Email+link+is+invalid'),
+          uri(
+            'solvision://auth/recovery?error=access_denied'
+            '&error_code=otp_expired&error_description=Email+link+is+invalid',
+          ),
         ),
         'otp_expired',
       );
@@ -120,9 +130,7 @@ void main() {
 
     test('the OAuth callback link is only the auth/callback path', () {
       expect(
-        DeepLinkService.isOAuthCallbackLink(
-          uri('solvision://auth/callback'),
-        ),
+        DeepLinkService.isOAuthCallbackLink(uri('solvision://auth/callback')),
         isTrue,
       );
       // PKCE returns the code in the query; implicit in the fragment — both
@@ -221,7 +229,8 @@ void main() {
           'android:host="${redirect.host}" '
           'android:pathPrefix="${redirect.path}"',
         ),
-        reason: 'AndroidManifest must declare the redirect the app signs up '
+        reason:
+            'AndroidManifest must declare the redirect the app signs up '
             'with, or the e-mail button opens a browser instead of the app',
       );
     });
@@ -242,7 +251,8 @@ void main() {
           'android:host="${redirect.host}" '
           'android:pathPrefix="${redirect.path}"',
         ),
-        reason: 'without this path the reset mail opens a browser, which cannot '
+        reason:
+            'without this path the reset mail opens a browser, which cannot '
             'follow solvision:// and cannot set the password',
       );
     });
@@ -253,34 +263,39 @@ void main() {
       expect(
         authService,
         contains('redirectTo: DeepLinkService.authRecoveryRedirect'),
-        reason: 'without a redirect the mailed link carries the Site URL and '
+        reason:
+            'without a redirect the mailed link carries the Site URL and '
             'the app never sees the tap',
       );
     });
 
-    test('the OAUTH-CALLBACK constant is the scheme/host/path Android declares',
-        () {
-      final redirect = uri(DeepLinkService.oauthCallbackRedirect);
-      expect(redirect.scheme, 'solvision');
-      expect(redirect.host, 'auth');
-      expect(redirect.path, '/callback');
-      expect(
-        manifest,
-        contains(
-          'android:scheme="${redirect.scheme}" '
-          'android:host="${redirect.host}" '
-          'android:pathPrefix="${redirect.path}"',
-        ),
-        reason: 'without this path the OAuth browser return opens a browser '
-            'instead of the app',
-      );
-    });
+    test(
+      'the OAUTH-CALLBACK constant is the scheme/host/path Android declares',
+      () {
+        final redirect = uri(DeepLinkService.oauthCallbackRedirect);
+        expect(redirect.scheme, 'solvision');
+        expect(redirect.host, 'auth');
+        expect(redirect.path, '/callback');
+        expect(
+          manifest,
+          contains(
+            'android:scheme="${redirect.scheme}" '
+            'android:host="${redirect.host}" '
+            'android:pathPrefix="${redirect.path}"',
+          ),
+          reason:
+              'without this path the OAuth browser return opens a browser '
+              'instead of the app',
+        );
+      },
+    );
 
     test('iOS registers the scheme (it matches on scheme alone)', () {
       expect(
         plist,
         contains('<string>solvision</string>'),
-        reason: 'another reason the redirect must stay on the solvision '
+        reason:
+            'another reason the redirect must stay on the solvision '
             'scheme: iOS has no per-path filter, only this registration',
       );
     });
@@ -289,7 +304,8 @@ void main() {
       expect(
         authService,
         contains('emailRedirectTo: DeepLinkService.authConfirmRedirect'),
-        reason: 'without emailRedirectTo the confirmation e-mail carries the '
+        reason:
+            'without emailRedirectTo the confirmation e-mail carries the '
             'site-URL redirect and the app never sees the link',
       );
     });
@@ -301,7 +317,8 @@ void main() {
       expect(
         emailOtpService,
         contains('emailRedirectTo: DeepLinkService.authConfirmRedirect'),
-        reason: 'the resend path builds its own link; leaving it out sends '
+        reason:
+            'the resend path builds its own link; leaving it out sends '
             'resent confirmations to the browser',
       );
     });
@@ -316,8 +333,75 @@ void main() {
       expect(
         runbook,
         contains(DeepLinkService.authConfirmRedirect),
-        reason: 'the R8 runbook is where the dashboard step lives — if the '
+        reason:
+            'the R8 runbook is where the dashboard step lives — if the '
             'redirect changes, that step changes with it',
+      );
+    });
+  });
+
+  group('a recovery link carries its own session', () {
+    test('tokens come out of the redirect fragment', () {
+      final params = DeepLinkService.recoverySessionParams(
+        uri(
+          'solvision://auth/recovery#access_token=at&refresh_token=rt'
+          '&expires_in=3600&token_type=bearer&type=recovery',
+        ),
+      );
+      expect(params['accessToken'], 'at');
+      expect(params['refreshToken'], 'rt');
+      expect(
+        params.containsKey('code'),
+        isFalse,
+        reason:
+            'implicit links carry tokens; treating them as a PKCE code '
+            'would exchange nothing',
+      );
+    });
+
+    test('a PKCE code is recognised too', () {
+      final params = DeepLinkService.recoverySessionParams(
+        uri('solvision://auth/recovery?code=abc123'),
+      );
+      expect(params['code'], 'abc123');
+    });
+
+    test('a refused link yields nothing to adopt', () {
+      // Same URL, query instead of fragment — an expired or already-used
+      // token. Adopting the session that happens to be live here would let a
+      // dead link change the WRONG account's password.
+      final params = DeepLinkService.recoverySessionParams(
+        uri(
+          'solvision://auth/recovery?error=access_denied'
+          '&error_code=otp_expired',
+        ),
+      );
+      expect(params, isEmpty);
+    });
+
+    test('the host outlives the splash route', () {
+      // Regression for the live failure: DeepLinkHost used to be SplashScreen's
+      // route parent, and pushReplacement disposed it after 900 ms. Supabase
+      // then signed the customer in from the reset link, but the handler that
+      // marks the session as a password recovery was already gone — so the app
+      // landed on Home with the reset unfinished.
+      final main = File('lib/main.dart').readAsStringSync();
+      expect(
+        main,
+        contains('child: DeepLinkHost('),
+        reason: 'the host must wrap MaterialApp, not sit inside its navigator',
+      );
+      expect(
+        main,
+        contains('home: const SplashScreen(),'),
+        reason: 'the splash may be replaced; the host above it must not be',
+      );
+      expect(
+        main,
+        isNot(contains('home: const DeepLinkHost(')),
+        reason:
+            'this is the exact placement that disposed the link listener '
+            'and swallowed every reset tap after startup',
       );
     });
   });

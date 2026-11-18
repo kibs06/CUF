@@ -5,7 +5,7 @@
   It does three jobs at once, which is why it is worth a whole drawable:
 
     * **Identity.** It is the app's rust against the cream card, so the tile is
-      recognisable as SoleVision at a glance among a launcher full of widgets.
+      recognisable as CUFMAI at a glance among a launcher full of widgets.
     * **Anchor.** It top-aligns the store name visually and gives the header a
       left edge, so the name and the "Updated" time stop floating.
     * **Legibility.** Nothing else marks where the header ends and the figures

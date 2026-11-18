@@ -1,4 +1,4 @@
-# SoleVision — Phase 1.5: Security & Safety Audit
+# CUFMAI — Phase 1.5: Security & Safety Audit
 
 **Date:** July 20, 2026  
 **Status:** IN PROGRESS  
@@ -264,7 +264,7 @@ await SentryFlutter.init(
     options.environment = kDebugMode ? 'development' : 'production';
     options.tracesSampleRate = 1.0;
   },
-  appRunner: () => runApp(const SoleVisionApp()),
+  appRunner: () => runApp(const CUFMAIApp()),
 );
 ```
 

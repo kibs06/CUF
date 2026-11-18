@@ -1,4 +1,4 @@
-# SoleVision — Project Roadmap
+# CUFMAI — Project Roadmap
 
 **Version:** 2.1.3  
 **Created:** July 16, 2026  
@@ -10,7 +10,7 @@
 
 ## Vision Statement
 
-SoleVision aims to be the **go-to digital marketplace for artisan footwear** in the Philippines, connecting skilled craftspeople with customers who value handcrafted quality. The platform bridges the gap between traditional shoemaking heritage and modern e-commerce.
+CUFMAI aims to be the **go-to digital marketplace for artisan footwear** in the Philippines, connecting skilled craftspeople with customers who value handcrafted quality. The platform bridges the gap between traditional shoemaking heritage and modern e-commerce.
 
 ---
 
@@ -483,5 +483,5 @@ SoleVision aims to be the **go-to digital marketplace for artisan footwear** in 
 
 ---
 
-*SoleVision Roadmap v2.1.0 — Updated July 22, 2026*  
+*CUFMAI Roadmap v2.1.0 — Updated July 22, 2026*  
 *Review and update quarterly or after major milestones.*

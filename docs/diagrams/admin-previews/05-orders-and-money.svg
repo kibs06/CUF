@@ -3,7 +3,7 @@
 <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 z" fill="#000000"/></marker></defs>
 <rect x="4" y="4" width="1092" height="2218" fill="none" stroke="#000000" stroke-width="1"/>
 <text font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="bold" fill="#000000" text-anchor="start"><tspan x="60" y="57.0">5 · Orders and money</tspan></text>
-<text font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start"><tspan x="60" y="88.0">SoleVision — what the admin does · page 5 of 7</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start"><tspan x="60" y="88.0">CUFMAI — what the admin does · page 5 of 7</tspan></text>
 <polyline points="565.0,193.0 565.0,261.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
 <polyline points="565.0,364.0 565.0,432.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
 <polyline points="565.0,516.0 565.0,584.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>

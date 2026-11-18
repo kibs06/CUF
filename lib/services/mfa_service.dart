@@ -94,7 +94,7 @@ class MfaService implements MfaGateway {
   Future<MfaEnrollment> enroll({String? friendlyName}) async {
     final res = await _auth.mfa.enroll(
       factorType: FactorType.totp,
-      issuer: 'SoleVision',
+      issuer: 'CUFMAI',
       friendlyName: friendlyName ?? 'Authenticator app',
     );
     final totp = res.totp;

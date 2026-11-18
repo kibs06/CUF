@@ -1,4 +1,4 @@
-# SoleVision / CUFMAI — Product 3D Viewing
+# CUFMAI — Product 3D Viewing
 
 > **What this covers.** The **3D icon in the corner of the product photograph**, the
 > **full-screen 3D viewer** behind it, the **Filament renderer** that draws the shoe,

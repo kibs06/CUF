@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Solid welt — a clay sole with an inset running stitch">
-  <title>SoleVision mark 01 — Welt</title>
+  <title>CUFMAI mark 01 — Welt</title>
   <!-- Sole silhouette: toe dome, narrowed waist, rounded heel. -->
   <path fill="#8B5A2B" d="M256,64 C200,64 160,110 160,176 C160,240 182,268 182,300 C182,342 170,378 170,404 C170,450 208,470 256,470 C304,470 342,450 342,404 C342,378 330,342 330,300 C330,268 352,240 352,176 C352,110 312,64 256,64 Z"/>
   <!-- Welt stitch: an even ring of round dashes, inset so it never crowds the edge. -->

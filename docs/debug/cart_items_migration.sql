@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════
--- SoleVision — Persistent Cart: cart_items table
+-- CUFMAI — Persistent Cart: cart_items table
 -- Run this migration in the Supabase SQL Editor.
 -- ═══════════════════════════════════════════════════════════════════
 

@@ -51,6 +51,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   String _paymentCountdown = '';
   Timer? _paymentTimer;
 
+  /// True while a customer-initiated GCash cancellation is in flight.
+  bool _cancellingGcash = false;
+
   // Order status → timeline step index (5 steps with Part D's 'delivered')
   static const _statusToStep = <String, int>{
     'pending': 0,
@@ -66,7 +69,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     'refunded': 4, // legacy — same step as replaced
     'awaiting_payment': 0, // PayMongo GCash: not yet paid
     'payment_conflict': -1, // money captured but needs review
-    'awaiting_payment_confirmation': 0, // dormant direct flow
+    'awaiting_payment_confirmation': 0, // manual GCash: awaiting the customer's proof
+    'payment_under_review': 0, // proof submitted — seller verifying
   };
 
   @override
@@ -239,6 +243,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   bool get _isAwaitingPayment =>
       _currentStatus == 'awaiting_payment_confirmation';
 
+  /// A proof is with the store (or admin). There is no timer to beat here:
+  /// the money may already be in the platform account.
+  bool get _isPaymentUnderReview => _currentStatus == 'payment_under_review';
+
   /// PayMongo online GCash — order created, not yet paid (webhook-driven).
   bool get _isPaymongoAwaiting => _currentStatus == 'awaiting_payment';
 
@@ -251,6 +259,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     if (_isPaymongoAwaiting) {
       // PayMongo path — resume the hosted checkout + countdown.
       await _initPaymongoPaymentState();
+      return;
+    }
+    if (_isPaymentUnderReview) {
+      await _loadProofState();
       return;
     }
     if (!_isAwaitingPayment) return;
@@ -289,11 +301,27 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     try {
       final data = await Supabase.instance.client
           .from('gcash_payment_proofs')
-          .select('id')
+          .select('id, status, rejection_reason, attempt_no')
           .eq('order_id', _order['id'])
-          .maybeSingle();
+          .order('attempt_no', ascending: false)
+          .limit(3);
       if (!mounted) return;
-      setState(() => _proofSubmitted = data != null);
+      final rows = (data as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final pending = rows.any((p) => p['status']?.toString() == 'pending');
+      String? reason;
+      for (final p in rows) {
+        if (p['status']?.toString() == 'rejected') {
+          reason = p['rejection_reason']?.toString();
+          break;
+        }
+      }
+      setState(() {
+        _proofSubmitted = pending || _isPaymentUnderReview;
+        _rejectionReason = reason;
+        _attemptsLeft = 3 - rows.length;
+      });
     } catch (e) {
       debugPrint('[Tracking] proof state error: $e');
     }
@@ -322,9 +350,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     final storeId = _order['store_id']?.toString();
     if (storeId == null) return;
     try {
+      // The money goes to the PLATFORM account now, not the store's own.
+      final account = await Supabase.instance.client
+          .from('platform_payment_accounts')
+          .select('qr_url, gcash_number, account_name')
+          .eq('is_active', true)
+          .maybeSingle();
       final store = await Supabase.instance.client
           .from('stores')
-          .select('id, name, gcash_qr_url, gcash_number, gcash_account_name')
+          .select('id, name')
           .eq('id', storeId)
           .single();
       if (!mounted) return;
@@ -338,9 +372,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               _order['payment_confirmation_deadline']?.toString() ?? '',
             ),
             storeName: store['name']?.toString() ?? '',
-            gcashQrUrl: store['gcash_qr_url']?.toString(),
-            gcashNumber: store['gcash_number']?.toString(),
-            gcashAccountName: store['gcash_account_name']?.toString(),
+            orderCode: _order['order_code']?.toString(),
+            gcashQrUrl: account?['qr_url']?.toString(),
+            gcashNumber: account?['gcash_number']?.toString(),
+            gcashAccountName: account?['account_name']?.toString(),
+            rejectionReason: _rejectionReason,
+            attemptsLeft: _attemptsLeft,
             proofSubmitted: _proofSubmitted,
           ),
         ),
@@ -409,26 +446,96 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            _proofSubmitted
+            _isPaymentUnderReview
+                ? 'Your proof is with the store for verification. There is no timer on this step — once the store verifies it, your order is prepared and CUFMAI remits the payment to them.'
+                : (_proofSubmitted
                 ? 'The store is verifying your payment. Once confirmed, your order will be prepared.'
                 : (expired
                     ? 'The payment window closed before you paid, so your items were released. You can place a new order anytime.'
-                    : 'Pay the store directly via GCash and submit your proof before the window closes.'),
+                    : 'Pay the CUFMAI GCash account and submit your proof before the window closes.')),
             style: AppConstants.bodyStyle(
               fontSize: 12,
               color: AppConstants.secondary.withValues(alpha: 0.7),
               height: 1.35,
             ),
           ),
+          const SizedBox(height: 12),
+          _buildPaymentSteps(),
           if (!_proofSubmitted && !expired) ...[const SizedBox(height: 8), _buildPaymentCountdownRow()],
           // Only offer to resume when we know the store (never a dead button).
           if (!_proofSubmitted && !expired && _order['store_id'] != null) ...[
             const SizedBox(height: 14),
             _buildCompletePaymentButton(),
+            const SizedBox(height: 4),
+            _buildCancelGcashButton(),
           ],
           if (_proofSubmitted) ...[const SizedBox(height: 14), _buildViewPaymentButton()],
         ],
       ),
+    );
+  }
+
+  /// The four steps of the manual-GCash payment, shown in the banner so the
+  /// customer always knows where the money is: they paid, the store checks
+  /// it, CUFMAI confirms the funds, the order is prepared.
+  Widget _buildPaymentSteps() {
+    // 1-based index of the step in progress.
+    final current = _isPaymentUnderReview || _proofSubmitted
+        ? (_isPaymentUnderReview ? 3 : 2)
+        : 1;
+    const labels = ['Pay', 'Submit', 'Verified', 'Prepared'];
+    return Row(
+      children: [
+        for (var i = 0; i < labels.length; i++) ...[
+          if (i > 0)
+            Expanded(
+              child: Container(
+                height: 2,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                color: i + 1 <= current
+                    ? AppConstants.success.withValues(alpha: 0.6)
+                    : AppConstants.borderGray.withValues(alpha: 0.4),
+              ),
+            ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i + 1 <= current
+                      ? AppConstants.success
+                      : AppConstants.borderGray.withValues(alpha: 0.3),
+                ),
+                child: Text(
+                  '${i + 1}',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: i + 1 <= current
+                        ? Colors.white
+                        : AppConstants.secondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                labels[i],
+                style: AppConstants.bodyStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: i + 1 <= current
+                      ? AppConstants.secondary
+                      : AppConstants.secondary.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 
@@ -463,6 +570,123 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     );
   }
 
+  /// Cancel an unpaid manual-GCash order. Deliberately secondary and quiet:
+  /// paying is what the customer came here to do, cancelling is the way out.
+  Widget _buildCancelGcashButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: TextButton.icon(
+        onPressed: _cancellingGcash ? null : _cancelGcashOrder,
+        style: TextButton.styleFrom(foregroundColor: AppConstants.error),
+        icon: _cancellingGcash
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.close, size: 16),
+        label: Text(
+          _cancellingGcash ? 'Cancelling…' : 'Cancel GCash order',
+          style: AppConstants.bodyStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: AppConstants.error,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Cancel this order's unpaid GCash checkout.
+  ///
+  /// The server owns every rule — `cancel_my_pending_gcash_checkout` only
+  /// accepts the customer's own order, only while no proof exists, and it
+  /// releases the reserved stock and frees the one-open-order cap. The
+  /// confirmation spells the money-safety rule out, because cancelling after
+  /// a transfer means the payment has nothing left to attach to.
+  Future<void> _cancelGcashOrder() async {
+    if (_cancellingGcash) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppConstants.surfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(
+          'Cancel this GCash order?',
+          style: AppConstants.headlineStyle(fontSize: 17),
+        ),
+        content: Text(
+          'The reserved items are released and this payment window closes.\n\n'
+          'Only cancel if you have NOT sent any money yet. If you already '
+          'paid, submit the proof instead — a transfer with no proof attached '
+          'cannot be verified.',
+          style: AppConstants.bodyStyle(fontSize: 13, height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep order'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppConstants.error),
+            child: const Text('Cancel order'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _cancellingGcash = true);
+    try {
+      final cancelled = await DirectGcashService()
+          .cancelPendingCheckout(_order['id'].toString());
+      if (!mounted) return;
+      if (!cancelled) {
+        // Resolved server-side between the tap and the call (paid, rejected or
+        // expired). Reloading is the only honest answer.
+        setState(() => _cancellingGcash = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This order was already resolved — there is nothing left to '
+              'cancel.',
+            ),
+            backgroundColor: AppConstants.statusPendingColor,
+          ),
+        );
+        return;
+      }
+      _paymentTimer?.cancel();
+      setState(() {
+        _cancellingGcash = false;
+        _order['status'] = 'cancelled';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order cancelled — your items were released.'),
+          backgroundColor: AppConstants.success,
+        ),
+      );
+    } on DirectGcashException catch (e) {
+      if (!mounted) return;
+      setState(() => _cancellingGcash = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: AppConstants.error),
+      );
+    } catch (e) {
+      debugPrint('[Tracking] cancel GCash order error: $e');
+      if (!mounted) return;
+      setState(() => _cancellingGcash = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not cancel this order. Please try again.'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+    }
+  }
+
   Widget _buildViewPaymentButton() {
     return SizedBox(
       width: double.infinity,
@@ -477,6 +701,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   GcashIntentResult? _paymongoIntent;
   String _paymongoCountdown = '';
+
+  // Manual-GCash proof state, hydrated from the latest attempt.
+  String? _rejectionReason;
+  int _attemptsLeft = 3;
 
   /// For PayMongo awaiting-payment orders: load the pending intent for
   /// THIS order (expiry + checkout URL) and start the countdown.

@@ -1,4 +1,4 @@
-# SoleVision — docs/debug (Debug Reference)
+# CUFMAI — docs/debug (Debug Reference)
 
 This folder contains **historical debugging documentation and setup SQL scripts**
 from past sessions. Nothing here is the source of truth — the actual source files
@@ -23,7 +23,7 @@ live in `lib/`.
 | `SELLER_ORDER_CONFIRMATION_ARCHITECTURE.md` | Seller order confirmation architecture |
 | `SESSION_LOG_JUNE_30_2026.md` | Session log (historical) |
 | `SESSION_LOG_JULY_2_2026.md` | Session log (historical) |
-| `SoleVision_Project_Documentation2.md` | Older project documentation (historical) |
+| `CUFMAI_Project_Documentation2.md` | Older project documentation (historical) |
 
 ---
 

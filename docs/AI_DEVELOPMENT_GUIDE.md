@@ -1,4 +1,4 @@
-# SoleVision — AI Development Guide
+# CUFMAI — AI Development Guide
 
 **Last Updated:** July 9, 2026  
 **Purpose:** Comprehensive reference for AI agents working on this codebase.
@@ -7,7 +7,7 @@
 
 ## Quick Summary
 
-SoleVision is a multi-role marketplace connecting **customers**, **sellers** (artisans), and **admins** for handcrafted shoe retail in Carcar City, Cebu, Philippines. It's built with Flutter (mobile), React (admin portal), and Supabase (backend).
+CUFMAI is a multi-role marketplace connecting **customers**, **sellers** (artisans), and **admins** for handcrafted shoe retail in Carcar City, Cebu, Philippines. It's built with Flutter (mobile), React (admin portal), and Supabase (backend).
 
 ---
 
@@ -342,7 +342,7 @@ SELECT proconfig FROM pg_proc WHERE proname = 'decrement_inventory_on_order';
 
 | File | Purpose |
 |------|---------|
-| `docs/SoleVision_Complete_Documentation.md` | Full project documentation |
+| `docs/CUFMAI_Complete_Documentation.md` | Full project documentation |
 | `docs/SESSION_LOG_*.md` | Session logs with fix history |
 | `docs/VERIFICATION_AUDIT_JULY_4_2026.md` | Audit proving fixes were never deployed |
 | `docs/createOrder_function_reference.md` | Annotated createOrder() flow |
@@ -361,4 +361,4 @@ SELECT proconfig FROM pg_proc WHERE proname = 'decrement_inventory_on_order';
 
 ---
 
-*SoleVision AI Development Guide — July 9, 2026*
+*CUFMAI AI Development Guide — July 9, 2026*

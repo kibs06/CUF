@@ -1,13 +1,13 @@
-# SoleVision — Customer Module Architecture
+# CUFMAI — Customer Module Architecture
 
 **Last Updated:** July 14, 2026  
-**Purpose:** Comprehensive reference for AI agents working on the Customer side of SoleVision.
+**Purpose:** Comprehensive reference for AI agents working on the Customer side of CUFMAI.
 
 ---
 
 ## Quick Summary
 
-The Customer module is the consumer-facing side of SoleVision — an artisan leather footwear e-commerce app built with Flutter + Supabase. Customers browse products, try them on in AR, customize shoes, manage a cart with store-grouped items, checkout with address selection, track orders, message sellers, and receive notifications. The shell has 4 tabs: Home, Store, Notifications, Profile.
+The Customer module is the consumer-facing side of CUFMAI — an artisan leather footwear e-commerce app built with Flutter + Supabase. Customers browse products, try them on in AR, customize shoes, manage a cart with store-grouped items, checkout with address selection, track orders, message sellers, and receive notifications. The shell has 4 tabs: Home, Store, Notifications, Profile.
 
 ---
 
@@ -624,4 +624,4 @@ Session expiry mid-use triggers a non-dismissible bottom sheet.
 
 ---
 
-*SoleVision Customer Module Architecture — July 14, 2026*
+*CUFMAI Customer Module Architecture — July 14, 2026*

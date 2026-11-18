@@ -109,6 +109,32 @@ class DeepLinkService {
         uri.path.startsWith(expected.path);
   }
 
+  /// The session tokens a password-reset link carries.
+  ///
+  /// GoTrue redirects to
+  /// `solvision://auth/recovery#access_token=…&refresh_token=…&type=recovery`;
+  /// a PKCE project may send `?code=…` instead. Read here rather than trusting
+  /// whichever session happens to be live: a reset opened while signed in as A
+  /// must change B's password when the mail belongs to B — adopting the link's
+  /// own session is the only way to know which account the mail is for.
+  static Map<String, String> recoverySessionParams(Uri uri) {
+    final Map<String, String> fragment = Uri.splitQueryString(uri.fragment);
+    final Map<String, String> query = uri.queryParameters;
+    String? pick(String key) {
+      final String? value = fragment[key] ?? query[key];
+      return (value == null || value.isEmpty) ? null : value;
+    }
+
+    final String? access = pick('access_token');
+    final String? refresh = pick('refresh_token');
+    final String? code = pick('code');
+    final Map<String, String> params = <String, String>{};
+    if (access != null) params['accessToken'] = access;
+    if (refresh != null) params['refreshToken'] = refresh;
+    if (code != null) params['code'] = code;
+    return params;
+  }
+
   /// The reason GoTrue itself refused a recovery link — `otp_expired` for one
   /// that was already used or sat in the inbox past its hour — else null.
   ///

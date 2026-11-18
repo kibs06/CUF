@@ -1,4 +1,4 @@
-# SoleVision — Sign Up Architecture (Split, Premium, Tiered Verification)
+# CUFMAI — Sign Up Architecture (Split, Premium, Tiered Verification)
 
 > Condensed reference for AI agents working on authentication / registration.
 > Derived from the live codebase: `lib/screens/auth/account_entry_screen.dart`,

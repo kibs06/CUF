@@ -23,7 +23,7 @@
 ///
 /// ## Why Dart and not curl
 ///
-/// Two of the fields carry the template FILES as their value, so the HTML has
+/// Three of the fields carry the template FILES as their value, so the HTML has
 /// to become a JSON string. Hand-escaping it is how a runbook silently ships
 /// a link-only mail again — and the obvious helper, `jq -Rs`, is not present
 /// on every machine this repo is built on (it is not on the one this was
@@ -114,6 +114,7 @@ const String smtpPort = '465';
 const String smtpSenderName = 'CUFMAI';
 const String subjectConfirmation = 'Confirm your CUFMAI email';
 const String subjectMagicLink = 'Your CUFMAI sign-in code';
+const String subjectRecovery = 'Reset your CUFMAI password';
 
 /// Saving custom SMTP replaces the built-in mailer's 2/hour ceiling with
 /// `rate_limit_email_sent`, whose project default is 30/hour. Sign-up
@@ -160,16 +161,20 @@ const String configPathTemplate = '/v1/projects/{ref}/config/auth';
 const Set<String> secretKeys = <String>{'smtp_pass'};
 
 final Directory _repoRoot = File(Platform.script.toFilePath()).parent.parent;
-final Directory _templateDir = Directory('${_repoRoot.path}/supabase/templates');
+final Directory _templateDir = Directory(
+  '${_repoRoot.path}/supabase/templates',
+);
 
 /// supabase/.gitignore ignores `.temp`, which is the only reason the payload —
 /// it carries the App Password — may sit here at all.
-final File _payloadFile =
-    File('${_repoRoot.path}/supabase/.temp/auth-mail-patch.json');
+final File _payloadFile = File(
+  '${_repoRoot.path}/supabase/.temp/auth-mail-patch.json',
+);
 
 Future<void> main(List<String> argv) async {
   final _Args args = _Args.parse(argv);
-  final String url = '${args.apiBase.replaceAll(RegExp(r'/+$'), '')}'
+  final String url =
+      '${args.apiBase.replaceAll(RegExp(r'/+$'), '')}'
       '${configPathTemplate.replaceAll('{ref}', args.projectRef)}';
 
   final String sender = _credential(
@@ -187,9 +192,7 @@ Future<void> main(List<String> argv) async {
     // Said BEFORE the list, because the list alone is misread: five ✅ rows
     // next to a broken mailer, and a ❌ row that reappears on every run, both
     // look like a stuck write when nothing was ever written.
-    print(
-      '\n── READ-ONLY check (--check): nothing will be written ──',
-    );
+    print('\n── READ-ONLY check (--check): nothing will be written ──');
     exit(
       await _verify(url, token, sender, readOnly: true, siteUrl: args.siteUrl)
           ? 0
@@ -221,10 +224,14 @@ Future<void> main(List<String> argv) async {
   final Map<String, dynamic> current = await _getConfig(url, token);
   final String currentList = '${current['uri_allow_list'] ?? ''}';
   final String currentSiteUrl = '${current['site_url'] ?? ''}';
-  print('Current uri_allow_list: '
-      '${currentList.isEmpty ? '(empty)' : currentList}');
-  print('Current site_url:       '
-      '${currentSiteUrl.isEmpty ? '(unset)' : currentSiteUrl}');
+  print(
+    'Current uri_allow_list: '
+    '${currentList.isEmpty ? '(empty)' : currentList}',
+  );
+  print(
+    'Current site_url:       '
+    '${currentSiteUrl.isEmpty ? '(unset)' : currentSiteUrl}',
+  );
 
   final Map<String, dynamic> payload = _buildPayload(
     args,
@@ -320,6 +327,18 @@ Map<String, dynamic> _buildPayload(
     'mailer_subjects_magic_link': subjectMagicLink,
     'mailer_templates_magic_link_content': _readTemplate('magic_link.html'),
 
+    // ── The one LINK-bearing mail (password reset) ───────────────────────
+    // The two above must carry a CODE; this one must carry the LINK. It is
+    // written from the repo for the same reason: a reset whose mail lost
+    // `.ConfirmationURL` fails only in a customer's inbox, long after every
+    // other check here is green.
+    'mailer_subjects_recovery': subjectRecovery,
+    'mailer_templates_recovery_content': _readTemplate(
+      'recovery.html',
+      requiredVariable: '{{ .ConfirmationURL }}',
+      why: 'that link carries the recovery session the reset screen needs',
+    ),
+
     // ── Where every e-mail link lands (Step 3b) ────────────────────────
     // The Site URL is GoTrue's DEFAULT redirect — what a reset call with no
     // `redirectTo` resolves to (an older app build, or any future call site
@@ -338,9 +357,14 @@ Map<String, dynamic> _buildPayload(
 /// Both files open with a `<!-- … -->` note that is not part of the e-mail.
 /// Sending it is harmless but leaks the notes into a customer's message
 /// source, so the body starts at the first `<div`. That is CHECKED rather than
-/// trusted: a template that lost `{{ .Token }}` is exactly how this feature
-/// ships broken, and nothing in the app can tell you why.
-String _readTemplate(String name) {
+/// trusted: a code template that lost `{{ .Token }}`, or a reset template that
+/// lost `{{ .ConfirmationURL }}`, is exactly how these features ship broken —
+/// and nothing in the app can tell you why.
+String _readTemplate(
+  String name, {
+  String requiredVariable = '{{ .Token }}',
+  String why = 'that is the 6-digit code the verify screen accepts',
+}) {
   final File file = File('${_templateDir.path}/$name');
   if (!file.existsSync()) {
     _fail('Missing template ${file.path}. Run this from the repo checkout.');
@@ -353,10 +377,10 @@ String _readTemplate(String name) {
   }
 
   final String body = '${lines.sublist(start).join('\n').trim()}\n';
-  if (!body.contains('{{ .Token }}')) {
+  if (!body.contains(requiredVariable)) {
     _fail(
-      '${file.path} no longer contains {{ .Token }} — that is the 6-digit '
-      'code the verify screen accepts. Fix the template before applying it.',
+      '${file.path} no longer contains $requiredVariable — $why. '
+      'Fix the template before applying it.',
     );
   }
   return body;
@@ -443,9 +467,9 @@ bool _allowListCovers(String list, String url) {
 String _trimSlashes(String value) => value.replaceAll(RegExp(r'/+$'), '');
 
 Map<String, dynamic> _masked(Map<String, dynamic> payload) => <String, dynamic>{
-      for (final MapEntry<String, dynamic> e in payload.entries)
-        e.key: secretKeys.contains(e.key) ? '***' : e.value,
-    };
+  for (final MapEntry<String, dynamic> e in payload.entries)
+    e.key: secretKeys.contains(e.key) ? '***' : e.value,
+};
 
 /// Field summary — template bodies are shown as a size + a code check, never
 /// pasted, so the terminal log of an apply stays readable.
@@ -453,12 +477,17 @@ String _preview(Map<String, dynamic> payload) {
   final List<String> lines = <String>[];
   _masked(payload).forEach((String key, dynamic value) {
     if (value is String && value.startsWith('<div')) {
+      final String marker = value.contains('{{ .Token }}')
+          ? '{{ .Token }}'
+          : '{{ .ConfirmationURL }}';
       lines.add(
         '  ${key.padRight(44)} <html, ${value.length} chars, '
-        '{{ .Token }} present>',
+        '$marker present>',
       );
     } else {
-      lines.add('  ${key.padRight(44)} ${value is String ? "'$value'" : value}');
+      lines.add(
+        '  ${key.padRight(44)} ${value is String ? "'$value'" : value}',
+      );
     }
   });
   return lines.join('\n');
@@ -493,8 +522,10 @@ Future<bool> _verify(
   final String allowList = '${config['uri_allow_list'] ?? ''}';
   final String liveSiteUrl = '${config['site_url'] ?? ''}';
   print('\nVerification (read back from the project):');
-  print('  site_url:       '
-      '${liveSiteUrl.isEmpty ? '(unset)' : liveSiteUrl}');
+  print(
+    '  site_url:       '
+    '${liveSiteUrl.isEmpty ? '(unset)' : liveSiteUrl}',
+  );
   print('  uri_allow_list: ${allowList.isEmpty ? '(empty)' : allowList}');
 
   final Map<String, bool> checks = <String, bool>{
@@ -508,18 +539,32 @@ Future<bool> _verify(
     '"Confirm email" is ON': config['mailer_autoconfirm'] == false,
     'otp length is 6': asInt('mailer_otp_length') == otpLength,
     'otp expiry is 3600s': asInt('mailer_otp_exp') == otpExpirySeconds,
-    'Confirm-signup carries a code':
-        has('mailer_templates_confirmation_content', '{{ .Token }}'),
-    'Magic-link carries a code':
-        has('mailer_templates_magic_link_content', '{{ .Token }}'),
-    'confirmation button returns to the app':
-        has('uri_allow_list', authConfirmRedirect),
-    'reset link returns to the app':
-        has('uri_allow_list', authRecoveryRedirect),
+    'Confirm-signup carries a code': has(
+      'mailer_templates_confirmation_content',
+      '{{ .Token }}',
+    ),
+    'Magic-link carries a code': has(
+      'mailer_templates_magic_link_content',
+      '{{ .Token }}',
+    ),
+    'Reset mail carries its link': has(
+      'mailer_templates_recovery_content',
+      '{{ .ConfirmationURL }}',
+    ),
+    'confirmation button returns to the app': has(
+      'uri_allow_list',
+      authConfirmRedirect,
+    ),
+    'reset link returns to the app': has(
+      'uri_allow_list',
+      authRecoveryRedirect,
+    ),
     'site_url is the reset destination':
         _trimSlashes(liveSiteUrl) == _trimSlashes(siteUrl),
-    'reset link can reach the portal account page':
-        _allowListCovers(allowList, customerPortalResetRedirect),
+    'reset link can reach the portal account page': _allowListCovers(
+      allowList,
+      customerPortalResetRedirect,
+    ),
   };
 
   checks.forEach((String name, bool ok) {
@@ -529,13 +574,15 @@ Future<bool> _verify(
   _printPasswordNote();
 
   if (checks.values.any((bool ok) => !ok)) {
-    print(readOnly
-        ? '\n⚠️  Read-only check: the ❌ rows above are the project\'s CURRENT '
-            'values — nothing was written, so they will read exactly like this '
-            'on every re-run until you run this command WITHOUT --check.'
-        : '\n⚠️  Some fields did not read back as expected. Re-run, and if it '
-            'persists check the dashboard\'s Authentication → SMTP Settings / '
-            'Emails screens — the PATCH may have been rejected field-by-field.');
+    print(
+      readOnly
+          ? '\n⚠️  Read-only check: the ❌ rows above are the project\'s CURRENT '
+                'values — nothing was written, so they will read exactly like this '
+                'on every re-run until you run this command WITHOUT --check.'
+          : '\n⚠️  Some fields did not read back as expected. Re-run, and if it '
+                'persists check the dashboard\'s Authentication → SMTP Settings / '
+                'Emails screens — the PATCH may have been rejected field-by-field.',
+    );
     return false;
   }
   return true;
@@ -603,8 +650,10 @@ Future<Map<String, dynamic>> _getConfig(String url, String token) async {
     () => http.get(Uri.parse(url), headers: _headers(token)),
   );
   if (response.statusCode != 200) {
-    _fail('Could not read the auth config (HTTP ${response.statusCode}): '
-        '${response.body}');
+    _fail(
+      'Could not read the auth config (HTTP ${response.statusCode}): '
+      '${response.body}',
+    );
   }
   return jsonDecode(response.body) as Map<String, dynamic>;
 }
@@ -613,20 +662,19 @@ Future<http.Response> _patch(
   String url,
   String token,
   Map<String, dynamic> payload,
-) =>
-    _send(
-      () => http.patch(
-        Uri.parse(url),
-        headers: _headers(token),
-        body: jsonEncode(payload),
-      ),
-    );
+) => _send(
+  () => http.patch(
+    Uri.parse(url),
+    headers: _headers(token),
+    body: jsonEncode(payload),
+  ),
+);
 
 Map<String, String> _headers(String token) => <String, String>{
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
+  'Authorization': 'Bearer $token',
+  'Content-Type': 'application/json',
+  'Accept': 'application/json',
+};
 
 Future<http.Response> _send(Future<http.Response> Function() call) async {
   try {
@@ -644,8 +692,10 @@ Future<http.Response> _send(Future<http.Response> Function() call) async {
 
 /// Env var first (so it can come from a secret manager), prompt otherwise.
 String _credential(String envName, String prompt, {bool secret = false}) {
-  final String? fromEnv =
-      Platform.environment[envName]?.trim().replaceAll('"', '');
+  final String? fromEnv = Platform.environment[envName]?.trim().replaceAll(
+    '"',
+    '',
+  );
   if (fromEnv != null && fromEnv.isNotEmpty) return fromEnv;
 
   stdout.write(prompt);
@@ -698,7 +748,7 @@ class _Args {
         Platform.environment['SUPABASE_API_BASE'] ?? defaultApiBase;
     int rateLimit =
         int.tryParse(Platform.environment['EMAIL_RATE_LIMIT'] ?? '') ??
-            defaultEmailRateLimit;
+        defaultEmailRateLimit;
     String siteUrl =
         Platform.environment['PORTAL_SITE_URL'] ?? customerPortalOrigin;
 
@@ -715,7 +765,8 @@ class _Args {
         case '--api-base':
           apiBase = _value(argv, ++i, '--api-base');
         case '--rate-limit':
-          rateLimit = int.tryParse(_value(argv, ++i, '--rate-limit')) ??
+          rateLimit =
+              int.tryParse(_value(argv, ++i, '--rate-limit')) ??
               defaultEmailRateLimit;
         case '--site-url':
           siteUrl = _value(argv, ++i, '--site-url');
@@ -743,7 +794,8 @@ class _Args {
     return argv[index];
   }
 
-  static String _usageText() => '''
+  static String _usageText() =>
+      '''
 Apply the live project's auth e-mail config (ANQUI item 16, §R8).
 
   dart run tool/apply_live_auth_mail.dart [options]

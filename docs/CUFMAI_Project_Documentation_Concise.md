@@ -1,4 +1,4 @@
-# SoleVision — Condensed Project Reference
+# CUFMAI — Condensed Project Reference
 
 **Version:** 1.1.0 | **Last Updated:** June 30, 2026
 **Platform:** Flutter (Mobile) + React (Admin Portal) | **Backend:** Supabase (PostgreSQL + Auth + Storage)
@@ -6,7 +6,7 @@
 
 ---
 
-## 1. What SoleVision Is
+## 1. What CUFMAI Is
 
 A multi-role marketplace for handcrafted shoes connecting **customers**, **sellers** (artisans), and **admins** through a mobile app and web admin dashboard.
 
@@ -271,4 +271,4 @@ app/
 
 ---
 
-*Condensed from SoleVision Project Documentation v1.1.0. For full details, see `SoleVision_Project_Documentation2.md`.*
+*Condensed from CUFMAI Project Documentation v1.1.0. For full details, see `CUFMAI_Project_Documentation2.md`.*

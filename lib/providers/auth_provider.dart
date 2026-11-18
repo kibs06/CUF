@@ -10,6 +10,7 @@ import '../models/seller_application_data.dart';
 import '../services/account_manager.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
+import '../services/deep_link_service.dart';
 import '../services/device_trust_service.dart';
 import '../services/email_otp_service.dart';
 import '../services/ip_geolocation_service.dart';
@@ -146,8 +147,8 @@ class AuthProvider extends ChangeNotifier {
       if (email == null || email.trim().isEmpty) return;
 
       final deviceId = await DeviceTrustService.instance.currentDeviceId();
-      final deviceLabel =
-          await DeviceTrustService.instance.currentDeviceLabel();
+      final deviceLabel = await DeviceTrustService.instance
+          .currentDeviceLabel();
 
       // Sending the code IS the challenge: on failure, leave the restored
       // session exactly as it was rather than parking the user on a screen
@@ -208,8 +209,10 @@ class AuthProvider extends ChangeNotifier {
   static const _failCountPrefix = 'fail_count_';
 
   /// Returns the SharedPreferences key for a given email.
-  String _lockoutKey(String email) => '$_lockoutPrefix${email.trim().toLowerCase()}';
-  String _failCountKey(String email) => '$_failCountPrefix${email.trim().toLowerCase()}';
+  String _lockoutKey(String email) =>
+      '$_lockoutPrefix${email.trim().toLowerCase()}';
+  String _failCountKey(String email) =>
+      '$_failCountPrefix${email.trim().toLowerCase()}';
 
   /// Check if [email] is currently locked out locally.
   Future<int> _getLocalFailCount(String email) async {
@@ -230,7 +233,9 @@ class AuthProvider extends ChangeNotifier {
     final count = (prefs.getInt(_failCountKey(key)) ?? 0) + 1;
     await prefs.setInt(_failCountKey(key), count);
     if (count >= _maxFailedAttempts) {
-      final expiry = DateTime.now().toUtc().add(Duration(minutes: _lockoutMinutes));
+      final expiry = DateTime.now().toUtc().add(
+        Duration(minutes: _lockoutMinutes),
+      );
       await prefs.setInt(_lockoutKey(key), expiry.millisecondsSinceEpoch);
     }
   }
@@ -259,7 +264,8 @@ class AuthProvider extends ChangeNotifier {
       if (Platform.isAndroid) {
         final android = await deviceInfo.androidInfo;
         deviceModel = '${android.manufacturer} ${android.model}';
-        osInfo = 'Android ${android.version.release} (SDK ${android.version.sdkInt})';
+        osInfo =
+            'Android ${android.version.release} (SDK ${android.version.sdkInt})';
       } else if (Platform.isIOS) {
         final ios = await deviceInfo.iosInfo;
         deviceModel = ios.name;
@@ -279,7 +285,9 @@ class AuthProvider extends ChangeNotifier {
     try {
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 3);
-      final req = await client.getUrl(Uri.parse('https://api.ipify.org?format=json'));
+      final req = await client.getUrl(
+        Uri.parse('https://api.ipify.org?format=json'),
+      );
       final res = await req.close().timeout(const Duration(seconds: 3));
       final body = await res.transform(utf8.decoder).join();
       final json = jsonDecode(body) as Map<String, dynamic>;
@@ -327,11 +335,13 @@ class AuthProvider extends ChangeNotifier {
     final trimmedEmail = email.trim().toLowerCase();
     if (!DevMode.instance.isEnabled) {
       final lockoutExpiry = await _getLocalLockoutExpiry(trimmedEmail);
-      if (lockoutExpiry != null && DateTime.now().toUtc().isBefore(lockoutExpiry)) {
+      if (lockoutExpiry != null &&
+          DateTime.now().toUtc().isBefore(lockoutExpiry)) {
         final remaining = lockoutExpiry.difference(DateTime.now().toUtc());
         final mins = remaining.inMinutes < 1 ? 1 : remaining.inMinutes;
         _isLoading = false;
-        _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
+        _errorMessage =
+            'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
         // Show the lockout overlay with device details
         final deviceInfo = await _collectDeviceInfo();
         _pendingLockout = {
@@ -483,9 +493,13 @@ class AuthProvider extends ChangeNotifier {
       if (!DevMode.instance.isEnabled && failCount >= _maxFailedAttempts) {
         final expiry = await _getLocalLockoutExpiry(trimmedEmail);
         final mins = expiry != null
-            ? (expiry.difference(DateTime.now().toUtc()).inMinutes).clamp(1, _lockoutMinutes)
+            ? (expiry.difference(DateTime.now().toUtc()).inMinutes).clamp(
+                1,
+                _lockoutMinutes,
+              )
             : _lockoutMinutes;
-        _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
+        _errorMessage =
+            'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
         // Collect device info so the admin can see the attacker's device
         // and the overlay can show it to the user.
         final deviceInfo = await _collectDeviceInfo();
@@ -534,7 +548,8 @@ class AuthProvider extends ChangeNotifier {
                 body: {
                   'recipientUserId': userId,
                   'title': '🔒 Account Locked',
-                  'body': 'Too many failed login attempts. Your account is locked for 30 minutes.',
+                  'body':
+                      'Too many failed login attempts. Your account is locked for 30 minutes.',
                   'type': 'lockout',
                 },
               );
@@ -610,10 +625,7 @@ class AuthProvider extends ChangeNotifier {
 
       _isLoading = false;
       notifyListeners();
-      return {
-        'success': true,
-        'emailMissing': res['emailMissing'] == true,
-      };
+      return {'success': true, 'emailMissing': res['emailMissing'] == true};
     } on UnregisteredSocialAccountException catch (e) {
       // Sign-in screen rule: this Gmail is not registered — NOT an error.
       // Report it to the UI so it can route to create-account instead.
@@ -638,11 +650,12 @@ class AuthProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> signInWithGoogle({
     String? serverClientId,
     bool requireExistingAccount = false,
-  }) =>
-      signInWithSocial(() => _auth.signInWithGoogle(
-            serverClientId: serverClientId,
-            requireExistingAccount: requireExistingAccount,
-          ));
+  }) => signInWithSocial(
+    () => _auth.signInWithGoogle(
+      serverClientId: serverClientId,
+      requireExistingAccount: requireExistingAccount,
+    ),
+  );
 
   /// Facebook variant of [signInWithSocial].
   Future<Map<String, dynamic>> signInWithFacebook() =>
@@ -741,9 +754,7 @@ class AuthProvider extends ChangeNotifier {
   /// point — abandoning earlier steps never orphans an account), persist
   /// the full Tier 1 application, and adopt the session so AuthGate routes
   /// the user to the PendingApprovalScreen.
-  Future<bool> signUpSeller({
-    required SellerApplicationData data,
-  }) async {
+  Future<bool> signUpSeller({required SellerApplicationData data}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -927,10 +938,13 @@ class AuthProvider extends ChangeNotifier {
 
     // Never finish a signup this install is not waiting on: another account's
     // link must not be adopted here.
-    final pendingEmail =
-        (_pendingSignupVerification?['email'] as String?)?.trim().toLowerCase();
+    final pendingEmail = (_pendingSignupVerification?['email'] as String?)
+        ?.trim()
+        .toLowerCase();
     final linkEmail = user.email?.trim().toLowerCase();
-    if (pendingEmail != null && linkEmail != null && pendingEmail != linkEmail) {
+    if (pendingEmail != null &&
+        linkEmail != null &&
+        pendingEmail != linkEmail) {
       return false;
     }
 
@@ -1012,29 +1026,81 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Sets a new password for the signed-in account, inside the app.
+  ///
+  /// No e-mail is sent: `updateUser(password:)` acts on the session that is
+  /// already live. Throws when the server refuses, so the screen renders the
+  /// mapped reason; returns whether other sessions were ended (see
+  /// [AuthService.changePassword]). Deliberately no [_errorMessage] write — the
+  /// screen owns the message, and a stale provider error would outlive it.
+  Future<bool?> changePassword(
+    String newPassword, {
+    bool signOutOtherDevices = false,
+  }) => _auth.changePassword(
+    newPassword,
+    signOutOtherDevices: signOutOtherDevices,
+  );
+
   // ── Password recovery by e-mail link ────────────────────────────
 
   /// Handles the return from a password-reset e-mail
   /// (`DeepLinkService.authRecoveryRedirect`): adopts the session the link
   /// carried and parks the app on the set-new-password screen.
   ///
-  /// The session itself needs no help — supabase_flutter's deep-link observer
-  /// parses the `#access_token=…&type=recovery` fragment and stores it, which
-  /// is also what makes AuthGate's stream emit. What that observer cannot know
-  /// is that this session's ONLY purpose is a password change, so holding it
-  /// must not drop the customer into the shell (or, on a brand-new install,
-  /// into onboarding). That is what [pendingPasswordRecovery] is for, and
-  /// AuthGate renders the screen ahead of every profile-based route.
+  /// The session is adopted FROM THE LINK, not from whatever session was live
+  /// a moment earlier: opening B's reset mail while signed in as A must set
+  /// B's password. (It also makes the cold start independent of
+  /// supabase_flutter's own observer, which is not guaranteed to run before
+  /// this handler.) The link's ONLY purpose is a password change, so holding
+  /// that session must not drop the customer into the shell — that is what
+  /// [pendingPasswordRecovery] is for, and AuthGate renders the screen ahead
+  /// of every profile-based route.
   ///
   /// The profile read below is best-effort on purpose: the server-side device
   /// gate can legitimately deny it before this install holds a device secret,
   /// and nothing about setting a password needs it. It is there so the gate
   /// has something to route on the moment the reset finishes — and so a cancel
   /// lands in the app rather than on the profile-error screen.
-  Future<bool> completePasswordRecoveryFromEmailLink() async {
-    final user = await _waitForLinkSession();
+  Future<bool> completePasswordRecoveryFromEmailLink(Uri link) async {
+    final Map<String, String> params = DeepLinkService.recoverySessionParams(
+      link,
+    );
+    final String? access = params['accessToken'];
+    final String? refresh = params['refreshToken'];
+    final String? code = params['code'];
+
+    User? user;
+    if (access != null && refresh != null) {
+      final Session? current = Supabase.instance.client.auth.currentSession;
+      if (current?.accessToken != access) {
+        try {
+          final AuthResponse res = await Supabase.instance.client.auth
+              .setSession(refresh, accessToken: access);
+          user = res.user;
+        } catch (e) {
+          debugPrint('[AuthProvider] recovery session refused: $e');
+        }
+      }
+      // The observer may have adopted the same link already; accept it only
+      // when its access token is the one the mail carried.
+      if (user == null) {
+        final Session? session = Supabase.instance.client.auth.currentSession;
+        if (session != null && session.accessToken == access) {
+          user = session.user;
+        }
+      }
+    } else if (code != null) {
+      try {
+        final AuthSessionUrlResponse res = await Supabase.instance.client.auth
+            .exchangeCodeForSession(code);
+        user = res.session.user;
+      } catch (e) {
+        debugPrint('[AuthProvider] recovery code refused: $e');
+      }
+    }
+
     if (user == null) {
-      debugPrint('[AuthProvider] recovery link arrived with no session');
+      debugPrint('[AuthProvider] recovery link carried no usable session');
       return false;
     }
 
@@ -1293,10 +1359,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await Supabase.instance.client.functions.invoke(
         'send-lockout-email',
-        body: {
-          'email': email,
-          'report': true,
-        },
+        body: {'email': email, 'report': true},
       );
       return true;
     } catch (_) {
@@ -1404,6 +1467,4 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
   }
-
-
 }

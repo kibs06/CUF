@@ -12,7 +12,7 @@ This MOC indexes the project's **history and trajectory**: the roadmap, the chan
 
 ## 🚀 Forward-looking
 
-- [[docs/RoadMap/SOLEVISION_ROADMAP|🧭 SoleVision roadmap]] — the plan
+- [[docs/RoadMap/CUFMAI_ROADMAP|🧭 CUFMAI roadmap]] — the plan
 - [[docs/fixes/PROJECT_IMPROVEMENT_PLAN|Project improvement plan]] — tracked fixes + gaps (includes a note that a changelog entry claims "rebranded to CUFMAI" while branding was reverted in `f39b34b` — later re-applied)
 - [[docs/AI_PROJECT_SUMMARY|⚡ AI Project Summary — "Current State"]] — what's working / broken / next (compiled July 8; partially stale)
 - [[docs/PROJECT_HANDOFF|📄 Project Handoff]] — decisions, known issues, "What's Next" (v1.1.0, July 2; partially stale)
@@ -39,7 +39,7 @@ This MOC indexes the project's **history and trajectory**: the roadmap, the chan
 - [[docs/SESSION_LOG_CUSTOMER_ADDRESSES_RLS_FIX|Session log — customer addresses RLS fix]]
 - [[docs/debug/SESSION_LOG_JULY_2_2026|Debug session log July 2]]
 - [[docs/debug/SESSION_LOG_JUNE_30_2026|Debug session log June 30]] — login-freeze investigation
-- [[docs/debug/SoleVision_Project_Documentation2|Debug project documentation 2]]
+- [[docs/debug/CUFMAI_Project_Documentation2|Debug project documentation 2]]
 
 ## 📊 Test reports & audits
 
@@ -74,14 +74,14 @@ This MOC indexes the project's **history and trajectory**: the roadmap, the chan
 
 | File | Notes |
 |------|-------|
-| [[docs/SoleVision_Complete_Documentation|SoleVision_Complete_Documentation]] | **Master reference — 22 sections, recommended** |
+| [[docs/CUFMAI_Complete_Documentation|CUFMAI_Complete_Documentation]] | **Master reference — 22 sections, recommended** |
 | [[docs/project_doc|project_doc]] | Earlier master (v1.2.0) |
-| [[docs/SoleVision_Project_Documentation|SoleVision_Project_Documentation]] | v1.0 |
-| [[docs/SoleVision_Project_Documentation2|SoleVision_Project_Documentation2]] | v1.1 (schema corrections) |
-| [[docs/SoleVision_Project_Documentation_Concise|…_Concise]] | Condensed reference |
-| [[docs/debug/SoleVision_Project_Documentation2|debug/ copy]] | Duplicate in debug/ |
+| [[docs/CUFMAI_Project_Documentation|CUFMAI_Project_Documentation]] | v1.0 |
+| [[docs/CUFMAI_Project_Documentation2|CUFMAI_Project_Documentation2]] | v1.1 (schema corrections) |
+| [[docs/CUFMAI_Project_Documentation_Concise|…_Concise]] | Condensed reference |
+| [[docs/debug/CUFMAI_Project_Documentation2|debug/ copy]] | Duplicate in debug/ |
 
-> 💡 **Suggested cleanup**: consolidate to one canonical master doc; move one-off session logs into `docs/debug/`; align naming to CUFMAI (docs still largely say SoleVision after the rebrand).
+> 💡 **Suggested cleanup**: consolidate to one canonical master doc; move one-off session logs into `docs/debug/`; align naming to CUFMAI (docs still largely say CUFMAI after the rebrand).
 
 ## ⚠️ Staleness warnings
 

@@ -1,4 +1,4 @@
-# SoleVision — POS Architecture
+# CUFMAI — POS Architecture
 
 > **Concise reference for AI agents working on the Point of Sale system.**
 > **Last updated:** July 25, 2026

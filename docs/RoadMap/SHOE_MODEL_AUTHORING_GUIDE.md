@@ -421,5 +421,5 @@ DECLARE     external length (mesh) + internal last length (fit) + reference size
 
 ---
 
-*SoleVision / CUFMAI — Shoe Model Authoring Guide v1.2.0 — September 28, 2026.*
+*CUFMAI — Shoe Model Authoring Guide v1.2.0 — September 28, 2026.*
 *If a requirement here disagrees with `VIRTUAL_FITTING_ARCHITECTURE.md` §2.5.1, that section wins — then tell the mobile team so both are fixed.*

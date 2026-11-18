@@ -1,6 +1,6 @@
-# Obsidian Vault — SoleVision
+# Obsidian Vault — CUFMAI
 
-This folder turns the entire SoleVision repo into an Obsidian knowledge base. Obsidian is pointed at the **repo root** as its vault, so every existing markdown file in `docs/` and `admin-portal/docs/` is searchable, linkable, and visible in the graph view — no copying or conversion needed.
+This folder turns the entire CUFMAI repo into an Obsidian knowledge base. Obsidian is pointed at the **repo root** as its vault, so every existing markdown file in `docs/` and `admin-portal/docs/` is searchable, linkable, and visible in the graph view — no copying or conversion needed.
 
 ---
 

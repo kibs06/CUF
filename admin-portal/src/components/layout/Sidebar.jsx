@@ -19,6 +19,9 @@ import {
   LogOut,
   Image,
   UserCircle,
+  Landmark,
+  BadgeCheck,
+  Banknote,
 } from 'lucide-react'
 
 const GROUPS = [
@@ -44,11 +47,14 @@ const GROUPS = [
     items: [
       { to: '/orders', label: 'Orders', icon: ShoppingCart },
       { to: '/transactions', label: 'Transactions', icon: Wallet },
+      { to: '/payment-verification', label: 'GCash Verification', icon: BadgeCheck },
+      { to: '/payouts', label: 'Payouts', icon: Banknote },
     ],
   },
   {
     label: 'System',
     items: [
+      { to: '/platform-payments', label: 'Platform GCash', icon: Landmark },
       { to: '/banners', label: 'Banners', icon: Image },
       { to: '/audit-logs', label: 'Audit Logs', icon: ScrollText },
       { to: '/settings', label: 'Settings', icon: Settings },
@@ -61,6 +67,7 @@ export default function Sidebar({ open, onClose }) {
   const { data: notificationCounts } = useAdminNotifications()
   const highPriorityCount = notificationCounts?.reports ?? 0
   const waitingModelRequests = notificationCounts?.modelRequests ?? 0
+  const proofsUnderReview = notificationCounts?.gcashProofs ?? 0
   const [hovered, setHovered] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -96,6 +103,8 @@ export default function Sidebar({ open, onClose }) {
       return { value: highPriorityCount > 9 ? '9+' : highPriorityCount, tone: 'bg-[#D64545]' }
     if (to === '/model-requests' && waitingModelRequests > 0)
       return { value: waitingModelRequests > 9 ? '9+' : waitingModelRequests, tone: 'bg-[#E8A020]' }
+    if (to === '/payment-verification' && proofsUnderReview > 0)
+      return { value: proofsUnderReview > 9 ? '9+' : proofsUnderReview, tone: 'bg-[#E8A020]' }
     return null
   }
 

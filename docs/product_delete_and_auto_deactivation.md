@@ -1,4 +1,4 @@
-# SoleVision — Product Delete & Auto-Deactivation Changelog
+# CUFMAI — Product Delete & Auto-Deactivation Changelog
 
 **Date:** June 28, 2026  
 **Status:** Complete (pending RLS migration)

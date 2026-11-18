@@ -1,4 +1,4 @@
-# SoleVision — Product Reviews & Ratings Roadmap
+# CUFMAI — Product Reviews & Ratings Roadmap
 
 **Feature:** Product Reviews & Ratings  
 **Date:** July 16, 2026  
@@ -8,7 +8,7 @@
 
 ## Overview
 
-Add a customer review and rating system to SoleVision. Customers who have purchased a product can leave a star rating (1–5) and written review. Sellers can view and respond. Reviews appear on product detail cards and product detail screens.
+Add a customer review and rating system to CUFMAI. Customers who have purchased a product can leave a star rating (1–5) and written review. Sellers can view and respond. Reviews appear on product detail cards and product detail screens.
 
 ---
 

@@ -15,17 +15,20 @@
 // Routes (verify_jwt = false — the seller application flow calls this
 // BEFORE an account exists, so it cannot require a user JWT):
 //   GET /geocode-proxy/search?q=<address text>      → forward geocoding
+//   GET /geocode-proxy/reverse?lat=..&lng=..        → reverse geocoding
 //   GET /geocode-proxy/tiles/{z}/{x}/{y}.png        → raster map tiles
 //
 // Env secrets: MAPTILER_API_KEY (required), SUPABASE_URL,
 // SUPABASE_SERVICE_ROLE_KEY (rate-limit counter store).
 //
 // Rate limits (per IP, fixed 60s window):
-//   search — 30/min. Human-paced: the client debounces 350ms and needs
-//            ≥2 chars, so even a heavy searching session stays in the
-//            low tens per minute. 30 caps abuse without touching normal
-//            use.
-//   tiles  — 600/min. Map panning is bursty by design (flutter_map
+//   search  — 30/min. Human-paced: the client debounces 350ms and needs
+//             ≥2 chars, so even a heavy searching session stays in the
+//             low tens per minute. 30 caps abuse without touching normal
+//             use.
+//   reverse — 30/min. The client debounces 600ms after a pin drag; a
+//             normal pick is a handful of requests.
+//   tiles   — 600/min. Map panning is bursty by design (flutter_map
 //            fires ~8–24 concurrent fetches per pan), so this is set
 //            high enough to never break real map use but still stops
 //            scripted whole-city scraping (which runs thousands/min).
@@ -51,6 +54,7 @@ const SEARCH_LIMIT_RESULTS = 5;
 
 // Tune-here limits (one place, not magic numbers in handlers).
 const SEARCH_RATE_LIMIT = 30; // per IP per minute
+const REVERSE_RATE_LIMIT = 30; // per IP per minute
 const TILES_RATE_LIMIT = 600; // per IP per minute
 
 function mapTilerKey(): string {
@@ -113,6 +117,93 @@ async function handleSearch(req: Request, query: string): Promise<Response> {
   } catch (e) {
     console.error("[geocode-proxy] search failed:", (e as Error)?.message ?? e);
     return json({ error: "geocoding failed" }, 502);
+  }
+}
+
+// ── Reverse geocoding ───────────────────────────────────────────
+// The Flutter address sheet used to reverse-geocode with the device
+// geocoder, which on Android often returns only a Plus Code (for example
+// "5PRQ+5H9") and leaves barangay/street empty. MapTiler has the
+// neighborhood/locality/county hierarchy, so return those fields in the
+// shape the app consumes. Context ids are stripped from "locality.123"
+// to "locality" to keep the client parser small.
+async function handleReverse(
+  req: Request,
+  lat: string,
+  lng: string,
+): Promise<Response> {
+  const rl = await checkRateLimit(
+    req,
+    "geocode-proxy:reverse",
+    REVERSE_RATE_LIMIT,
+  );
+  if (!rl.allowed) return rateLimitedResponse(rl, corsHeaders);
+
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+  if (
+    !Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+    !Number.isFinite(longitude) || longitude < -180 || longitude > 180
+  ) {
+    return json({ error: "invalid coordinates" }, 400);
+  }
+
+  const url =
+    `https://api.maptiler.com/geocoding/${longitude},${latitude}.json` +
+    `?key=${mapTilerKey()}&language=en`;
+
+  try {
+    const upstream = await fetch(url, {
+      headers: { "User-Agent": "com.solevision.app (geocode-proxy)" },
+    });
+    if (!upstream.ok) {
+      console.error(
+        `[geocode-proxy] MapTiler reverse ${upstream.status}: ${
+          await upstream.text()
+        }`,
+      );
+      return json(
+        { error: "reverse geocoding upstream error" },
+        upstream.status === 429 ? 429 : 502,
+      );
+    }
+
+    const data = await upstream.json() as {
+      features?: Array<{
+        place_name?: string;
+        text?: string;
+        address?: string;
+        place_type?: string[];
+        properties?: { kind?: string };
+        context?: Array<{ id?: string; text?: string }>;
+      }>;
+    };
+    const feature = (data.features ?? [])[0];
+    if (!feature) return json({ place: null });
+
+    const context = (feature.context ?? [])
+      .map((c) => ({
+        id: String(c.id ?? "").split(".")[0],
+        text: String(c.text ?? "").trim(),
+      }))
+      .filter((c) => c.id.length > 0 && c.text.length > 0);
+
+    return json({
+      place: {
+        place_name: feature.place_name ?? "",
+        text: feature.text ?? "",
+        house_number: feature.address ?? "",
+        place_types: feature.place_type ?? [],
+        kind: feature.properties?.kind ?? "",
+        context,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[geocode-proxy] reverse failed:",
+      (e as Error)?.message ?? e,
+    );
+    return json({ error: "reverse geocoding failed" }, 502);
   }
 }
 
@@ -197,6 +288,16 @@ serve(async (req: Request) => {
       ? path.slice(slugIdx + "/geocode-proxy".length)
       : path;
     const route = (raw.startsWith("/") ? raw : "/" + raw).replace(/\/+$/, "");
+
+    // Reverse: /reverse?lat=..&lng=..
+    if (route === "/reverse") {
+      const lat = url.searchParams.get("lat");
+      const lng = url.searchParams.get("lng") ?? url.searchParams.get("lon");
+      if (!lat || !lng) {
+        return json({ error: "missing lat/lng parameters" }, 400);
+      }
+      return handleReverse(req, lat, lng);
+    }
 
     // Search: /search?q=… (also accept ?q= on the bare route for ease)
     const query = url.searchParams.get("q");

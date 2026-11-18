@@ -397,7 +397,7 @@ class _StatusBanner extends StatelessWidget {
           Icons.verified_rounded,
           AppConstants.success,
           'Verified',
-          'Your business documents are verified. Thank you for building trust on SoleVision.'
+          'Your business documents are verified. Thank you for building trust on CUFMAI.'
         ),
       AppConstants.bizStatusPending => (
           Icons.hourglass_top_rounded,

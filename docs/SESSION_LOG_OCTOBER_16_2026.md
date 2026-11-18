@@ -79,7 +79,7 @@ Five pieces of work, in the order they happened:
   session-geometry fault (changelog §10), then Step 1 code change, TEMP-DIAG removal, full
   suite re-run. Blocked on hands on the phone; diagnosis rests on the probe build staying
   installed.
-- **Vault leftovers by design:** master-doc consolidation, SoleVision→CUFMAI rename.
+- **Vault leftovers by design:** master-doc consolidation, CUFMAI→CUFMAI rename.
 - **Watch-list severities** (§11 🔴/🟡/🟢) are judgment — revisit after the probe verdict.
 
 ---

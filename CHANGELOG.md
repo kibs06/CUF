@@ -1,4 +1,4 @@
-# SoleVision — Changelog
+# CUFMAI — Changelog
 
 ## Unreleased — the Verified Seller badge reaches every buyer-facing surface
 

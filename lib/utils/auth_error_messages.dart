@@ -116,6 +116,11 @@ String friendlyAuthError(AuthException e) {
       // one thing that cannot work while the mailer cannot send, and it is
       // what makes the app look broken instead of unset-up.
       return authErrorMailNotSent;
+    case 'session_missing':
+      // Raised by `AuthService.changePassword` when the in-app change is
+      // asked for with no live session — the one case the signed-in path
+      // cannot serve, since no client may set a password without a session.
+      return 'Your session ended. Sign in again to change your password.';
     case 'over_email_send_rate_limit':
       // Reached by the email-OTP resend button too — Supabase rate-limits
       // per address AND per IP, so this must never fail silently.
@@ -257,8 +262,9 @@ String? _socialUserSafeMessage(Object error) {
   // flow never matches anything below it.
   if (lower.contains('cancel')) return 'Sign-in was cancelled.';
   // Strip the "Exception: " prefix so the UI reads clean copy.
-  final stripped =
-      text.replaceFirst(RegExp(r'^[\w.]*Exception:\s*'), '').trim();
+  final stripped = text
+      .replaceFirst(RegExp(r'^[\w.]*Exception:\s*'), '')
+      .trim();
   if (stripped.isEmpty) return null;
   final strippedLower = stripped.toLowerCase();
   if (strippedLower.startsWith('google sign-in') ||

@@ -22,7 +22,7 @@
 
 ## 1. The big picture
 
-SoleVision has **two distinct checkout paths**, each with its own GCash story:
+CUFMAI has **two distinct checkout paths**, each with its own GCash story:
 
 | | **Online (customer)** | **POS (seller, in-store)** |
 |---|---|---|

@@ -748,7 +748,16 @@ bool matchesMyOrdersFilter(Map<String, dynamic> order, String filter) {
 
   switch (filter) {
     case 'unpaid':
-      return paymentStatus == 'unpaid' && status != 'cancelled';
+      // Manual GCash orders sit in `awaiting_payment_confirmation` (pay + submit
+      // proof) or `payment_under_review` (proof with the seller) with
+      // payment_status 'pending'. They are money the customer still owes or is
+      // waiting on, so they belong in Unpaid — otherwise an in-flight manual
+      // checkout is invisible in the Orders list and only reachable from the
+      // tracking screen.
+      return (paymentStatus == 'unpaid' ||
+              status == 'awaiting_payment_confirmation' ||
+              status == 'payment_under_review') &&
+          status != 'cancelled';
     case 'processing':
       return status == 'pending' ||
           status == 'placed' ||

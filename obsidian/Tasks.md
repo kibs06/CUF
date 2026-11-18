@@ -48,4 +48,4 @@
 - Tag tasks for the area: `#auth`, `#checkout`, `#seller`, `#admin`, `#db`, `#notifications`.
 - Link a task to its doc when it exists, e.g. `- [ ] Ship X — see [[docs/AI/...|...]]`.
 - Friday: fold completed work into [[obsidian/Templates/Weekly Review|Weekly Review]].
-- Bigger ambitions live in [[docs/RoadMap/SOLEVISION_ROADMAP|🧭 Roadmap]].
+- Bigger ambitions live in [[docs/RoadMap/CUFMAI_ROADMAP|🧭 Roadmap]].

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * SoleVision — customer journey flowchart generator (client-facing, plain English).
+ * CUFMAI — customer journey flowchart generator (client-facing, plain English).
  *
  * Writes docs/diagrams/customer-journey-flowchart.drawio (multi-page) and one
  * SVG preview per page into docs/diagrams/previews/.
@@ -919,7 +919,7 @@ function pageXml(p) {
   const cells = [];
   const extras = [
     { id: `p${p.meta.n}-title`, kind: 'title', lines: [`${p.meta.n} · ${p.meta.name}`], x: 60, y: 42, w: 700, h: 30 },
-    { id: `p${p.meta.n}-subtitle`, kind: 'subtitle', lines: [`SoleVision — what the admin does · page ${p.meta.n} of ${META.length}`], x: 60, y: 76, w: 700, h: 24 },
+    { id: `p${p.meta.n}-subtitle`, kind: 'subtitle', lines: [`CUFMAI — what the admin does · page ${p.meta.n} of ${META.length}`], x: 60, y: 76, w: 700, h: 24 },
   ];
   for (const s of [...p.shapes, ...extras]) {
     cells.push(`        <mxCell id="${s.id}" value="${xmlLabel(s.lines)}" style="${styleFor(s.kind)}" vertex="1" parent="1">
@@ -939,7 +939,7 @@ ${cells.join('\n')}
 }
 
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" agent="SoleVision journey generator" version="24.7.17">
+<mxfile host="app.diagrams.net" agent="CUFMAI journey generator" version="24.7.17">
 ${pages.map(pageXml).join('\n')}
 </mxfile>
 `;
@@ -993,7 +993,7 @@ function svgPage(p) {
   parts.push('<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 z" fill="#000000"/></marker></defs>');
   parts.push(`<rect x="4" y="4" width="${PAGE_W - 8}" height="${p.pageHeight - 8}" fill="none" stroke="#000000" stroke-width="1"/>`);
   parts.push(svgText([`${p.meta.n} · ${p.meta.name}`], 0, 57, 22, { anchor: 'start', x: 60, bold: true }));
-  parts.push(svgText([`SoleVision — what the admin does · page ${p.meta.n} of ${META.length}`], 0, 88, 12, { anchor: 'start', x: 60 }));
+  parts.push(svgText([`CUFMAI — what the admin does · page ${p.meta.n} of ${META.length}`], 0, 88, 12, { anchor: 'start', x: 60 }));
   for (const e of p.edges) {
     const pts = polyline(e, p.shapes);
     const full = e.__waypoints.length ? [pts[0], ...e.__waypoints, pts[pts.length - 1]] : pts;

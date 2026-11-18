@@ -1,5 +1,5 @@
 -- ============================================================
--- SoleVision: Backfill inventory table from product_variants
+-- CUFMAI: Backfill inventory table from product_variants
 -- Run this ONCE in the Supabase SQL Editor after deploying
 -- the code fix that adds _syncInventoryFromVariants().
 -- ============================================================

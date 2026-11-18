@@ -1,4 +1,4 @@
-# SoleVision Push Notifications — Complete System Documentation
+# CUFMAI Push Notifications — Complete System Documentation
 
 **Last Updated:** July 15, 2026  
 **Status:** Fully implemented and working (customer ↔ seller bidirectional)
@@ -27,7 +27,7 @@
 
 ## Overview
 
-SoleVision's push notification system delivers real-time OS-level notifications when messages are exchanged between customers and sellers. This is the **first push notification feature** in the app — there was no pre-existing Firebase/APNs/FCM plumbing.
+CUFMAI's push notification system delivers real-time OS-level notifications when messages are exchanged between customers and sellers. This is the **first push notification feature** in the app — there was no pre-existing Firebase/APNs/FCM plumbing.
 
 ### What it does
 

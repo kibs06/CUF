@@ -1,5 +1,5 @@
 -- ============================================================
--- SoleVision — Hard Fix Migration: Add size column to cart_items
+-- CUFMAI — Hard Fix Migration: Add size column to cart_items
 -- Date: July 3, 2026
 -- Purpose: Eliminates the root cause of false "no longer available"
 --   errors by storing the cart size directly on cart_items, removing

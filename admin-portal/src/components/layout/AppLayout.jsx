@@ -16,6 +16,12 @@ const TITLES = {
   '/audit-logs': 'Audit Logs',
   '/analytics': 'Analytics',
   '/settings': 'Settings',
+  // The three manual-GCash screens live inside the same shell as everything
+  // else, so they need a real title here — without these entries the shell
+  // falls back to 'Admin / CUFMAI admin workspace.' above their own heading.
+  '/platform-payments': 'Platform GCash',
+  '/payment-verification': 'Payment Verification',
+  '/payouts': 'Payouts',
 }
 
 const DESCRIPTIONS = {
@@ -31,6 +37,9 @@ const DESCRIPTIONS = {
   '/audit-logs': 'Read-only trails of admin and seller activity.',
   '/analytics': 'Sales, order, and product trends over time.',
   '/settings': 'Your admin profile, password, and two-factor authentication.',
+  '/platform-payments': 'The GCash account customers pay into, plus fees and payout rates.',
+  '/payment-verification': 'Proofs from customers, and the money confirmed in the platform account.',
+  '/payouts': 'What each store is owed, and the transfers that settle it.',
 }
 
 export default function AppLayout() {

@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════
--- SoleVision — Supabase Database Schema
+-- CUFMAI — Supabase Database Schema
 -- Generated: July 2026 — RLS section updated 2026-08-09 (42P17 recursion fix)
 -- Derived from actual service code, models, and SQL migration files.
 -- This file documents the LIVE database structure.

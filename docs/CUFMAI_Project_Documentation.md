@@ -1,4 +1,4 @@
-# SoleVision — Project Documentation
+# CUFMAI — Project Documentation
 
 **Version:** 1.0.0  
 **Date:** June 28, 2026  
@@ -31,7 +31,7 @@
 
 ## 1. Project Overview
 
-**SoleVision** is a multi-role marketplace platform for artisan footwear in Carcar City, Cebu. It connects three user types — **customers**, **sellers** (artisans), and **admins** — through a unified mobile application and a web-based admin dashboard.
+**CUFMAI** is a multi-role marketplace platform for artisan footwear in Carcar City, Cebu. It connects three user types — **customers**, **sellers** (artisans), and **admins** — through a unified mobile application and a web-based admin dashboard.
 
 ### Core Value Proposition
 - Customers browse and purchase handcrafted shoes from local Carcar artisans

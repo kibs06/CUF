@@ -1,6 +1,6 @@
 # Walkthrough - Gradle Build Error Fixes
 
-I have successfully fixed the Gradle build errors in the SoleVision project. The implementation involved migrating from Kotlin DSL (`.kts`) to Groovy DSL (`.gradle`) as requested, while also upgrading key components to satisfy the requirements of your current Flutter SDK (3.44.1) and modern plugins.
+I have successfully fixed the Gradle build errors in the CUFMAI project. The implementation involved migrating from Kotlin DSL (`.kts`) to Groovy DSL (`.gradle`) as requested, while also upgrading key components to satisfy the requirements of your current Flutter SDK (3.44.1) and modern plugins.
 
 ## Key Changes Accomplished
 

@@ -1,12 +1,12 @@
 # 🧑‍💻 Onboarding / Handoff
 
-> A guided ramp-up path for anyone (human dev or AI agent) starting on SoleVision. Follow it top to bottom — each step links the docs you need. **#moc**
+> A guided ramp-up path for anyone (human dev or AI agent) starting on CUFMAI. Follow it top to bottom — each step links the docs you need. **#moc**
 
 ---
 
 ## Step 0 — The 2-minute picture
 - [[docs/AI_PROJECT_SUMMARY|⚡ AI Project Summary]] — self-contained brief: stack, structure, data flow, current state, bug history. **Read this first, always.**
-- [[docs/ABOUT_SOLEVISION|About SoleVision]] — what the product is
+- [[docs/ABOUT_CUFMAI|About CUFMAI]] — what the product is
 
 ## Step 1 — Where the code lives
 - `lib/` — Flutter app (Provider state mgmt, singleton services)
@@ -21,7 +21,7 @@
 
 ## Step 3 — Architecture essentials
 - [[docs/PROJECT_HANDOFF|📄 Project Handoff]] — decisions & rationale, known issues, what's next
-- [[docs/SoleVision_Complete_Documentation|📘 Master documentation]] — 22 sections (schema, RLS, services, setup)
+- [[docs/CUFMAI_Complete_Documentation|📘 Master documentation]] — 22 sections (schema, RLS, services, setup)
 - [[admin-portal/docs/architecture|🏛️ Admin portal architecture]]
 - [[docs/AI/ADMIN_SUSPENSION_ARCHITECTURE|⛔ Admin suspension architecture]]
 

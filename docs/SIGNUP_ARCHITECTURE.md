@@ -1,13 +1,13 @@
-# SoleVision — Sign Up & Seller Application Architecture
+# CUFMAI — Sign Up & Seller Application Architecture
 
 **Last Updated:** August 12, 2026
-**Purpose:** Comprehensive documentation of the account registration flow for both Customers and Sellers in SoleVision — an artisan leather footwear e-commerce app built with Flutter + Supabase.
+**Purpose:** Comprehensive documentation of the account registration flow for both Customers and Sellers in CUFMAI — an artisan leather footwear e-commerce app built with Flutter + Supabase.
 
 ---
 
 ## Quick Summary
 
-SoleVision uses a **single, unified registration screen** that serves both Customer and Seller sign-up. A toggle switch ("Apply as a seller") determines which lifecycle a new account enters:
+CUFMAI uses a **single, unified registration screen** that serves both Customer and Seller sign-up. A toggle switch ("Apply as a seller") determines which lifecycle a new account enters:
 
 - **Customer:** Account is created and usable immediately.
 - **Seller applicant:** Account is created with a `pending` seller status, gated behind an admin review screen until an admin approves it.

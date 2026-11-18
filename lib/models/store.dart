@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
 
 /// Maps to the `stores` table in Supabase.
-/// Represents a single artisan shoe store on the SoleVision platform.
+/// Represents a single artisan shoe store on the CUFMAI platform.
 class Store {
   final String id;
   final String name;

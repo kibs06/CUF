@@ -1,4 +1,4 @@
-# SoleVision — Seller & POS Architecture
+# CUFMAI — Seller & POS Architecture
 
 > **Purpose:** Comprehensive reference for AI agents working on the seller side of the app.
 > **Last updated:** July 25, 2026

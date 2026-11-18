@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
 import '../../constants/app_constants.dart';
 import '../../models/address_model.dart';
 import '../../providers/address_provider.dart';
@@ -12,13 +10,13 @@ import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../utils/delivery_date.dart';
 import '../../utils/size_key.dart';
-import '../../services/gcash_payment_service.dart';
+import '../../services/direct_gcash_service.dart';
 import '../../services/voucher_service.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/order_confirmation_view.dart';
 import '../../widgets/sole_primary_button.dart';
 import 'address_book_screen.dart';
-import 'gcash_payment_screen.dart';
+import 'gcash_pay_screen.dart';
 import 'tracking_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -35,8 +33,7 @@ class CheckoutScreen extends StatefulWidget {
   State<CheckoutScreen> createState() => _CheckoutScreenState();
 }
 
-class _CheckoutScreenState extends State<CheckoutScreen>
-    with SingleTickerProviderStateMixin {
+class _CheckoutScreenState extends State<CheckoutScreen> {
   int _checkoutStep = 0; // 0: Details/Payment, 1: Confirmation
 
   final _formKey = GlobalKey<FormState>();
@@ -59,28 +56,15 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       _isDirectCheckout ? widget.directItems! : cart.selectedItems;
 
   double _checkoutSubtotal(List<Map<String, dynamic>> items) => items.fold(
-        0.0,
-        (sum, item) =>
-            sum + ((item['price'] as double) * (item['quantity'] as int)),
-      );
+    0.0,
+    (sum, item) =>
+        sum + ((item['price'] as double) * (item['quantity'] as int)),
+  );
 
   // Cart validation state
   bool _isValidatingCart = false;
   List<_CartItemValidation> _itemValidations = [];
   bool _isSubmitting = false;
-
-  // GCash (PayMongo) Model B fee — displayed as its own line item.
-  double? _gcashFeeAmount;
-  int? _gcashFeeRateBps;
-  bool _feeLoading = false;
-
-  // Idempotency key for the GCash checkout: generated lazily on first
-  // submit and REUSED across retries of the same submission (a client
-  // timeout → retry must hit the same server-side key, not create a
-  // duplicate). It is only reset once a checkout actually resolves or
-  // is cancelled. Double-taps therefore funnel into the server's
-  // idempotency gate instead of spawning duplicate orders/intents.
-  String? _gcashIdempotencyKey;
 
   // Voucher (ANQUI item #5). The client only ever sends the CODE — the
   // discount shown here comes from the server-side quote, and the orders
@@ -101,39 +85,28 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   /// prices up itself, so only identity + quantity are sent.
   List<Map<String, dynamic>> _voucherItems(List<Map<String, dynamic>> items) =>
       items
-          .map((i) => {
-                'product_id': i['product_id'],
-                'size': i['size'] ?? '',
-                'quantity': i['quantity'],
-              })
+          .map(
+            (i) => {
+              'product_id': i['product_id'],
+              'size': i['size'] ?? '',
+              'quantity': i['quantity'],
+            },
+          )
           .toList();
-
-  // Animation controller for checkmark
-  late AnimationController _checkController;
-  late Animation<double> _checkScale;
 
   @override
   void initState() {
     super.initState();
-    _checkController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-    _checkScale = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _checkController, curve: Curves.elasticOut),
-    );
 
-    // Load address book, validate cart, and fetch the GCash fee display
+    // Load address book and validate cart.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAddress();
       _validateCart();
-      _fetchGcashFee();
     });
   }
 
   @override
   void dispose() {
-    _checkController.dispose();
     _voucherController.dispose();
     super.dispose();
   }
@@ -176,9 +149,6 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       }
     });
 
-    // The GCash fee is charged on what the customer actually owes, so the
-    // quote changes it.
-    if (quote.hasDiscount || silent) unawaited(_fetchGcashFee());
     return quote;
   }
 
@@ -215,7 +185,6 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       _voucherError = null;
       _voucherController.clear();
     });
-    unawaited(_fetchGcashFee());
   }
 
   Widget _buildVoucherBody() {
@@ -224,8 +193,11 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     if (applied != null) {
       return Row(
         children: [
-          const Icon(Icons.local_offer_outlined,
-              size: 18, color: AppConstants.success),
+          const Icon(
+            Icons.local_offer_outlined,
+            size: 18,
+            color: AppConstants.success,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -271,8 +243,10 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                 decoration: InputDecoration(
                   hintText: 'Voucher code',
                   isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
                   filled: true,
                   fillColor: AppConstants.surfaceLight,
                   border: OutlineInputBorder(
@@ -305,8 +279,11 @@ class _CheckoutScreenState extends State<CheckoutScreen>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 15, color: AppConstants.error),
+              const Icon(
+                Icons.error_outline,
+                size: 15,
+                color: AppConstants.error,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -389,7 +366,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     // validation service (which validates server cart rows) doesn't
     // apply. Order placement re-validates stock server-side anyway.
     if (_isDirectCheckout) return;
-    debugPrint('[CHECKOUT-SCREEN] _validateCart() called — items: ${cart.items.length}, selected: ${cart.selectedCount}');
+    debugPrint(
+      '[CHECKOUT-SCREEN] _validateCart() called — items: ${cart.items.length}, selected: ${cart.selectedCount}',
+    );
     if (cart.items.isEmpty) {
       if (_itemValidations.isNotEmpty) {
         setState(() => _itemValidations = []);
@@ -445,34 +424,6 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // GCASH FEE DISPLAY (Model B) — server-computed, shown pre-submit
-  // ═══════════════════════════════════════════════════════════════
-
-  /// Fetch the Model B GCash fee for the current cart total so the price
-  /// breakdown can show it as its own line item BEFORE the customer
-  /// submits. Display-only — the intent edge function recomputes the fee
-  /// authoritatively from server-side prices, so a rate change mid-flow
-  /// can never under-charge.
-  Future<void> _fetchGcashFee() async {
-    if (_paymentMethod != 'GCash') return;
-    final cart = context.read<CartProvider>();
-    // items + fixed ₱100 delivery − any applied voucher: the Model B fee is
-    // charged on what the customer actually owes, and the server computes it
-    // from the same discounted total.
-    final orderTotal =
-        _checkoutSubtotal(_checkoutItems(cart)) + 100.0 - _voucherDiscount;
-    if (orderTotal <= 0) return;
-    setState(() => _feeLoading = true);
-    final fee = await GcashPaymentService().fetchFee(orderTotal);
-    if (!mounted) return;
-    setState(() {
-      _gcashFeeAmount = fee?.feeAmount;
-      _gcashFeeRateBps = fee?.rateBps;
-      _feeLoading = false;
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════════
   // SUBMIT — creates order with ALL selected items + address snapshot
   // ═══════════════════════════════════════════════════════════════
 
@@ -484,7 +435,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     if (_selectedAddress == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select a delivery address before placing your order.'),
+          content: Text(
+            'Please select a delivery address before placing your order.',
+          ),
           backgroundColor: AppConstants.error,
         ),
       );
@@ -530,11 +483,11 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     orderTotal += orderTotal > 0 ? 100.0 : 0.0; // ₱100 delivery
     orderTotal -= _voucherDiscount; // server re-applies this on insert
 
-    // GCash (PayMongo): the server creates the order in 'awaiting_payment'
-    // (no stock held yet) and a hosted PayMongo checkout session. The
-    // cart is cleared right after; the customer authorizes in GCash on
-    // the next screen, and the order is only marked paid by the verified
-    // webhook — never by the client.
+    // GCash (manual): the server creates the order in
+    // 'awaiting_payment_confirmation' (stock reserved) and returns the
+    // platform account + order code. The customer pays in their own GCash
+    // app and submits proof; a seller verifies it and an admin reconciles
+    // the funds before any payout.
     if (_paymentMethod == 'GCash') {
       await _startGcashCheckout(
         items: items,
@@ -544,14 +497,18 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     }
 
     // Build items list for the order
-    final orderItems = items.map((item) => {
-      'product_id': item['product_id'],
-      'product_name': item['product_name'] ?? 'Product',
-      'size': item['size'] ?? '',
-      'variant_id': item['variant_id'],
-      'quantity': item['quantity'] as int,
-      'unit_price': item['price'] as double,
-    }).toList();
+    final orderItems = items
+        .map(
+          (item) => {
+            'product_id': item['product_id'],
+            'product_name': item['product_name'] ?? 'Product',
+            'size': item['size'] ?? '',
+            'variant_id': item['variant_id'],
+            'quantity': item['quantity'] as int,
+            'unit_price': item['price'] as double,
+          },
+        )
+        .toList();
 
     final order = await orderProvider.placeOrder(
       customerId: auth.profile?['id'] ?? '',
@@ -591,13 +548,13 @@ class _CheckoutScreenState extends State<CheckoutScreen>
         _placedOrder = order;
         // The server owns the money — with a voucher the trigger has
         // already rewritten total_amount, so display what it returned.
-        _placedTotal = (order['total_amount'] as num?)?.toDouble() ?? orderTotal;
+        _placedTotal =
+            (order['total_amount'] as num?)?.toDouble() ?? orderTotal;
       });
-
-      _checkController.forward();
     } else if (mounted) {
       final stockErr = orderProvider.stockError;
-      final errorMsg = stockErr?.friendlyMessage ??
+      final errorMsg =
+          stockErr?.friendlyMessage ??
           orderProvider.errorMessage ??
           'Something went wrong placing your order. Please try again.';
       debugPrint('Checkout failed: $errorMsg');
@@ -641,61 +598,70 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   // BUILD
   // ═══════════════════════════════════════════════════════════════
 
-  // GCASH FLOW (PayMongo): create the checkout (order + hosted session)
-  // server-side, clear the cart, and open the payment screen that sends
-  // the customer into GCash and polls the server-verified status.
+  // MANUAL GCASH FLOW: the server creates the order (stock reserved, 30-min
+  // pay window) and returns the PLATFORM GCash account + order code. The
+  // customer pays in their own GCash app and submits the proof on the next
+  // screen; a seller verifies it and an admin reconciles the funds.
   Future<void> _startGcashCheckout({
     required List<Map<String, dynamic>> items,
     String? voucherCode,
   }) async {
+    // Vouchers are applied by the cash order RPC only. Charging full price
+    // would be worse than refusing, so stop before the order exists.
+    if (voucherCode != null && voucherCode.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Vouchers can\'t be used with GCash yet. Remove the voucher or '
+            'choose cash on pickup.',
+          ),
+          backgroundColor: AppConstants.error,
+          duration: Duration(seconds: 5),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
-      final result = await GcashPaymentService().createIntent(
-        idempotencyKey: _gcashIdempotencyKey ??= const Uuid().v4(),
+      final result = await DirectGcashService().createCheckout(
         items: items
-            .map((i) => {
-                  'product_id': i['product_id'],
-                  'size': i['size'] ?? '',
-                  'quantity': i['quantity'],
-                })
+            .map(
+              (i) => {
+                'product_id': i['product_id'],
+                'size': i['size'] ?? '',
+                'quantity': i['quantity'],
+              },
+            )
             .toList(),
         deliveryAddress: _selectedAddress?.formattedAddress,
         shippingAddress: _selectedAddress?.toSnapshot(),
-        voucherCode: voucherCode,
       );
 
       if (!mounted) return;
-
-      // The order now exists in 'awaiting_payment' (no stock held yet),
-      // but the items STAY in the cart: while the payment is pending the
-      // customer should still see them in My Cart (and can retry/cancel
-      // freely). The payment screen removes the purchased items from the
-      // cart only once the server-confirmed status shows paid/conflict —
-      // never before.
-      if (!mounted) return;
-
       setState(() => _isSubmitting = false);
 
-      // The customer authorizes in GCash from the hosted page; this
-      // screen polls the server-verified status (never the redirect).
+      // The items stay in the cart until the order is actually paid — the
+      // customer may abandon here and still see their cart intact.
       await Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => GcashPaymentScreen(intent: result),
+          builder: (_) => GcashPayScreen(
+            orderId: result.orderId,
+            storeId: result.storeId,
+            totalAmount: result.totalAmount,
+            deadline: result.deadline,
+            storeName: result.storeName,
+            orderCode: result.orderCode,
+            gcashQrUrl: result.gcashQrUrl,
+            gcashNumber: result.gcashNumber,
+            gcashAccountName: result.gcashAccountName,
+          ),
         ),
       );
-      // The checkout is now owned by the payment screen; a brand-new
-      // submission (if the user ever returns) must use a fresh key.
-      _gcashIdempotencyKey = null;
-    } on GcashPaymentException catch (e) {
+    } on DirectGcashException catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      // 409: an unfinished checkout already exists (different cart) —
-      // offer to resume it or cancel it (frees the one-pending cap).
-      if (e.statusCode == 409) {
-        await _handlePendingGcashCheckout(items: items);
-        return;
-      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.message),
@@ -709,194 +675,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('Could not start the GCash checkout. Please try again.'),
-          backgroundColor: AppConstants.error,
-        ),
-      );
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // PENDING CHECKOUT — the one-open-order cap (23505) was hit
-  // ═══════════════════════════════════════════════════════════════
-
-  /// The customer already has a pending GCash checkout. Offer to COMPLETE
-  /// it (resume the payment screen) or CANCEL it (frees the one-pending
-  /// cap so this checkout can proceed) — never a dead-end banner.
-  Future<void> _handlePendingGcashCheckout({
-    required List<Map<String, dynamic>> items,
-  }) async {
-    // The checkout may have just resolved (webhook/sweep) between the
-    // failed create and now — re-check before offering actions.
-    GcashIntentResult? pending;
-    try {
-      pending = await GcashPaymentService().fetchPendingIntent();
-    } catch (e) {
-      debugPrint('[CHECKOUT] fetch pending checkout error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
           content: Text(
-            'Could not check your pending checkout. Please try again.',
+            'Could not start the GCash checkout. Please try again.',
           ),
-          backgroundColor: AppConstants.error,
-        ),
-      );
-      return;
-    }
-    if (!mounted) return;
-    if (pending == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Your pending GCash checkout was resolved. Tap Complete Order to continue.',
-          ),
-          backgroundColor: AppConstants.success,
-          duration: Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-    // final capture so the promoted non-null type survives into the
-    // dialog closure below (a plain local isn't promoted in closures).
-    final pendingIntent = pending;
-
-    final action = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Finish your pending GCash payment?'),
-        content: Text(
-          'You have an unpaid GCash checkout of ₱${pendingIntent.amount.toStringAsFixed(2)}. '
-          'Complete that payment, or cancel it to release it and place this new order.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop('complete'),
-            child: const Text('Complete Payment'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop('cancel'),
-            style: FilledButton.styleFrom(backgroundColor: AppConstants.error),
-            child: const Text('Cancel Pending'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || action == null) return;
-
-    if (action == 'complete') {
-      await _openPendingPayment(pending);
-    } else if (action == 'cancel') {
-      await _cancelPendingThenRetry(pending, items: items);
-    }
-  }
-
-  /// Resume the pending checkout's payment screen. Falls back to the
-  /// tracking screen if the payment screen can't open.
-  Future<void> _openPendingPayment(GcashIntentResult pending) async {
-    try {
-      await Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => GcashPaymentScreen(intent: pending),
-        ),
-      );
-      return;
-    } catch (e) {
-      debugPrint('[CHECKOUT] open pending payment error: $e');
-      if (!mounted) return;
-    }
-
-    // Fallback: open the tracking screen for the pending order.
-    try {
-      final order = await Supabase.instance.client
-          .from('orders')
-          .select('*')
-          .eq('id', pending.orderId)
-          .single();
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => OrderTrackingScreen(order: order),
-        ),
-      );
-    } catch (e) {
-      debugPrint('[CHECKOUT] open pending tracking error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not open the pending order. Find it under My Orders.',
-          ),
-          backgroundColor: AppConstants.error,
-        ),
-      );
-    }
-  }
-
-  /// Confirm + cancel the pending checkout (frees the one-pending cap),
-  /// then auto-retry the checkout the customer was attempting.
-  Future<void> _cancelPendingThenRetry(
-    GcashIntentResult pending, {
-    required List<Map<String, dynamic>> items,
-  }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel pending checkout?'),
-        content: const Text(
-          'No charge has been made yet. Cancelling releases this checkout '
-          'so your new order can be placed.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Keep It'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: AppConstants.error),
-            child: const Text('Yes, Cancel It'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || confirmed != true) return;
-
-    setState(() => _isSubmitting = true);
-    try {
-      final cancelled = await GcashPaymentService()
-          .cancelPending(pending.orderId);
-      if (!mounted) return;
-      if (cancelled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Pending checkout cancelled — placing your new order…',
-            ),
-            backgroundColor: AppConstants.success,
-            duration: Duration(seconds: 3),
-          ),
-        );
-        // The cap is freed — retry the checkout the customer was making.
-        await _startGcashCheckout(items: items);
-      } else {
-        setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'That checkout already resolved — tap Complete Order to continue.',
-            ),
-            backgroundColor: AppConstants.success,
-          ),
-        );
-      }
-    } on GcashPaymentException catch (e) {
-      if (!mounted) return;
-      setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
           backgroundColor: AppConstants.error,
         ),
       );
@@ -918,8 +699,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
         elevation: 0,
         leading: _checkoutStep == 0
             ? IconButton(
-                icon:
-                    Icon(Icons.arrow_back, color: AppConstants.secondary),
+                icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
                 onPressed: () => Navigator.of(context).pop(),
               )
             : null,
@@ -927,9 +707,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       body: Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
-          _checkoutStep == 1
-              ? _buildConfirmationStep()
-              : _buildFormStep(cart),
+          _checkoutStep == 1 ? _buildConfirmationStep() : _buildFormStep(cart),
         ],
       ),
     );
@@ -974,7 +752,8 @@ class _CheckoutScreenState extends State<CheckoutScreen>
               if (!v.isAvailable)
                 _buildBanner(
                   icon: Icons.error_outline,
-                  text: '${v.productName} is no longer available. Please remove it from your cart.',
+                  text:
+                      '${v.productName} is no longer available. Please remove it from your cart.',
                   bgColor: AppConstants.error.withValues(alpha: 0.08),
                   borderColor: AppConstants.error.withValues(alpha: 0.2),
                   iconColor: AppConstants.error,
@@ -985,7 +764,8 @@ class _CheckoutScreenState extends State<CheckoutScreen>
               if (v.isAvailable && v.insufficientStock)
                 _buildBanner(
                   icon: Icons.warning_amber_outlined,
-                  text: '${v.productName} only has ${v.currentStock} left in stock. Please reduce quantity to $v.currentStock or less.',
+                  text:
+                      '${v.productName} only has ${v.currentStock} left in stock. Please reduce quantity to $v.currentStock or less.',
                   bgColor: AppConstants.error.withValues(alpha: 0.08),
                   borderColor: AppConstants.error.withValues(alpha: 0.2),
                   iconColor: AppConstants.error,
@@ -1004,8 +784,10 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                 ),
 
             // ── Section 1: Order Summary ──────────────────────
-            Text('Order Summary ($selectedCount item${selectedCount != 1 ? 's' : ''})',
-                style: AppConstants.headlineStyle(fontSize: 16)),
+            Text(
+              'Order Summary ($selectedCount item${selectedCount != 1 ? 's' : ''})',
+              style: AppConstants.headlineStyle(fontSize: 16),
+            ),
             const SizedBox(height: 12),
             SoleCard(
               color: AppConstants.surfaceLight,
@@ -1016,10 +798,11 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                     _OrderItemRow(item: selectedItems[i]),
                     if (i < selectedItems.length - 1)
                       Divider(
-                          height: 1,
-                          color: AppConstants.borderGray,
-                          indent: 14,
-                          endIndent: 14),
+                        height: 1,
+                        color: AppConstants.borderGray,
+                        indent: 14,
+                        endIndent: 14,
+                      ),
                   ],
                 ],
               ),
@@ -1027,15 +810,16 @@ class _CheckoutScreenState extends State<CheckoutScreen>
             const SizedBox(height: 24),
 
             // ── Section 2: Deliver To ─────────────────────────
-            Text('Deliver To',
-                style: AppConstants.headlineStyle(fontSize: 16)),
+            Text('Deliver To', style: AppConstants.headlineStyle(fontSize: 16)),
             const SizedBox(height: 12),
             _buildDeliveryCard(),
             const SizedBox(height: 24),
 
             // ── Section 3: Payment ────────────────────────────
-            Text('Payment Method',
-                style: AppConstants.headlineStyle(fontSize: 16)),
+            Text(
+              'Payment Method',
+              style: AppConstants.headlineStyle(fontSize: 16),
+            ),
             const SizedBox(height: 12),
             SoleCard(
               color: AppConstants.surfaceLight,
@@ -1046,16 +830,20 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                     onChanged: (val) {
                       if (val == null) return;
                       setState(() => _paymentMethod = val);
-                      if (val == 'GCash') _fetchGcashFee();
                     },
                     child: Column(
                       children: [
                         _buildPaymentRadio(
-                            'GCash', 'Pay the store directly via GCash',
-                            Icons.account_balance_wallet_outlined),
+                          'GCash',
+                          'Pay the store directly via GCash',
+                          Icons.account_balance_wallet_outlined,
+                        ),
                         Divider(color: AppConstants.borderGray, height: 1),
-                        _buildPaymentRadio('Cash on Pickup',
-                            'Pay cash at Carcar studio', Icons.storefront_outlined),
+                        _buildPaymentRadio(
+                          'Cash on Pickup',
+                          'Pay cash at Carcar studio',
+                          Icons.storefront_outlined,
+                        ),
                       ],
                     ),
                   ),
@@ -1073,10 +861,12 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'GCash payments are secured by PayMongo. A small GCash service fee is added at checkout.',
+                            'You\'ll pay the CUFMAI GCash account, then upload your receipt. The store verifies it before your order is prepared — no gateway fee.',
                             style: AppConstants.bodyStyle(
                               fontSize: 12,
-                              color: AppConstants.secondary.withValues(alpha: 0.45),
+                              color: AppConstants.secondary.withValues(
+                                alpha: 0.45,
+                              ),
                               height: 1.3,
                             ),
                           ),
@@ -1103,9 +893,15 @@ class _CheckoutScreenState extends State<CheckoutScreen>
               color: AppConstants.primary.withValues(alpha: 0.04),
               child: Column(
                 children: [
-                  _priceRow('Subtotal', '₱${selectedSubtotal.toStringAsFixed(2)}'),
+                  _priceRow(
+                    'Subtotal',
+                    '₱${selectedSubtotal.toStringAsFixed(2)}',
+                  ),
                   const SizedBox(height: 6),
-                  _priceRow('Delivery Fee', '₱${selectedDeliveryFee.toStringAsFixed(2)}'),
+                  _priceRow(
+                    'Delivery Fee',
+                    '₱${selectedDeliveryFee.toStringAsFixed(2)}',
+                  ),
                   if (voucherDiscount > 0) ...[
                     const SizedBox(height: 6),
                     _priceRow(
@@ -1114,19 +910,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                       color: AppConstants.success,
                     ),
                   ],
-                  // Model B: the GCash fee is its own disclosed line item.
-                  if (_paymentMethod == 'GCash') ...[const SizedBox(height: 6), _priceRow(
-                    _feeLoading
-                        ? 'GCash Fee (checking…)'
-                        : (_gcashFeeRateBps != null
-                            ? 'GCash Fee (${(_gcashFeeRateBps! / 100).toStringAsFixed(2)}% + VAT)'
-                            : 'GCash Fee'),
-                    _feeLoading
-                        ? '…'
-                        : (_gcashFeeAmount != null
-                            ? '₱${_gcashFeeAmount!.toStringAsFixed(2)}'
-                            : 'Unavailable'),
-                  )],
+                  // Manual GCash: no gateway, so no gateway surcharge line at
+                  // all. (The old 'GCash Fee — None' row hinted at a fee that
+                  // does not exist in this flow.)
                   const SizedBox(height: 4),
                   Padding(
                     padding: const EdgeInsets.only(left: 4),
@@ -1138,7 +924,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                           child: Icon(
                             Icons.schedule_outlined,
                             size: 13,
-                            color: AppConstants.secondary.withValues(alpha: 0.4),
+                            color: AppConstants.secondary.withValues(
+                              alpha: 0.4,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -1147,7 +935,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                             'Estimated delivery: ${formatDeliveryDate(getEstimatedDeliveryDate(DateTime.now()))}',
                             style: AppConstants.bodyStyle(
                               fontSize: 11,
-                              color: AppConstants.secondary.withValues(alpha: 0.45),
+                              color: AppConstants.secondary.withValues(
+                                alpha: 0.45,
+                              ),
                             ),
                           ),
                         ),
@@ -1157,7 +947,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                   Divider(color: AppConstants.borderGray, height: 20),
                   _priceRow(
                     'Total Amount Due',
-                    '₱${(_paymentMethod == 'GCash' && _gcashFeeAmount != null ? selectedTotal + _gcashFeeAmount! : selectedTotal).toStringAsFixed(2)}',
+                    '₱${selectedTotal.toStringAsFixed(2)}',
                     bold: true,
                   ),
                   const SizedBox(height: 16),
@@ -1226,10 +1016,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right,
-                  color: AppConstants.primary,
-                ),
+                const Icon(Icons.chevron_right, color: AppConstants.primary),
               ],
             ),
           ),
@@ -1277,7 +1064,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                           _selectedAddress!.recipientPhone,
                           style: AppConstants.bodyStyle(
                             fontSize: 12,
-                            color: AppConstants.secondary.withValues(alpha: 0.5),
+                            color: AppConstants.secondary.withValues(
+                              alpha: 0.5,
+                            ),
                           ),
                         ),
                       ],
@@ -1356,21 +1145,27 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: AppConstants.bodyStyle(
-          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-          color: color ?? AppConstants.secondary,
-        )),
-        Text(value, style: AppConstants.monoStyle(
-          fontSize: bold ? 16 : 13,
-          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-          color: color ?? (bold ? AppConstants.primary : AppConstants.secondary),
-        )),
+        Text(
+          label,
+          style: AppConstants.bodyStyle(
+            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            color: color ?? AppConstants.secondary,
+          ),
+        ),
+        Text(
+          value,
+          style: AppConstants.monoStyle(
+            fontSize: bold ? 16 : 13,
+            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            color:
+                color ?? (bold ? AppConstants.primary : AppConstants.secondary),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildPaymentRadio(
-      String method, String subtitle, IconData icon) {
+  Widget _buildPaymentRadio(String method, String subtitle, IconData icon) {
     // Wrap in Material so the tap ripple/selection highlight paints on a
     // Material ancestor instead of being hidden by SoleCard's DecoratedBox.
     // Group selection (groupValue/onChanged) is handled by the enclosing
@@ -1384,14 +1179,16 @@ class _CheckoutScreenState extends State<CheckoutScreen>
           children: [
             Icon(icon, color: AppConstants.primary, size: 20),
             const SizedBox(width: 8),
-            Text(method,
-                style:
-                    AppConstants.bodyStyle(fontWeight: FontWeight.bold)),
+            Text(
+              method,
+              style: AppConstants.bodyStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
-        subtitle: Text(subtitle,
-            style:
-                AppConstants.bodyStyle(fontSize: 12, color: Colors.black54)),
+        subtitle: Text(
+          subtitle,
+          style: AppConstants.bodyStyle(fontSize: 12, color: Colors.black54),
+        ),
       ),
     );
   }
@@ -1405,7 +1202,6 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       orderId: _placedOrderId ?? '',
       total: _placedTotal,
       paymentLabel: _paymentMethod,
-      checkScale: _checkScale,
       onTrackOrder: _placedOrder != null
           ? () {
               Navigator.of(context).pushReplacement(
@@ -1453,7 +1249,11 @@ class _OrderItemRow extends StatelessWidget {
                 width: 48,
                 height: 48,
                 color: AppConstants.borderGray.withValues(alpha: 0.2),
-                child: const Icon(Icons.broken_image, size: 18, color: AppConstants.primary),
+                child: const Icon(
+                  Icons.broken_image,
+                  size: 18,
+                  color: AppConstants.primary,
+                ),
               ),
             ),
           ),

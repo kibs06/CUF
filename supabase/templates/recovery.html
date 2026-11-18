@@ -1,0 +1,42 @@
+<!--
+  Password-reset email — the one auth mail whose LINK is the whole point.
+
+  WHY THIS FILE EXISTS: GoTrue's stock "Reset password" template does render
+  `{{ .ConfirmationURL }}`, but it is NOT versioned in this repo and every
+  other mail here has been customized — so whether a customer's reset link is
+  present was previously decided by whatever the hosted project happened to
+  have. This file makes the reset mail reviewable, and
+  `tool/apply_live_auth_mail.dart` writes it with the rest of the auth config.
+
+  ⚠️ Do NOT replace `{{ .ConfirmationURL }}` with `{{ .Token }}`. Unlike the
+  sign-up and new-device mails (which the app verifies with a 6-digit code),
+  a reset is completed by opening the link: it carries the short-lived
+  recovery session that lets ResetPasswordScreen set the new password. A
+  code-only reset mail leaves that screen with nothing to accept.
+-->
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#F3E9D8;padding:32px 16px;">
+  <div style="max-width:480px;margin:0 auto;background:#FBF5E9;border-radius:16px;padding:32px;border:1px solid #E3D6BC;">
+    <h1 style="margin:0 0 8px;font-size:20px;color:#3A2E22;">Choose a new password</h1>
+    <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#6B5B47;">
+      We received a request to reset the password for your CUFMAI account.
+      Tap the button below to choose a new one.
+    </p>
+
+    <p style="margin:0 0 24px;">
+      <a href="{{ .ConfirmationURL }}"
+         style="display:inline-block;background:#8C6B4F;color:#FBF5E9;text-decoration:none;font-size:14px;font-weight:600;padding:12px 22px;border-radius:12px;">
+        Reset my password
+      </a>
+    </p>
+
+    <p style="margin:0 0 24px;font-size:12px;line-height:1.6;color:#6B5B47;">
+      If the button does not open, copy this link into your browser:<br>
+      <span style="word-break:break-all;color:#3A2E22;">{{ .ConfirmationURL }}</span>
+    </p>
+
+    <p style="margin:0;font-size:12px;line-height:1.6;color:#6B5B47;">
+      This link works once and expires soon. If you did not ask for a reset,
+      you can safely ignore this email — your password will not change.
+    </p>
+  </div>
+</div>

@@ -21,6 +21,15 @@
 //     paid event.
 //   • A paid order is NEVER deleted. Stock/amount/late-payment problems
 //     land in status='payment_conflict' for manual review.
+//   • Mode integrity: the event's own `livemode` must match
+//     PAYMONGO_LIVEMODE. A test-mode event can therefore never finalize a
+//     live order, and live money is never booked as sandbox. Both
+//     mismatches are audited as
+//     event_type='webhook.blocked_key_mode_mismatch', status='failed', but
+//     they are NOT treated alike: a TEST event in a live config is
+//     acknowledged (200 — a leftover sandbox checkout can never be valid),
+//     while a LIVE event in a test config is retryable (500) so a rollback
+//     can never silently drop a real payment.
 //
 // Events handled:
 //   • checkout_session.payment.paid  (primary — Checkout Sessions API)
@@ -32,7 +41,8 @@
 //   (payment_intents.expires_at) and the app-side poll, not this hook.
 //
 // Env: PAYMONGO_WEBHOOK_SECRET (required, whsk_…), SUPABASE_URL,
-//      SUPABASE_SERVICE_ROLE_KEY
+//      SUPABASE_SERVICE_ROLE_KEY,
+//      PAYMONGO_LIVEMODE ("true" = live — decides which `livemode` we accept)
 // ══════════════════════════════════════════════════════════════════
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -41,6 +51,8 @@ import { checkRateLimit, rateLimitedResponse } from "../_shared/rate_limit.ts";
 import {
   verifyWebhookSignature,
   parseWebhookEvent,
+  paymongoConfiguredMode,
+  evaluateWebhookModeGuard,
   resourceAttrs,
   extractPaymentId,
   extractPaymentIntentId,
@@ -52,6 +64,7 @@ import {
   resolveInventorySize,
 } from "../_shared/paymongo.ts";
 import { sendPushToUser } from "../_shared/push.ts";
+import { notifyAdminsPaymentModeMismatch } from "../_shared/admin_alert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -143,6 +156,110 @@ serve(async (req: Request) => {
       console.error("[WEBHOOK] could not log rejection:", (e as any)?.message ?? e);
     }
     return json(401, { error: "invalid signature" });
+  }
+
+  // ── 1b. Mode guard: the event's environment must be OUR environment ─
+  // The secret key decides which mode a checkout was created in; the
+  // event carries that same `livemode`. They can drift in two ways, and
+  // the two are NOT equal:
+  //   • TEST event, LIVE config → a leftover sandbox checkout. It can never
+  //     be valid here, so audit it and ACK (200); PayMongo should stop.
+  //   • LIVE event, TEST config → real money moved and our config is wrong
+  //     (e.g. rolled back to test keys while live checkouts were in flight).
+  //     Dropping it would silently lose a paid order, so audit it and answer
+  //     500: PayMongo retries, and once the config is restored the retry
+  //     passes this guard and processes normally — the event id below is
+  //     never consumed because the claim happens after this block.
+  // Both audit rows use a DETERMINISTIC synthetic key (`mode-<event id>`) so
+  // the retry storm for a retryable mismatch yields exactly one row.
+  const expectedLivemode = paymongoConfiguredMode() === "live";
+  // A payload with no boolean `livemode` cannot be proven to belong to our
+  // environment. The parser defaults such a payload to `false`, which would
+  // classify it as a harmless sandbox event; treat it as retryable instead so
+  // the guard fails CLOSED, never open.
+  const guard = evaluateWebhookModeGuard(
+    event.livemode,
+    event.livemodeKnown,
+    expectedLivemode,
+  );
+  if (guard.disposition !== "ok") {
+    const retryable = guard.retryable;
+    const auditKey = event.id
+      ? `mode-${event.id}`
+      : `mode-${crypto.randomUUID()}`;
+    console.error(
+      `[WEBHOOK] REJECTED — livemode mismatch: event ${event.id} (${event.type}) ` +
+        `is ${event.livemodeKnown ? `${event.livemode ? "live" : "test"}-mode` : "of unknown mode (no boolean livemode in the payload)"} ` +
+        `but this project runs in ${expectedLivemode ? "live" : "test"}-mode. ` +
+        (retryable
+          ? "Real payment left unconfirmed — returning 500 so PayMongo retries."
+          : "Leftover sandbox event — acknowledged, order not touched."),
+    );
+    try {
+      const { error: auditErr } = await supabase
+        .from("payment_webhook_events")
+        .insert({
+          paymongo_event_id: auditKey,
+          event_type: "webhook.blocked_key_mode_mismatch",
+          status: "failed",
+          livemode: event.livemode,
+          redacted_payload: {
+            ...event.redacted,
+            type: "webhook.blocked_key_mode_mismatch",
+            original_event_id: event.id,
+            original_type: event.type,
+            event_livemode: event.livemode,
+            event_livemode_known: event.livemodeKnown,
+            expected_livemode: expectedLivemode,
+            disposition: guard.disposition,
+          },
+        });
+      if (auditErr) {
+        if ((auditErr as any).code === "23505") {
+          // A retryable mismatch is redelivered by PayMongo — one audit row
+          // per event is the record, not one per retry.
+          console.log("[WEBHOOK] mode-mismatch already audited for this event:", event.id);
+        } else {
+          console.error("[WEBHOOK] mode-mismatch audit write failed:", auditErr.message);
+        }
+      }
+    } catch (e) {
+      console.error("[WEBHOOK] could not log mode rejection:", (e as any)?.message ?? e);
+    }
+    // Best-effort admin bell. The notification is attempted AFTER the status
+    // is decided and its failure is swallowed inside the helper, so the
+    // response below is byte-identical whether or not the insert succeeds
+    // (the payment_mode_mismatch CHECK may not be migrated yet on this DB).
+    if (guard.notifyAdmins) {
+      try {
+        await notifyAdminsPaymentModeMismatch(supabase, {
+          source: "webhook",
+          disposition: guard.disposition,
+          detail:
+            `${event.livemodeKnown ? (event.livemode ? "live" : "test") : "unknown"}-mode event refused because ` +
+            `this project runs in ${expectedLivemode ? "live" : "test"}-mode.` +
+            (retryable
+              ? " Order left unconfirmed; PayMongo will retry."
+              : " Order not touched."),
+          keyMode: undefined,
+          configuredMode: expectedLivemode ? "live" : "test",
+          eventId: event.id,
+          eventType: event.type,
+        });
+      } catch {
+        // The helper already swallows; this is belt and braces so a future
+        // change to it still cannot break the webhook's response.
+      }
+    }
+
+    if (retryable) {
+      // 500 = retryable on purpose: never let a real payment vanish because
+      // our own configuration was rolled back under it.
+      return json(500, { error: "livemode mismatch — retry after configuration is restored" });
+    }
+    // 200 = this delivery was HANDLED (refused), not failed — a test-mode
+    // event will never become valid in a live store, so PayMongo must stop.
+    return json(200, { ok: true, ignored: "livemode_mismatch" });
   }
 
   // ── 2. Idempotency gate: first INSERT wins; 'failed' rows re-claim ─

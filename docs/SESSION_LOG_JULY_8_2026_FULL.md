@@ -26,7 +26,7 @@ The recurring root cause across issues #3 and #4 is the same pattern seen on Jul
 **User Request:** Add a search bar with live MapTiler geocoding predictions to the Delivery Location map screen.
 
 **Investigation:**
-- Read `docs/SoleVision_Complete_Documentation.md` and `AI_PROJECT_SUMMARY.md` for architecture context
+- Read `docs/CUFMAI_Complete_Documentation.md` and `AI_PROJECT_SUMMARY.md` for architecture context
 - Found existing implementation in `lib/screens/customer/add_edit_address_screen.dart` — already has GPS auto-locate, manual pin-dragging, reverse geocoding
 - MapTiler already integrated for tile rendering via `flutter_map`
 - No `http` or `dio` packages in the project — uses `dart:io`'s `HttpClient` elsewhere

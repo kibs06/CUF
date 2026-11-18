@@ -1076,7 +1076,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _settingsRow(
               icon: Icons.qr_code_2,
               title: 'Payment Methods',
-              subtitle: 'Set up your GCash QR code',
+              subtitle: 'For in-store (POS) payments',
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(

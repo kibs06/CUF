@@ -405,7 +405,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
           style: AppConstants.bodyStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'GCash will be unavailable at checkout until you upload a new one.',
+          'GCash will be unavailable at your POS counter until you upload a new one.',
           style: AppConstants.bodyStyle(fontSize: 14),
         ),
         actions: [
@@ -569,7 +569,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
           ),
           _GuideStep(
             number: '3',
-            text: 'Make sure you are on the "Scan to Pay" / receive view — this is the QR that lets customers pay directly into your wallet.',
+            text: 'Make sure you are on the "Scan to Pay" / receive view — this QR lets customers pay you at the counter.',
           ),
           _GuideStep(
             number: '4',
@@ -577,7 +577,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
           ),
           _GuideStep(
             number: '5',
-            text: 'Upload that screenshot below. At checkout, customers scan YOUR QR and the money goes straight to your GCash wallet.',
+            text: 'Upload that screenshot below. At your IN-STORE (POS) counter, customers scan YOUR QR and the money goes straight to your GCash wallet. Online orders never use this QR — they pay the CUFMAI platform account, and CUFMAI remits your earnings in a daily payout.',
           ),
         ],
       ),

@@ -1,4 +1,4 @@
-# Logo design brief — SoleVision / CUFMAI
+# Logo design brief — CUFMAI
 
 ## Status: the symbol is settled
 
@@ -13,7 +13,7 @@ brief now asks for.
 
 ## The client, in three sentences
 
-SoleVision is the marketplace app of **CUFMAI** — the Carcar United Footwear
+CUFMAI is the marketplace app of **CUFMAI** — the Carcar United Footwear
 Manufacturers Association, Inc. — a 2004 association of artisan shoemakers in
 **Carcar City, Cebu, Philippines**, a town long known as the "Footwear Capital of
 the South." The app gives those artisans the tools big brands have (storefront,
@@ -75,7 +75,7 @@ with heritage weight, or a clean geometric sans. Not a display script.
 ## The name
 
 The app carries two names: the association's (**CUFMAI**, the launcher label) and
-the product's (**SoleVision**, the bundle id and all the docs under `docs/`). The
+the product's (**CUFMAI**, the bundle id and all the docs under `docs/`). The
 symbol commits to neither in letterform, but the C is CUFMAI's initial.
 
 **Recommend which name the wordmark carries**, or show both. This is the one

@@ -63,17 +63,24 @@ select is(
   '3: gcash_payment_decision_audit has RLS enabled'
 );
 
--- ── RPC grants (remote route closed, legacy resolution preserved) ─
+-- ── RPC grants ────────────────────────────────────────────────────
+-- 20261118040000 deliberately RE-OPENED the manual GCash route: it is now
+-- the marketplace's real online payment path (one platform account), and
+-- the 3-argument submit_gcash_proof — which skipped the amount, hash and
+-- attempt checks — was dropped in the same migration.
 select is(
   has_function_privilege('authenticated', 'public.create_gcash_checkout(jsonb,text,jsonb)', 'EXECUTE'),
-  false,
-  '4: create_gcash_checkout revoked from authenticated (remote order creation closed)'
+  true,
+  '4: create_gcash_checkout is executable (manual flow is the live route)'
 );
 
-select is(
-  has_function_privilege('authenticated', 'public.submit_gcash_proof(uuid,text,text)', 'EXECUTE'),
-  true,
-  '5: submit_gcash_proof still executable (legacy awaiting orders resolve)'
+select ok(
+  to_regprocedure('public.submit_gcash_proof(uuid,text,text)') IS NULL
+  AND has_function_privilege(
+    'authenticated',
+    'public.submit_gcash_proof(uuid,text,text,numeric,text,text,timestamptz)',
+    'EXECUTE'),
+  '5: only the 7-argument submit (amount + hash + attempt checks) survives'
 );
 
 select is(

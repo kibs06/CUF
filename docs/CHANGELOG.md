@@ -1,4 +1,4 @@
-# SoleVision — Changelog
+# CUFMAI — Changelog
 
 ## June 28, 2026
 

@@ -1,4 +1,4 @@
-# SoleVision — Notifications AI Context
+# CUFMAI — Notifications AI Context
 
 > Condensed reference for AI agents working on the notification system.
 > Derived from NOTIFICATIONS_ARCHITECTURE.md v1.0.0 (July 16, 2026).

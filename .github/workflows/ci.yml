@@ -59,3 +59,22 @@ jobs:
           name: coverage-report
           path: coverage/lcov.info
           retention-days: 7
+
+  paymongo-mode-guards:
+    name: PayMongo mode guards
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # The Edge Functions run on Deno, but the mode guards are pure logic and
+      # read config through a stubbed Deno.env, so Node's type stripping runs
+      # them without pulling the Deno toolchain into CI.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run mode-guard tests
+        run: node --experimental-strip-types supabase/tests/functions/paymongo_mode.test.mjs

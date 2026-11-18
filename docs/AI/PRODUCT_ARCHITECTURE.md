@@ -1,4 +1,4 @@
-# Product Architecture — SoleVision (CUFMAI)
+# Product Architecture — CUFMAI (CUFMAI)
 
 > Current-state reference for the product system, with a deep dive on the
 > **Adjust Stock** feature. Written after the stock-persistence hardening

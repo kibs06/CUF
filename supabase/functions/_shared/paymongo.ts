@@ -28,6 +28,133 @@ export function getSecretAuthHeader(): string {
 }
 
 // ────────────────────────────────────────────────────────────────
+// MODE GUARD — sandbox vs live is decided by the SECRET KEY alone.
+//
+// A `sk_test_…` key creates TEST checkout sessions no matter what
+// PAYMONGO_LIVEMODE says; that variable only labels the rows we
+// record. When the two disagree, nothing downstream complains: the
+// customer pays nothing, the order sits at awaiting_payment, and the
+// books claim the opposite of what happened (the Aug 19, 2026
+// incident: a test payment in a live store). So the checkout path
+// refuses to create a session at all until key and config agree.
+//
+// Fail closed: a key whose prefix is neither sk_test_ nor sk_live_
+// (rotated format, typo, truncated paste) is also refused.
+// ────────────────────────────────────────────────────────────────
+
+export type PaymongoMode = "test" | "live";
+
+export class PaymongoModeMismatchError extends Error {
+  readonly keyMode: PaymongoMode | "unknown";
+  readonly configuredMode: PaymongoMode;
+
+  constructor(keyMode: PaymongoMode | "unknown", configuredMode: PaymongoMode) {
+    super(
+      `PayMongo mode mismatch: the configured secret key is ` +
+        (keyMode === "unknown"
+          ? "neither sk_test_ nor sk_live_"
+          : `${keyMode}-mode`) +
+        ` but PAYMONGO_LIVEMODE=${configuredMode}. Refusing to create a checkout session.`,
+    );
+    this.name = "PaymongoModeMismatchError";
+    this.keyMode = keyMode;
+    this.configuredMode = configuredMode;
+  }
+}
+
+/// Mode encoded in a secret key's prefix.
+export function secretKeyMode(secretKey: string): PaymongoMode | "unknown" {
+  if (secretKey.startsWith("sk_live_")) return "live";
+  if (secretKey.startsWith("sk_test_")) return "test";
+  return "unknown";
+}
+
+/// Mode PAYMONGO_LIVEMODE asks for.
+export function configuredLivemodeMode(flag: string | undefined): PaymongoMode {
+  return flag === "true" ? "live" : "test";
+}
+
+/// Mode of the secret key currently installed on the project.
+export function paymongoKeyMode(): PaymongoMode | "unknown" {
+  return secretKeyMode(Deno.env.get("PAYMONGO_SECRET_KEY") ?? "");
+}
+
+/// Mode the project is configured to run in.
+export function paymongoConfiguredMode(): PaymongoMode {
+  return configuredLivemodeMode(Deno.env.get("PAYMONGO_LIVEMODE"));
+}
+
+export type ModeMismatchDisposition = "ok" | "retry" | "acknowledge";
+
+/// How a webhook event's `livemode` should be treated against ours.
+///
+///   ok          — the event is from the environment we are running in.
+///   retry       — a LIVE event while we are configured for TEST. Real money
+///                 moved, so it must never be dropped: answer 500 so PayMongo
+///                 keeps redelivering, and once the configuration is restored
+///                 (live key + PAYMONGO_LIVEMODE=true) the retry processes
+///                 normally because the guard passes and the event id is
+///                 still unclaimed.
+///   acknowledge — a TEST event while we are configured for LIVE. A leftover
+///                 sandbox checkout can never be valid here, so there is
+///                 nothing to retry: audit it and answer 200.
+export function eventModeDisposition(
+  eventLivemode: boolean,
+  configuredLivemode: boolean,
+): ModeMismatchDisposition {
+  if (eventLivemode === configuredLivemode) return "ok";
+  return eventLivemode ? "retry" : "acknowledge";
+}
+
+export interface WebhookModeGuardResult {
+  disposition: ModeMismatchDisposition;
+  /** HTTP status the webhook must answer with. */
+  status: 200 | 500;
+  /** True when PayMongo should redeliver (real money left unconfirmed). */
+  retryable: boolean;
+  /** True when an admin must be told about this delivery. */
+  notifyAdmins: boolean;
+}
+
+/// The webhook's whole mode decision, in one pure place.
+///
+/// An event with no boolean `livemode` cannot be proven to belong to our
+/// environment, so it is treated like the retryable case: fail closed, never
+/// open (the parser defaults the missing field to `false`).
+///
+/// Both mismatch directions notify an admin and neither changes what the
+/// caller does with the result: `status` is decided here, before any
+/// notification is attempted.
+export function evaluateWebhookModeGuard(
+  eventLivemode: boolean,
+  livemodeKnown: boolean,
+  configuredLivemode: boolean,
+): WebhookModeGuardResult {
+  if (!livemodeKnown) {
+    return { disposition: "retry", status: 500, retryable: true, notifyAdmins: true };
+  }
+  const disposition = eventModeDisposition(eventLivemode, configuredLivemode);
+  if (disposition === "ok") {
+    return { disposition, status: 200, retryable: false, notifyAdmins: false };
+  }
+  if (disposition === "retry") {
+    return { disposition, status: 500, retryable: true, notifyAdmins: true };
+  }
+  return { disposition, status: 200, retryable: false, notifyAdmins: true };
+}
+
+/// Throws PaymongoModeMismatchError unless the key's mode is the one
+/// PAYMONGO_LIVEMODE asks for. Returns the agreed mode.
+export function assertPaymongoModeMatch(): PaymongoMode {
+  const keyMode = paymongoKeyMode();
+  const configuredMode = paymongoConfiguredMode();
+  if (keyMode !== configuredMode) {
+    throw new PaymongoModeMismatchError(keyMode, configuredMode);
+  }
+  return keyMode;
+}
+
+// ────────────────────────────────────────────────────────────────
 // CURRENT FLOW — GCash via Checkout Sessions (attempt #6)
 // ────────────────────────────────────────────────────────────────
 
@@ -57,6 +184,9 @@ export async function createGcashCheckoutSession(
   description: string,
   metadata: Record<string, string>,
 ): Promise<GcashCheckoutSession> {
+  // Chokepoint: no caller can create a session in the wrong mode.
+  assertPaymongoModeMatch();
+
   const body = {
     data: {
       attributes: {
@@ -244,7 +374,13 @@ export interface PayMongoEvent {
   id: string;
   /// Event type (checkout_session.payment.paid, payment.paid, …).
   type: string;
+  /// `attributes.livemode`, defaulting to false only when it is ABSENT.
+  /// Never trust `livemode` alone for a security decision — pair it with
+  /// `livemodeKnown`, which distinguishes "test mode" from "the payload
+  /// did not say" (a forged/truncated body, or a new PayMongo shape).
   livemode: boolean;
+  /// True only when the payload carried a boolean `livemode`.
+  livemodeKnown: boolean;
   /// The resource embedded in the event.
   data: {
     id: string;          // resource id (cs_xxx | pay_xxx)
@@ -260,10 +396,12 @@ export function parseWebhookEvent(body: string): PayMongoEvent {
   const attributes = parsed?.data?.attributes ?? {};
   const resource = attributes?.data ?? {};
 
+  const rawLivemode = attributes?.livemode;
   return {
     id: parsed?.data?.id ?? "",
     type: attributes?.type ?? "",
-    livemode: attributes?.livemode === true,
+    livemode: rawLivemode === true,
+    livemodeKnown: typeof rawLivemode === "boolean",
     data: {
       id: resource?.id ?? "",
       type: resource?.type ?? "",
@@ -273,6 +411,7 @@ export function parseWebhookEvent(body: string): PayMongoEvent {
       event_id: parsed?.data?.id ?? "",
       type: attributes?.type ?? "",
       livemode: attributes?.livemode ?? false,
+      livemode_known: typeof rawLivemode === "boolean",
       resource_id: resource?.id ?? "",
       resource_type: resource?.type ?? "",
       status: resource?.attributes?.status ?? null,

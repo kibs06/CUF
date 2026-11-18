@@ -1,5 +1,5 @@
 # ============================================================
-# SoleVision - Backup configuration (TEMPLATE)
+# CUFMAI - Backup configuration (TEMPLATE)
 # ============================================================
 # HOW TO USE:
 #   1. Copy this file to  config.ps1  (same folder).
@@ -31,7 +31,7 @@ $DbPassword = 'REPLACE_WITH_YOUR_DB_PASSWORD'
 #   <BackupRoot>/20260813_091500/data.sql
 #   <BackupRoot>/20260813_091500/json/<table>.json
 #   <BackupRoot>/20260813_091500/storage/<bucket>/<path...>
-$BackupRoot = 'C:\Users\jeffh\Documents\SoleVisionBackups'
+$BackupRoot = 'C:\Users\jeffh\Documents\CUFMAIBackups'
 
 # Prune: keep only the N most recent backup runs, delete the rest.
 $KeepBackups = 10

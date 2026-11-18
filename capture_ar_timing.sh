@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# SoleVision — AR timing capture
+# CUFMAI — AR timing capture
 # Measures screen-open → first-successful-point on a real device by capturing
 # the [AR_TIMING] milestone lines emitted by foot_manual_measure_screen.dart.
 #

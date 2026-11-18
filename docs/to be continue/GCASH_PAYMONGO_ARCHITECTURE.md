@@ -29,7 +29,7 @@
 
 ## 1. Overview
 
-This document describes the architecture for real, auto-confirming GCash payments in the SoleVision POS (Point of Sale) Flutter app using **PayMongo's QR Ph** integration.
+This document describes the architecture for real, auto-confirming GCash payments in the CUFMAI POS (Point of Sale) Flutter app using **PayMongo's QR Ph** integration.
 
 ### What It Does
 

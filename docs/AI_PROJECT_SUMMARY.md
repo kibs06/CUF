@@ -1,6 +1,6 @@
-# SoleVision — AI Project Summary
+# CUFMAI — AI Project Summary
 
-**Purpose:** This document gives another AI agent everything it needs to understand, navigate, and work on the SoleVision project. It is a self-contained brief — not exhaustive, but sufficient to plan and execute tasks.
+**Purpose:** This document gives another AI agent everything it needs to understand, navigate, and work on the CUFMAI project. It is a self-contained brief — not exhaustive, but sufficient to plan and execute tasks.
 
 **Date compiled:** July 8, 2026 (updated)
 
@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Project** | SoleVision — multi-role artisan footwear marketplace |
+| **Project** | CUFMAI — multi-role artisan footwear marketplace |
 | **Market** | Carcar City, Cebu, Philippines |
 | **Currency** | Philippine Peso (₱) |
 | **Mobile app** | Flutter (Dart) — `lib/` |
@@ -79,7 +79,7 @@ app/
 
 | File | Purpose |
 |------|---------|
-| `docs/SoleVision_Complete_Documentation.md` | **Master reference** — 22 sections covering everything: schema, RLS, architecture, services, bug history, setup |
+| `docs/CUFMAI_Complete_Documentation.md` | **Master reference** — 22 sections covering everything: schema, RLS, architecture, services, bug history, setup |
 | `docs/project_doc.md` | Earlier version of master doc (v1.2.0) — still accurate for most things |
 | `docs/PROJECT_HANDOFF.md` | Decisions & rationale, known issues, what's next |
 | `docs/SESSION_DOCUMENTATION_JULY_3_2026.md` | Investigation narrative for checkout bugs |
@@ -381,7 +381,7 @@ npm run dev
 ### Database
 - Supabase project URL: `psczvbfoybqhjeqssimw.supabase.co`
 - Do NOT use `supabase/schema.sql` — it's outdated
-- Use `docs/SoleVision_Complete_Documentation.md` Section 4 as schema reference
+- Use `docs/CUFMAI_Complete_Documentation.md` Section 4 as schema reference
 - Storage buckets: `avatars`, `product-images`, `store-assets` (all public)
 
 ---
@@ -430,6 +430,6 @@ npm run dev
 
 ---
 
-*SoleVision AI Project Summary — compiled July 8, 2026 (updated).*
-*Primary source: `docs/SoleVision_Complete_Documentation.md`*
+*CUFMAI AI Project Summary — compiled July 8, 2026 (updated).*
+*Primary source: `docs/CUFMAI_Complete_Documentation.md`*
 *Session log: `docs/SESSION_LOG_JULY_8_2026.md`*

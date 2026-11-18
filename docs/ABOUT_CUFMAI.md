@@ -1,4 +1,4 @@
-# SoleVision — What Is This App?
+# CUFMAI — What Is This App?
 
 **Last Updated:** August 12, 2026
 
@@ -6,7 +6,7 @@
 
 ## One-Liner
 
-SoleVision is a **multi-role marketplace app** that connects artisans, customers, and admins for handcrafted leather footwear retail in **Carcar City, Cebu, Philippines** — the hometown of the region's shoe industry.
+CUFMAI is a **multi-role marketplace app** that connects artisans, customers, and admins for handcrafted leather footwear retail in **Carcar City, Cebu, Philippines** — the hometown of the region's shoe industry.
 
 ---
 
@@ -14,7 +14,7 @@ SoleVision is a **multi-role marketplace app** that connects artisans, customers
 
 Carcar City is a known hub for handcrafted shoes and sandals, but local artisans (mostly members of CUFMAI — the Carcar United Footwear Manufacturers Association Inc.) sell through traditional channels with no digital storefront. Customers outside the city have no easy way to discover, order, and track these handcrafted products.
 
-SoleVision bridges that gap with a single platform where:
+CUFMAI bridges that gap with a single platform where:
 
 - **Customers** discover and buy artisan footwear online (with delivery or pickup).
 - **Sellers/artisans** get a digital storefront, order management, and a POS for walk-in sales.
@@ -114,7 +114,7 @@ Screen (UI) → Provider (state) → Service (data access) → Supabase
 
 ## Why It Matters (The Story)
 
-SoleVision is a capstone project that digitizes an entire local industry. Instead of replacing the artisans, it gives them the same tools big brands have — a storefront, order tracking, and a POS — while preserving the craftsmanship story of Carcar: full-grain leather, hand-stitched welts, and designs rooted in Cebuano tradition.
+CUFMAI is a capstone project that digitizes an entire local industry. Instead of replacing the artisans, it gives them the same tools big brands have — a storefront, order tracking, and a POS — while preserving the craftsmanship story of Carcar: full-grain leather, hand-stitched welts, and designs rooted in Cebuano tradition.
 
 ---
 
@@ -123,7 +123,7 @@ SoleVision is a capstone project that digitizes an entire local industry. Instea
 | Document | What It Covers |
 |----------|----------------|
 | `docs/AI_PROJECT_SUMMARY.md` | AI-agent quick reference for the whole project |
-| `docs/SoleVision_Complete_Documentation.md` | Master reference (schema, RLS, services, history) |
+| `docs/CUFMAI_Complete_Documentation.md` | Master reference (schema, RLS, services, history) |
 | `docs/PROJECT_HANDOFF.md` | Decisions, known issues, what's next |
 | `docs/SIGNUP_ARCHITECTURE.md` | Customer & seller sign-up flow deep-dive |
 | `docs/CUSTOMER_ARCHITECTURE.md` | Customer module deep-dive |

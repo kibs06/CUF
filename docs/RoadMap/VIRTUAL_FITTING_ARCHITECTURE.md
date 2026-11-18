@@ -31,7 +31,7 @@
 **Platform target:** Android first (matches the shipped ARCore stack), iOS deferred
 **Rendering decision:** Native **glTF on our own ARCore plugin** — no third-party try-on SDK
 **Companion:** `docs/RoadMap/VIRTUAL_FITTING_ROADMAP.md` (the phased build plan for this design)
-**Related:** `docs/RoadMap/SHOE_MODEL_AUTHORING_GUIDE.md` (**the partner-facing how-to for §2.5.1**) · `docs/RoadMap/SOLEVISION_ROADMAP.md` (Phase 8 umbrella) · `docs/AI/FOOT_SIZING_ARCHITECTURE.md` (the shipped scan paths) · `docs/AI/AR_TRY_ON_ARCHITECTURE.md` (**partly stale** — it predates v2 and lists try-on entry points that no longer exist; use §1 of this doc instead) · `docs/AI/SIZE_AWARE_SHOPPING_PLAN.md` (P3/P4 are still open; the fit engine in §2.6 is the data source they were waiting for)
+**Related:** `docs/RoadMap/SHOE_MODEL_AUTHORING_GUIDE.md` (**the partner-facing how-to for §2.5.1**) · `docs/RoadMap/CUFMAI_ROADMAP.md` (Phase 8 umbrella) · `docs/AI/FOOT_SIZING_ARCHITECTURE.md` (the shipped scan paths) · `docs/AI/AR_TRY_ON_ARCHITECTURE.md` (**partly stale** — it predates v2 and lists try-on entry points that no longer exist; use §1 of this doc instead) · `docs/AI/SIZE_AWARE_SHOPPING_PLAN.md` (P3/P4 are still open; the fit engine in §2.6 is the data source they were waiting for)
 
 ---
 
@@ -795,5 +795,5 @@ android/app/src/test/kotlin/com/solevision/app/tryon/ -- (V4.2–V4.8) 44 JVM te
 
 ---
 
-*SoleVision / CUFMAI — Virtual Fitting Architecture v1.2.0 — September 27, 2026.*
+*CUFMAI — Virtual Fitting Architecture v1.2.0 — September 27, 2026.*
 *Update this document whenever a decision in §2.2 changes, not just when phases finish.*

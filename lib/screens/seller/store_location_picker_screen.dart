@@ -4,11 +4,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../constants/app_constants.dart';
+import '../../services/reverse_geocode_service.dart';
 import '../../widgets/sole_primary_button.dart';
 
 /// Result returned when the seller confirms a store location.
@@ -49,6 +49,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
   bool _isSearchLoading = false;
   String? _searchError;
   Timer? _searchDebounce;
+  Timer? _reverseDebounce;
 
   @override
   void initState() {
@@ -59,6 +60,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _reverseDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -162,8 +164,9 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
       try {
         final request = await client.getUrl(url);
         request.headers.set('User-Agent', 'com.solevision.app');
-        final response =
-            await request.close().timeout(const Duration(seconds: 8));
+        final response = await request.close().timeout(
+          const Duration(seconds: 8),
+        );
         final body = await response.transform(utf8.decoder).join();
         if (!mounted) return;
 
@@ -223,6 +226,15 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
     _reverseGeocode();
   }
 
+  void _scheduleReverseGeocode() {
+    _reverseDebounce?.cancel();
+    _reverseDebounce = Timer(const Duration(milliseconds: 600), () {
+      if (mounted && !_isReverseGeocoding && !_isLocating) {
+        _reverseGeocode();
+      }
+    });
+  }
+
   // ── GPS recenter ──────────────────────────────────────────────
   Future<void> _useCurrentLocation() async {
     try {
@@ -240,7 +252,9 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
         }
       }
       if (permission == LocationPermission.deniedForever) {
-        _showSnack('Location permission permanently denied. Enable it in Settings.');
+        _showSnack(
+          'Location permission permanently denied. Enable it in Settings.',
+        );
         return;
       }
 
@@ -266,42 +280,34 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
   }
 
   // ── Reverse geocode the pinned center ─────────────────────────
+  // Uses the exact same lookup as the customer address picker, so the
+  // seller's store location gets the barangay-level label too.
   Future<void> _reverseGeocode() async {
     if (!mounted) return;
     setState(() => _isReverseGeocoding = true);
-    try {
-      final placemarks = await Geocoding().placemarkFromCoordinates(
-        _center.latitude,
-        _center.longitude,
-      );
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-        final street = [
-          if ((p.subThoroughfare ?? '').isNotEmpty) p.subThoroughfare!,
-          if ((p.thoroughfare ?? '').isNotEmpty) p.thoroughfare!,
-        ].join(' ');
-        final parts = [
-          street,
-          p.subLocality ?? '',
-          p.locality ?? '',
-          p.subAdministrativeArea ?? '',
-          p.administrativeArea ?? '',
-          p.country ?? '',
-        ].where((s) => s.trim().isNotEmpty).toList();
-        final composed = parts.join(', ');
-        if (mounted) setState(() => _addressPreview = composed);
-      }
-    } catch (e) {
-      debugPrint('[StoreLocationPicker] reverse geocode error: $e');
-      // Not critical — the coordinates are still shown.
-    }
-    if (mounted) setState(() => _isReverseGeocoding = false);
+
+    final result = await const ReverseGeocodeService().lookupWithDeviceFallback(
+      latitude: _center.latitude,
+      longitude: _center.longitude,
+    );
+    if (!mounted) return;
+
+    final label = result?.areaLabel.trim() ?? '';
+    setState(() {
+      _isReverseGeocoding = false;
+      _addressPreview = label.isEmpty ? null : label;
+    });
   }
 
-  void _confirm() {
+  Future<void> _confirm() async {
+    // Make sure the preview belongs to the current pin even if the user
+    // tapped before the drag debounce fired.
+    await _reverseGeocode();
+    if (!mounted) return;
+
     final address = (_addressPreview == null || _addressPreview!.trim().isEmpty)
         ? '${_center.latitude.toStringAsFixed(5)}, '
-            '${_center.longitude.toStringAsFixed(5)}'
+              '${_center.longitude.toStringAsFixed(5)}'
         : _addressPreview!.trim();
     Navigator.of(context).pop<StoreLocationResult>((
       address: address,
@@ -334,6 +340,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
               onPositionChanged: (position, hasGesture) {
                 if (hasGesture && mounted) {
                   setState(() => _center = position.center);
+                  _scheduleReverseGeocode();
                 }
               },
             ),
@@ -348,7 +355,8 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
               const RichAttributionWidget(
                 attributions: [
                   TextSourceAttribution(
-                      '© MapTiler © OpenStreetMap contributors'),
+                    '© MapTiler © OpenStreetMap contributors',
+                  ),
                 ],
                 showFlutterMapAttribution: false,
               ),
@@ -396,7 +404,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
 
           // My location (bottom-right, above the confirm sheet)
           Positioned(
-            bottom: 190,
+            bottom: 220,
             right: 16,
             child: _circleButton(
               icon: Icons.my_location,
@@ -413,8 +421,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
               child: Center(
                 child: Card(
                   child: Padding(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -441,12 +448,17 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
               child: Card(
                 color: Colors.white.withValues(alpha: 0.95),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline,
-                          size: 18, color: AppConstants.primary),
+                      const Icon(
+                        Icons.info_outline,
+                        size: 18,
+                        color: AppConstants.primary,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -502,7 +514,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Store location',
+                    'Store Location',
                     style: AppConstants.bodyStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -510,34 +522,42 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
                   ),
                   const SizedBox(height: 4),
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       if (_isReverseGeocoding) ...[
                         const SizedBox(
                           width: 14,
                           height: 14,
-                          child: Padding(
-                            padding: EdgeInsets.only(top: 2),
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                       ],
                       Expanded(
                         child: Text(
                           _addressPreview ??
-                              '${_center.latitude.toStringAsFixed(5)}, '
-                                  '${_center.longitude.toStringAsFixed(5)}',
+                              (_isLocating
+                                  ? 'Finding your location…'
+                                  : 'Pinned location'),
                           style: AppConstants.bodyStyle(
-                            fontSize: 13,
-                            color: AppConstants.secondary.withValues(alpha: 0.8),
-                            height: 1.4,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${_center.latitude.toStringAsFixed(5)}, '
+                    '${_center.longitude.toStringAsFixed(5)}',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      color: AppConstants.secondary.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Text(
                     'Search or drag the pin to adjust the exact spot.',
                     style: AppConstants.bodyStyle(
@@ -579,7 +599,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
         onTapOutside: (_) => FocusScope.of(context).unfocus(),
         style: AppConstants.bodyStyle(fontSize: 14),
         decoration: InputDecoration(
-          hintText: 'Search for your street, barangay, or town',
+          hintText: 'Search for your store address, barangay, or landmark',
           hintStyle: AppConstants.bodyStyle(
             fontSize: 13,
             color: AppConstants.secondary.withValues(alpha: 0.4),
@@ -588,7 +608,10 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
             padding: EdgeInsets.only(left: 14, right: 8),
             child: Icon(Icons.search, size: 20, color: AppConstants.secondary),
           ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 0,
+            minHeight: 0,
+          ),
           suffixIcon: _isSearchLoading
               ? const Padding(
                   padding: EdgeInsets.only(right: 14),

@@ -5,7 +5,7 @@
 **Updated:** September 28, 2026 — initial flag: the gap inventory below was verified by inspection, not estimated
 **Owner:** Mobile (Flutter/iOS) + Product
 **Status:** 🚩 **FLAGGED — not started.** Decision taken 2026-09-28: **the app will be made downloadable on iOS "soon"**. Nothing in this document has been built yet; the inventory is the starting point, not a plan that has begun
-**Umbrella roadmap:** `docs/RoadMap/SOLEVISION_ROADMAP.md` Phase 9 ("Platform Expansion")
+**Umbrella roadmap:** `docs/RoadMap/CUFMAI_ROADMAP.md` Phase 9 ("Platform Expansion")
 **Related:** `docs/RoadMap/VIRTUAL_FITTING_ROADMAP.md` (AR is Android-first — iOS/ARKit parity is explicitly out of scope there), `docs/AI/SHARE_PRODUCT_ARCHITECTURE.md` (Universal Links, domain-gated), `lib/widgets/update_overlay.dart` + `lib/screens/shared/whats_new_screen.dart` (the iOS update path is a static stub today)
 
 ---
@@ -45,7 +45,7 @@ Each of these must be closed before an iPhone user can install the app.
 | **B2** | **Signing unconfigured.** `CODE_SIGN_STYLE = Automatic` with **no `DEVELOPMENT_TEAM`** and no provisioning profile → an archive cannot be signed or uploaded. Requires a paid Apple Developer Program membership (also required for TestFlight) | `ios/Runner.xcodeproj/project.pbxproj` (no `DEVELOPMENT_TEAM` key) | Small |
 | **B3** | **CocoaPods never resolved.** **No `ios/Podfile` and no `Podfile.lock`** → `flutter build ios` / `pod install` has never run in this repo, so iOS dependency resolution is unproven against the 28 registered native plugins | `ls ios/Podfile ios/Podfile.lock` → both absent | Small |
 | **B4** | **Firebase iOS config file missing.** Only `android/app/google-services.json` exists; there is **no `ios/Runner/GoogleService-Info.plist`** → `firebase_core` initialisation and `firebase_messaging` push would fail on iOS. Needs an APNs auth key uploaded to Firebase | `find . -name GoogleService-Info.plist` → no result | Small |
-| **B5** | **Bundle identity undecided.** Two identifiers in play (`com.solevision.app`, `com.cufmai.solvision.checkout`) and a third-party brand question between the SoleVision project name and the shipped `CUFMAI` display name. App Store Connect requires one canonical, permanent identifier and one public name | `project.pbxproj:385,564,586`; `Info.plist` | Small |
+| **B5** | **Bundle identity undecided.** Two identifiers in play (`com.solevision.app`, `com.cufmai.solvision.checkout`) and a third-party brand question between the CUFMAI project name and the shipped `CUFMAI` display name. App Store Connect requires one canonical, permanent identifier and one public name | `project.pbxproj:385,564,586`; `Info.plist` | Small |
 | **B6** | **Export-compliance key absent.** `Info.plist` has no `ITSAppUsesNonExemptEncryption`, so every upload stalls on the export-compliance question — and the app ships `flutter_secure_storage` / `crypto`, which makes the answer non-trivial | `ios/Runner/Info.plist` | Small |
 | **B7** | **Privacy disclosures unwritten.** The app uses `camera`, `google_mlkit_*`, `image_picker`, `geolocator`, `local_auth`, `shared_preferences`, `path_provider`, `flutter_secure_storage`, plus FCM — all of which need App Store privacy nutrition labels and, for camera/photo use, a written justification. Biometric + location are review-sensitive | `pubspec.yaml` dependencies | Medium |
 | **B8** | **No iOS build automation.** No macOS runner anywhere; a tag produces only an `.apk`. TestFlight uplifts must be scripted or they will be hand-made every release | `.github/workflows/release.yml`, `.github/workflows/ci.yml` | Medium |
@@ -67,7 +67,7 @@ Ordered so each one unblocks the next. Effort units as in the other roadmaps: Sm
 | **I2** | First real iOS build | On a Mac: `flutter pub get` → `flutter build ios --no-codesign` → fix whatever the plugin set surfaces; **commit `ios/Podfile` and `Podfile.lock`** | I1 | Small–Medium |
 | **I3** | Firebase iOS | Add the iOS app in the Firebase console, drop in `GoogleService-Info.plist`, upload the APNs auth key, confirm `firebase_options.dart`'s iOS entry matches, verify a push arrives | I1, I2 | Small |
 | **I4** | Info.plist hardening | Add `ITSAppUsesNonExemptEncryption`; re-check every purpose string against what the app actually does; confirm iPad orientations (`UIInterfaceOrientation*~ipad`) are genuinely supported | I2 | Small |
-| **I5** | Listing & review pack | Public name decision (CUFMAI vs SoleVision), subtitle/description, screenshots for the required device sizes, privacy nutrition labels (B7), age rating, review notes explaining biometric login, camera scanning and why location is asked for | I4 | Medium |
+| **I5** | Listing & review pack | Public name decision (CUFMAI vs CUFMAI), subtitle/description, screenshots for the required device sizes, privacy nutrition labels (B7), age rating, review notes explaining biometric login, camera scanning and why location is asked for | I4 | Medium |
 | **I6** | TestFlight + release automation | macOS CI job (or a scripted local path) that archives, exports an `.ipa` and uploads to TestFlight using an App Store Connect API key; extend `releases/version.json` with an iOS field | I2, I3 | Medium |
 | **I7** | In-app update parity | Point the iOS branch of the update overlay / What's-New screen at the real App Store listing; audit `lib/services/update_checker.dart`, which is Android-oriented | I5 | Small |
 | **I8** | *(deferred)* ARKit parity | Only if iOS AR becomes a goal in its own right — see `VIRTUAL_FITTING_ROADMAP.md` | — | Very Large |
@@ -91,7 +91,7 @@ The flag can only be cleared when **all** of these hold:
 | # | Decision | Why it matters |
 |---|---|---|
 | **D1** | Canonical bundle identifier | Permanent once published; drives signing, Firebase, Universal Links and push |
-| **D2** | Public app name (CUFMAI vs SoleVision) | Listing + brand; the binary currently says `CUFMAI` |
+| **D2** | Public app name (CUFMAI vs CUFMAI) | Listing + brand; the binary currently says `CUFMAI` |
 | **D3** | Does iOS v1 need push notifications? | No → B4/I3 can slip; Yes → I3 is on the critical path |
 | **D4** | Does iOS v1 need AR try-on? | Recommended **no** (Android-first per `VIRTUAL_FITTING_ROADMAP.md`), otherwise add I8 |
 | **D5** | Who owns the Apple Developer account and the $99/yr membership | Blocks I1 entirely |

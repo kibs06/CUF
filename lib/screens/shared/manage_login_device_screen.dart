@@ -8,6 +8,7 @@ import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/device_trust_service.dart';
 import '../../services/login_challenge_service.dart';
+import 'change_password_screen.dart';
 
 /// Manage Login Device screen — shows the current device and lets the user
 /// review or log out of their CUFMAI account.
@@ -81,7 +82,10 @@ class _ManageLoginDeviceScreenState extends State<ManageLoginDeviceScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppConstants.surfaceLight,
-        title: Text('Remove this device?', style: AppConstants.headlineStyle(fontSize: 17)),
+        title: Text(
+          'Remove this device?',
+          style: AppConstants.headlineStyle(fontSize: 17),
+        ),
         content: Text(
           '${device.displayLabel} will need an emailed code the next time '
           'someone signs in from it.',
@@ -105,9 +109,11 @@ class _ManageLoginDeviceScreenState extends State<ManageLoginDeviceScreen> {
     try {
       await _challenge.revokeDevice(device.deviceId);
       if (!mounted) return;
-      setState(() => _trusted = _trusted
-          ?.where((d) => d.deviceId != device.deviceId)
-          .toList());
+      setState(
+        () => _trusted = _trusted
+            ?.where((d) => d.deviceId != device.deviceId)
+            .toList(),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Device removed.'),
@@ -144,8 +150,18 @@ class _ManageLoginDeviceScreenState extends State<ManageLoginDeviceScreen> {
       return '$d day${d == 1 ? '' : 's'} ago';
     }
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[time.month - 1]} ${time.day}, ${time.year}';
   }
@@ -305,7 +321,9 @@ class _ManageLoginDeviceScreenState extends State<ManageLoginDeviceScreen> {
                             'To log out all other devices, change your password. This will end all other active sessions.',
                             style: AppConstants.bodyStyle(
                               fontSize: 13,
-                              color: AppConstants.secondary.withValues(alpha: 0.6),
+                              color: AppConstants.secondary.withValues(
+                                alpha: 0.6,
+                              ),
                               height: 1.4,
                             ),
                           ),
@@ -318,26 +336,23 @@ class _ManageLoginDeviceScreenState extends State<ManageLoginDeviceScreen> {
                       height: 44,
                       child: OutlinedButton.icon(
                         onPressed: () async {
-                          final email = auth.displayEmail;
-                          final success = await auth.resetPassword(email);
-                          if (!mounted) return;
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                success
-                                    ? 'Password reset email sent to ${auth.displayEmail}'
-                                    : auth.errorMessage ?? 'Unable to send reset email.',
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ChangePasswordScreen(
+                                email: auth.displayEmail,
+                                // The button's own promise: the change ends
+                                // every OTHER session, this one stays.
+                                onSubmit: (newPassword) => auth.changePassword(
+                                  newPassword,
+                                  signOutOtherDevices: true,
+                                ),
                               ),
-                              backgroundColor:
-                                  success ? AppConstants.success : AppConstants.error,
                             ),
                           );
+                          if (!mounted) return;
+                          await _loadTrustedDevices();
                         },
-                        icon: const Icon(
-                          Icons.lock_reset_outlined,
-                          size: 18,
-                        ),
+                        icon: const Icon(Icons.lock_reset_outlined, size: 18),
                         label: Text(
                           'Change Password to Log Out All Devices',
                           style: AppConstants.bodyStyle(

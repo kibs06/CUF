@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.jsx'
-import { useAdminNotifications } from '../../hooks/useAdminNotifications.js'
+import {
+  useAdminNotificationFeed,
+  useAdminNotifications,
+  useMarkAdminNotificationRead,
+} from '../../hooks/useAdminNotifications.js'
 import AvatarInitials from '../ui/AvatarInitials.jsx'
 import {
   AlertTriangle,
@@ -17,6 +21,18 @@ import {
   Store,
 } from 'lucide-react'
 
+function formatWhen(value) {
+  if (!value) return ''
+  const at = new Date(value)
+  if (Number.isNaN(at.getTime())) return ''
+  const minutes = Math.round((Date.now() - at.getTime()) / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours} h ago`
+  return at.toLocaleDateString()
+}
+
 export default function TopBar({ title, subtitle, onMenuClick }) {
   const { profile, signOut } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -29,6 +45,10 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
     isError: notificationsError,
     refetch: refetchNotifications,
   } = useAdminNotifications()
+  const { data: alertFeed } = useAdminNotificationFeed()
+  const markRead = useMarkAdminNotificationRead()
+  const alertItems = alertFeed?.rows ?? []
+  const unreadAlerts = alertFeed?.unread ?? 0
 
   useEffect(() => {
     if (!menuOpen) return undefined
@@ -101,7 +121,8 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
     },
   ].filter((item) => item.count > 0)
 
-  const notificationTotal = notificationItems.reduce((sum, item) => sum + item.count, 0)
+  const notificationTotal =
+    notificationItems.reduce((sum, item) => sum + item.count, 0) + unreadAlerts
   const notificationBadge = notificationTotal > 99 ? '99+' : notificationTotal
 
   return (
@@ -199,7 +220,7 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
                     Try again
                   </button>
                 </div>
-              ) : notificationItems.length === 0 ? (
+              ) : notificationItems.length === 0 && alertItems.length === 0 ? (
                 <div className="px-5 py-7 text-center">
                   <CheckCircle2 size={22} strokeWidth={1.8} className="mx-auto text-accent" />
                   <p className="mt-2 text-[12.5px] font-semibold text-ink">
@@ -211,6 +232,70 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
                 </div>
               ) : (
                 <div className="divide-y divide-border/70">
+                  {alertItems.length > 0 && (
+                    <div className="bg-canvas/40">
+                      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-2.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                          Payment mode alerts
+                        </p>
+                        {unreadAlerts > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              markRead.mutate(
+                                alertItems.filter((row) => !row.is_read).map((row) => row.id),
+                              )
+                            }
+                            disabled={markRead.isPending}
+                            className="text-[10.5px] font-semibold text-primary transition-colors hover:text-primary/80 disabled:opacity-50"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                      </div>
+                      <div className="divide-y divide-border/70">
+                        {alertItems.map((alert) => (
+                          <div
+                            key={alert.id}
+                            className={`flex items-start gap-3 px-4 py-2.5 ${
+                              alert.is_read ? '' : 'bg-errorSoft/40'
+                            }`}
+                          >
+                            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-errorSoft text-error">
+                              <AlertTriangle size={14} strokeWidth={2} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-semibold leading-snug text-ink">
+                                {alert.title}
+                              </p>
+                              <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
+                                {alert.body}
+                              </p>
+                              <p className="mt-1 font-mono text-[10px] text-muted/80">
+                                {formatWhen(alert.created_at)}
+                              </p>
+                            </div>
+                            {alert.is_read ? (
+                              <CheckCircle2
+                                size={13}
+                                strokeWidth={2}
+                                className="mt-1 shrink-0 text-accent"
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => markRead.mutate([alert.id])}
+                                disabled={markRead.isPending}
+                                className="shrink-0 rounded-lg border border-border px-2 py-1 text-[10.5px] font-semibold text-ink transition-colors hover:bg-white disabled:opacity-50"
+                              >
+                                Mark read
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {notificationItems.map(({ key, label, hint, count, to, icon: Icon, tone }) => (
                     <Link
                       key={key}

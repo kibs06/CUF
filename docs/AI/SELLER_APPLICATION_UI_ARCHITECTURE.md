@@ -1,4 +1,4 @@
-# SoleVision — Seller Application UI Architecture
+# CUFMAI — Seller Application UI Architecture
 
 > Condensed, UI-focused reference for AI agents working on the seller
 > application screens. Derived from the live codebase:
@@ -70,7 +70,7 @@ routes — one route whose body swaps between steps with an
 
 - **Eyebrow:** `SELLER APPLICATION` (small-caps, brand color, letter-spaced)
 - **Title:** `Create your seller account` (serif display, 30px)
-- **Subtitle:** `Step 1 of 4 — your login details for SoleVision.`
+- **Subtitle:** `Step 1 of 4 — your login details for CUFMAI.`
 - **Stepper:** 4 numbered circles (Account → Identity → Community → Storefront)
 - **Fields:** Full Name, Email Address, Phone Number, Password, Confirm
   Password — each a label above a white rounded box with a left icon
@@ -139,7 +139,7 @@ inside the read-and-agree flow would be stored but never repainted.
 - `ctrl.nextStep() / backStep() / jumpToStep(i)` mutate `_step` and
   `notifyListeners()`. Step is zero-based (`0..3`).
 - Titles/subtitles are derived per step:
-  - 0 · `Create your seller account` / `Step 1 of 4 — your login details for SoleVision.`
+  - 0 · `Create your seller account` / `Step 1 of 4 — your login details for CUFMAI.`
   - 1 · `Verify your identity` / `Step 2 of 4 — a government ID and a selfie help admins confirm it's really you.`
   - 2 · `Prove your community link` / `Step 3 of 4 — CUFMAI membership, or a barangay proof if you're not a member.`
   - 3 · `Set up your storefront` / `Step 4 of 4 — how customers will find you, and where your earnings go.`
@@ -262,7 +262,7 @@ Policy…").
     name + photo.
   - **Liveness selfie** — "Selfie", clear face photo.
 - Privacy `_InfoBanner` (lock icon): photos are private and only seen by
-  SoleVision admins.
+  CUFMAI admins.
 - **Continue** is gated on both docs being non-empty; if missing, a red
   SnackBar names what's required (no form validation, just doc presence).
 
@@ -291,7 +291,7 @@ The tile renders whatever state the controller gives it:
 
 ## Step 3 · Community (`_CommunityStep`)
 
-- Explainer `_InfoBanner` (people icon) on why SoleVision asks (Carcar City
+- Explainer `_InfoBanner` (people icon) on why CUFMAI asks (Carcar City
   shoe artisans marketplace).
 - **`SegmentedButton<bool>`** toggle: `CUFMAI member` (badge icon) vs
   `Not a member` (home icon). Style: selected bg `primary @ 12%`,

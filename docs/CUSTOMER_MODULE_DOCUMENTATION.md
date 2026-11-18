@@ -1,8 +1,8 @@
-# SoleVision — Customer Module Documentation
+# CUFMAI — Customer Module Documentation
 
 **Version:** 1.0.0  
 **Last Updated:** July 16, 2026  
-**Purpose:** Complete reference for the Customer-facing side of the SoleVision app.
+**Purpose:** Complete reference for the Customer-facing side of the CUFMAI app.
 
 ---
 
@@ -27,7 +27,7 @@
 
 ## 1. Overview
 
-The Customer module is the primary buyer-facing side of SoleVision. It allows customers to:
+The Customer module is the primary buyer-facing side of CUFMAI. It allows customers to:
 
 - Browse artisan footwear from multiple stores
 - Search and filter products by category
@@ -1170,4 +1170,4 @@ void _buyNow() {
 
 ---
 
-*SoleVision Customer Module Documentation v1.0.0 — July 16, 2026*
+*CUFMAI Customer Module Documentation v1.0.0 — July 16, 2026*

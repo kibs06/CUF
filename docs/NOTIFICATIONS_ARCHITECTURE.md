@@ -1,4 +1,4 @@
-# SoleVision — Notifications System Architecture
+# CUFMAI — Notifications System Architecture
 
 **Version:** 1.0.0  
 **Last Updated:** July 16, 2026  
@@ -24,7 +24,7 @@
 
 ## 1. Overview
 
-SoleVision has **three notification systems** that work together:
+CUFMAI has **three notification systems** that work together:
 
 | System | Scope | Table | Purpose |
 |--------|-------|-------|---------|
@@ -875,4 +875,4 @@ Badge shows `unreadBadge` ("9+" if > 9). Tapping navigates to `SellerNotificatio
 
 ---
 
-*SoleVision Notifications Architecture v1.0.0 — July 16, 2026*
+*CUFMAI Notifications Architecture v1.0.0 — July 16, 2026*

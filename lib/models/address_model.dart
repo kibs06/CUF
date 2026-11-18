@@ -9,6 +9,7 @@ class Address {
   final String province;
   final String cityMunicipality;
   final String barangay;
+  final String purok;
   final String streetAddress;
   final String? landmark;
   final double latitude;
@@ -27,6 +28,7 @@ class Address {
     required this.province,
     required this.cityMunicipality,
     required this.barangay,
+    this.purok = '',
     required this.streetAddress,
     this.landmark,
     required this.latitude,
@@ -37,27 +39,38 @@ class Address {
   });
 
   /// Full formatted address line (e.g. for display on cards / checkout).
-  String get formattedAddress =>
-      '$streetAddress, $barangay, $cityMunicipality, $province, $region';
+  String get formattedAddress => [
+    streetAddress,
+    purok,
+    barangay,
+    cityMunicipality,
+    province,
+    region,
+  ].where((part) => part.trim().isNotEmpty).join(', ');
 
   /// Compact one-line display for checkout.
-  String get shortAddress =>
-      '$barangay, $cityMunicipality, $province';
+  String get shortAddress => [
+    purok,
+    barangay,
+    cityMunicipality,
+    province,
+  ].where((part) => part.trim().isNotEmpty).join(', ');
 
   /// Snapshot as JSONB for storing on the orders table.
   Map<String, dynamic> toSnapshot() => {
-        'label': label,
-        'recipient_name': recipientName,
-        'recipient_phone': recipientPhone,
-        'region': region,
-        'province': province,
-        'city_municipality': cityMunicipality,
-        'barangay': barangay,
-        'street_address': streetAddress,
-        'landmark': landmark,
-        'latitude': latitude,
-        'longitude': longitude,
-      };
+    'label': label,
+    'recipient_name': recipientName,
+    'recipient_phone': recipientPhone,
+    'region': region,
+    'province': province,
+    'city_municipality': cityMunicipality,
+    'barangay': barangay,
+    'purok': purok,
+    'street_address': streetAddress,
+    'landmark': landmark,
+    'latitude': latitude,
+    'longitude': longitude,
+  };
 
   factory Address.fromMap(Map<String, dynamic> map) {
     return Address(
@@ -70,6 +83,7 @@ class Address {
       province: map['province']?.toString() ?? '',
       cityMunicipality: map['city_municipality']?.toString() ?? '',
       barangay: map['barangay']?.toString() ?? '',
+      purok: map['purok']?.toString() ?? '',
       streetAddress: map['street_address']?.toString() ?? '',
       landmark: map['landmark']?.toString(),
       latitude: (map['latitude'] as num?)?.toDouble() ?? 0.0,
@@ -95,6 +109,7 @@ class Address {
       province: snap['province']?.toString() ?? '',
       cityMunicipality: snap['city_municipality']?.toString() ?? '',
       barangay: snap['barangay']?.toString() ?? '',
+      purok: snap['purok']?.toString() ?? '',
       streetAddress: snap['street_address']?.toString() ?? '',
       landmark: snap['landmark']?.toString(),
       latitude: (snap['latitude'] as num?)?.toDouble() ?? 0.0,
@@ -103,35 +118,37 @@ class Address {
   }
 
   Map<String, dynamic> toInsertMap() => {
-        'user_id': userId,
-        'label': label,
-        'recipient_name': recipientName,
-        'recipient_phone': recipientPhone,
-        'region': region,
-        'province': province,
-        'city_municipality': cityMunicipality,
-        'barangay': barangay,
-        'street_address': streetAddress,
-        'landmark': landmark,
-        'latitude': latitude,
-        'longitude': longitude,
-        'is_default': isDefault,
-      };
+    'user_id': userId,
+    'label': label,
+    'recipient_name': recipientName,
+    'recipient_phone': recipientPhone,
+    'region': region,
+    'province': province,
+    'city_municipality': cityMunicipality,
+    'barangay': barangay,
+    'purok': purok,
+    'street_address': streetAddress,
+    'landmark': landmark,
+    'latitude': latitude,
+    'longitude': longitude,
+    'is_default': isDefault,
+  };
 
   Map<String, dynamic> toUpdateMap() => {
-        'label': label,
-        'recipient_name': recipientName,
-        'recipient_phone': recipientPhone,
-        'region': region,
-        'province': province,
-        'city_municipality': cityMunicipality,
-        'barangay': barangay,
-        'street_address': streetAddress,
-        'landmark': landmark,
-        'latitude': latitude,
-        'longitude': longitude,
-        'is_default': isDefault,
-      };
+    'label': label,
+    'recipient_name': recipientName,
+    'recipient_phone': recipientPhone,
+    'region': region,
+    'province': province,
+    'city_municipality': cityMunicipality,
+    'barangay': barangay,
+    'purok': purok,
+    'street_address': streetAddress,
+    'landmark': landmark,
+    'latitude': latitude,
+    'longitude': longitude,
+    'is_default': isDefault,
+  };
 
   Address copyWith({
     String? id,
@@ -143,6 +160,7 @@ class Address {
     String? province,
     String? cityMunicipality,
     String? barangay,
+    String? purok,
     String? streetAddress,
     String? landmark,
     double? latitude,
@@ -159,6 +177,7 @@ class Address {
       province: province ?? this.province,
       cityMunicipality: cityMunicipality ?? this.cityMunicipality,
       barangay: barangay ?? this.barangay,
+      purok: purok ?? this.purok,
       streetAddress: streetAddress ?? this.streetAddress,
       landmark: landmark ?? this.landmark,
       latitude: latitude ?? this.latitude,

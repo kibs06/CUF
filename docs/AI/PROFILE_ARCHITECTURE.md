@@ -1,6 +1,6 @@
-# SoleVision — Profile Architecture
+# CUFMAI — Profile Architecture
 
-> **Purpose:** This document gives another AI agent everything it needs to understand, navigate, and modify profile-related code in the SoleVision Flutter app. Read this before touching any profile file.
+> **Purpose:** This document gives another AI agent everything it needs to understand, navigate, and modify profile-related code in the CUFMAI Flutter app. Read this before touching any profile file.
 
 ---
 
@@ -237,7 +237,7 @@ This is the **main profile screen** used by customers. It is a `StatefulWidget` 
    - Phone Number (editable TextField)
    - Save Changes button
 3. **Notifications Panel** — "My Orders" row with 5 category icons (Unpaid, Processing, Shipped, Review, Returns) showing real per-tab order counts (from `OrderProvider.myOrdersCounts`)
-4. **Settings Card** — Change Password, Terms & Privacy, Help & Support, About SoleVision
+4. **Settings Card** — Change Password, Terms & Privacy, Help & Support, About CUFMAI
 5. **Seller Section** (if `userRole == 'seller'`) — Store link, Seller Status chip, Member Since
 6. **Logout Button** — Confirmation dialog → `auth.logout()`
 

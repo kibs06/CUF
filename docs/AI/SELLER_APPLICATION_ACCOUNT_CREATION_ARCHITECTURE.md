@@ -8,7 +8,7 @@
 
 | Entry | Trigger | Notes |
 |---|---|---|
-| `AccountEntryScreen` → role choice | New user selects "Sell on SoleVision" | Fresh application, draft-eligible |
+| `AccountEntryScreen` → role choice | New user selects "Sell on CUFMAI" | Fresh application, draft-eligible |
 | `EditProfileScreen` → "Re-apply" | Rejected seller taps re-apply | Prefills from existing profile (`prefillProfile`), no password collected, `isReapply = true` |
 | Dev mode bypass | `DevMode.instance.isEnabled` | Skips validation at each step, creates a real PENDING account with null documents on submit |
 

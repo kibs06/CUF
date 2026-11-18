@@ -171,7 +171,7 @@ for eid, (src, tgt, ex, en, pts) in enumerate(EDGES):
     )
 
 out = ['<?xml version="1.0" encoding="UTF-8"?>',
-       '<mxfile host="Electron" agent="SoleVision ERD generator">',
+       '<mxfile host="Electron" agent="CUFMAI ERD generator">',
        '  <diagram id="p1" name="ERD - 1 page (Capstone)">',
        '    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">',
        '      <root>',

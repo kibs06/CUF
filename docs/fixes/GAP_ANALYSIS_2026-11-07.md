@@ -1,8 +1,8 @@
-# CUFMAI / SoleVision — Gap Analysis (2026-11-07)
+# CUFMAI — Gap Analysis (2026-11-07)
 
 Source: full-repo search of Flutter `lib/`, `admin-portal/`, `customer-portal/`, `supabase/migrations + functions + tests`, `docs/` (roadmaps, handoff, AI notes), plus code search for `TODO / coming soon / placeholder / stub`.
 
-> Note: `docs/RoadMap/SOLEVISION_ROADMAP.md` still says "38 tests, ~5% coverage" — `test/` now holds **228 Dart test files** plus 14 pgTAP suites. Treat coverage numbers in older docs as stale.
+> Note: `docs/RoadMap/CUFMAI_ROADMAP.md` still says "38 tests, ~5% coverage" — `test/` now holds **228 Dart test files** plus 14 pgTAP suites. Treat coverage numbers in older docs as stale.
 
 ## 1. Mobile app (Flutter) — unfinished surfaces
 

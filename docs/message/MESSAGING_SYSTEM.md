@@ -1,4 +1,4 @@
-# SoleVision — Real-Time Messaging System
+# CUFMAI — Real-Time Messaging System
 
 **Last Updated:** July 14, 2026  
 **Purpose:** Complete reference for AI agents working on the Seller-Customer messaging feature.  
@@ -543,4 +543,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 
 ---
 
-*SoleVision Messaging System Documentation — July 14, 2026*
+*CUFMAI Messaging System Documentation — July 14, 2026*

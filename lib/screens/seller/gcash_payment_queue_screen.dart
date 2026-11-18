@@ -5,17 +5,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
 import '../../services/direct_gcash_service.dart';
-import '../../widgets/sole_card.dart';
-import '../../widgets/sole_primary_button.dart';
+import '../../widgets/gcash_flow_kit.dart';
+import 'gcash_ref_scanner_screen.dart';
+import 'seller_earnings_screen.dart';
 
 /// Seller-facing queue of gateway-free GCash orders waiting for the
 /// seller to confirm (or reject) the customer's proof of payment.
 ///
-/// The seller cross-checks the submitted GCash reference number +
-/// screenshot against their own GCash app, then taps Confirm (order
-/// enters the normal pipeline) or Reject (order cancelled, stock
-/// released, customer notified). Only the store owner can act — the RPCs
-/// enforce this server-side.
+/// The seller cross-checks the submitted GCash reference number, sender name,
+/// amount and screenshot against the PLATFORM GCash statement, then taps
+/// Verify & accept (order enters the normal pipeline) or Reject (the customer
+/// can resubmit; the 3rd rejection cancels and releases stock). Only the store
+/// owner can act — the RPCs enforce this server-side.
 class GcashPaymentQueueScreen extends StatefulWidget {
   const GcashPaymentQueueScreen({super.key});
 
@@ -86,12 +87,16 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
       final orders = await client
           .from('orders')
           .select(
-            'id, customer_id, total_amount, payment_confirmation_deadline, '
-            'created_at, gcash_payment_proofs(*), '
+            'id, customer_id, total_amount, order_code, '
+            'payment_confirmation_deadline, review_deadline, '
+            'created_at, payment_flagged, gcash_payment_proofs(*), '
             'profiles!orders_customer_id_fkey(full_name)',
           )
           .eq('store_id', storeId)
-          .eq('status', 'awaiting_payment_confirmation')
+          // Only proofs awaiting a decision. A submitted proof means the
+          // money may already be in the platform account, so these never
+          // expire on a timer.
+          .eq('status', 'payment_under_review')
           .order('created_at', ascending: false);
 
       final list = (orders as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -160,11 +165,17 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirm payment received?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Verify this payment?',
+          style: AppConstants.headlineStyle(fontSize: 19),
+        ),
         content: Text(
-          'Order #$shortId — mark as paid and start preparing? Make sure the '
-          'reference number matches a real GCash transaction in your app.',
+          'Order #$shortId — check that the reference, sender name and amount '
+          'match a real GCash transaction in the PLATFORM account before you '
+          'accept. Accepting starts preparation; CUFMAI pays you out at '
+          'the end of the day once the admin confirms the money landed.',
+          style: AppConstants.bodyStyle(fontSize: 13, height: 1.4),
         ),
         actions: [
           TextButton(
@@ -173,7 +184,7 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm Received'),
+            child: const Text('Verify & Accept'),
           ),
         ],
       ),
@@ -181,7 +192,7 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await _service.confirmPayment(orderId);
+      await _service.verifyPayment(orderId);
       if (!mounted) return;
       setState(() => _orders.removeWhere((o) => o['id'].toString() == orderId));
       if (_storeId != null) {
@@ -189,7 +200,7 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Payment confirmed — order is now in your queue.'),
+          content: Text('Payment verified — order is now in your queue.'),
           backgroundColor: AppConstants.success,
         ),
       );
@@ -214,15 +225,20 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
     final rejected = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Reject payment?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Reject this proof?',
+          style: AppConstants.headlineStyle(fontSize: 19),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Order #$shortId will be cancelled and the items released back '
-              'to stock. The customer will see your reason.',
+              'Order #$shortId goes back to the customer with your reason so '
+              'they can submit a corrected proof. On their 3rd rejection the '
+              'order is cancelled and the items released to stock.',
+              style: AppConstants.bodyStyle(fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -232,7 +248,7 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
                 labelText: 'Reason (shown to the customer)',
                 hintText: 'e.g. No matching GCash transaction found',
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
             ),
@@ -256,7 +272,7 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
     if (rejected != true || !mounted) return;
 
     try {
-      await _service.rejectPayment(orderId, reasonController.text.trim());
+      await _service.rejectProof(orderId, reasonController.text.trim());
       if (!mounted) return;
       setState(() => _orders.removeWhere((o) => o['id'].toString() == orderId));
       if (_storeId != null) {
@@ -264,7 +280,9 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Payment rejected — order cancelled, stock released.'),
+          content: Text(
+            'Proof rejected — the customer can correct it (3 attempts total).',
+          ),
           backgroundColor: AppConstants.success,
         ),
       );
@@ -286,8 +304,8 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
         title: Text(
-          'Payments to Confirm',
-          style: AppConstants.headlineStyle(fontSize: 20),
+          'Payments to confirm',
+          style: AppConstants.headlineStyle(fontSize: 19),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -295,6 +313,20 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
           icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Earnings & payouts',
+            icon: Icon(
+              Icons.account_balance_wallet_outlined,
+              color: AppConstants.secondary,
+            ),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SellerEarningsScreen(),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -337,9 +369,10 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
               ),
               const SizedBox(height: 16),
               SizedBox(
-                width: 160,
-                child: SolePrimaryButton(
+                width: 180,
+                child: GcashPrimaryButton(
                   label: 'Retry',
+                  icon: Icons.refresh,
                   onPressed: _load,
                 ),
               ),
@@ -348,72 +381,90 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
         ),
       );
     }
-    if (_orders.isEmpty) {
-      return RefreshIndicator(
-        color: AppConstants.primary,
-        onRefresh: _load,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 24),
-          children: [
-            const SizedBox(height: 120),
-            const Icon(
-              Icons.check_circle_outline,
-              size: 52,
-              color: AppConstants.success,
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: Text(
-                'Nothing to confirm',
-                style: AppConstants.bodyStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Center(
-              child: Text(
-                'New GCash orders waiting for your confirmation\nwill appear here.',
-                textAlign: TextAlign.center,
-                style: AppConstants.bodyStyle(
-                  fontSize: 12,
-                  color: AppConstants.secondary,
-                ),
-              ),
-            ),
-            if (_history.isNotEmpty) ...[
-              const SizedBox(height: 28),
-              _DecisionHistory(history: _history),
-            ],
-          ],
-        ),
-      );
-    }
 
     return RefreshIndicator(
       color: AppConstants.primary,
       onRefresh: _load,
-      child: ListView.builder(
+      child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        itemCount: _orders.length + (_history.isNotEmpty ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index >= _orders.length) {
-            return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 36),
+        children: [
+          GcashRiseIn(
+            child: GcashFlowHeader(
+              eyebrow: 'Manual GCash',
+              title: 'Payments to confirm',
+              description:
+                  'Match each reference, sender name and amount against the '
+                  'platform GCash statement. Accepting releases the order for '
+                  'preparation; rejecting lets the customer correct it.',
+              trailing: _orders.isEmpty
+                  ? null
+                  : GcashStatusPill(
+                      label: '${_orders.length} waiting',
+                      color: AppConstants.statusPendingColor,
+                    ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_orders.isEmpty)
+            GcashRiseIn(
+              order: 1,
+              child: GcashPanel(
+                eyebrow: 'Queue',
+                title: 'Nothing to confirm',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline,
+                          size: 22,
+                          color: AppConstants.success,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'New GCash proofs appear here the moment a '
+                            'customer submits one.',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              height: 1.4,
+                              color: AppConstants.secondary
+                                  .withValues(alpha: 0.75),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...List.generate(_orders.length, (index) {
+              final order = _orders[index];
+              return GcashRiseIn(
+                key: ValueKey(order['id']),
+                order: index > 5 ? 6 : index + 1,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: GcashOrderCard(
+                    order: order,
+                    screenshotUrl: _signedUrls[order['id'].toString()],
+                    now: _now,
+                    onConfirm: () => _confirmOrder(order),
+                    onReject: () => _rejectOrder(order),
+                  ),
+                ),
+              );
+            }),
+          if (_history.isNotEmpty)
+            Padding(
               padding: const EdgeInsets.only(top: 12),
               child: _DecisionHistory(history: _history),
-            );
-          }
-          return _OrderCard(
-            order: _orders[index],
-            screenshotUrl: _signedUrls[_orders[index]['id'].toString()],
-            now: _now,
-            onConfirm: () => _confirmOrder(_orders[index]),
-            onReject: () => _rejectOrder(_orders[index]),
-          );
-        },
+            ),
+        ],
       ),
     );
   }
@@ -436,12 +487,11 @@ class _DecisionHistory extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Text(
-            'Recently decided',
-            style: AppConstants.bodyStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: AppConstants.secondary,
-            ),
+            'RECENTLY DECIDED',
+            style: AppConstants.monoStyle(
+              fontSize: 9.5,
+              color: AppConstants.secondary.withValues(alpha: 0.55),
+            ).copyWith(letterSpacing: 1.8),
           ),
         ),
         const SizedBox(height: 8),
@@ -460,30 +510,24 @@ class _DecisionHistory extends StatelessWidget {
           final reason = e['notes']?.toString().trim() ?? '';
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: SoleCard(
-              color: AppConstants.surfaceLight,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppConstants.primary.withValues(alpha: 0.10),
+                ),
+                color: AppConstants.primary.withValues(alpha: 0.03),
+              ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: (confirmed
-                              ? AppConstants.success
-                              : AppConstants.error)
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      confirmed ? 'Confirmed' : 'Rejected',
-                      style: AppConstants.bodyStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: confirmed
-                            ? AppConstants.success
-                            : AppConstants.error,
-                      ),
-                    ),
+                  GcashStatusPill(
+                    label: confirmed ? 'Confirmed' : 'Rejected',
+                    color: confirmed
+                        ? AppConstants.success
+                        : AppConstants.error,
+                    icon: confirmed ? Icons.check : Icons.close,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -493,16 +537,20 @@ class _DecisionHistory extends StatelessWidget {
                         Text(
                           'Order #$shortId · ₱${total.toStringAsFixed(2)}',
                           style: AppConstants.bodyStyle(
-                            fontSize: 13,
+                            fontSize: 12.5,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           confirmed
                               ? when
-                              : (reason.isNotEmpty ? '$when · $reason' : when),
+                              : (reason.isNotEmpty
+                                  ? '$when · $reason'
+                                  : when),
                           style: AppConstants.bodyStyle(
                             fontSize: 11,
+                            height: 1.3,
                             color: AppConstants.secondary
                                 .withValues(alpha: 0.6),
                           ),
@@ -532,14 +580,15 @@ class _DecisionHistory extends StatelessWidget {
   }
 }
 
-class _OrderCard extends StatelessWidget {
+class GcashOrderCard extends StatelessWidget {
   final Map<String, dynamic> order;
   final String? screenshotUrl;
   final DateTime now;
   final VoidCallback onConfirm;
   final VoidCallback onReject;
 
-  const _OrderCard({
+  const GcashOrderCard({
+    super.key,
     required this.order,
     required this.screenshotUrl,
     required this.now,
@@ -553,8 +602,13 @@ class _OrderCard extends StatelessWidget {
     final shortId =
         orderId.length >= 8 ? orderId.substring(orderId.length - 8) : orderId;
     final total = (order['total_amount'] as num?)?.toDouble() ?? 0;
-    final deadline = DateTime.tryParse(
-      order['payment_confirmation_deadline']?.toString() ?? '',
+    // Every order in this queue is `payment_under_review`: the customer has
+    // already paid, so the 30-minute PAY window is irrelevant (and usually
+    // already past). `review_deadline` is the 24 h advisory SLA, and the
+    // database never cancels a submitted payment — so nothing here may
+    // disable the seller's decision.
+    final reviewDeadline = DateTime.tryParse(
+      order['review_deadline']?.toString() ?? '',
     );
     final customer = order['profiles'] is Map
         ? (order['profiles'] as Map)['full_name']?.toString() ?? 'Customer'
@@ -565,184 +619,275 @@ class _OrderCard extends StatelessWidget {
         ? Map<String, dynamic>.from(proofs.first as Map)
         : null;
     final reference = proof?['reference_number']?.toString() ?? '—';
+    final senderName = proof?['sender_name']?.toString() ?? '—';
+    final amountPaid = (proof?['amount_paid'] as num?)?.toDouble();
+    final code = order['order_code']?.toString() ?? '—';
+    final flagged = order['payment_flagged'] == true;
 
-    final remaining = deadline?.difference(now) ?? Duration.zero;
-    final expired = remaining.isNegative || remaining == Duration.zero;
+    final slaRemaining = reviewDeadline?.difference(now);
+    final slaPassed = slaRemaining != null && slaRemaining.isNegative;
+    final amountMatches = amountPaid != null &&
+        (amountPaid - total).abs() <= 0.009;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: SoleCard(
-        color: AppConstants.surfaceLight,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppConstants.primary.withValues(alpha: 0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.account_balance_wallet_outlined,
-                    size: 20,
-                    color: AppConstants.primary,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Order #$shortId',
-                        style: AppConstants.bodyStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        customer,
-                        style: AppConstants.bodyStyle(
-                          fontSize: 12,
-                          color: AppConstants.secondary.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
+    return GcashPanel(
+      eyebrow: 'Order #$shortId',
+      title: customer,
+      trailing: flagged
+          ? GcashStatusPill(
+              label: 'Flagged',
+              color: AppConstants.error,
+              icon: Icons.flag_outlined,
+            )
+          : GcashStatusPill(
+              label: 'Under review',
+              color: AppConstants.statusPendingColor,
+            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Text(
                   '₱${total.toStringAsFixed(2)}',
                   style: AppConstants.monoStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
                     color: AppConstants.primary,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _row('Reference No.', reference),
-            const SizedBox(height: 6),
-            _row(
-              'Window',
-              expired
-                  ? 'Expired'
-                  : '${_formatDuration(remaining)} left',
-              valueColor: expired
-                  ? AppConstants.error
-                  : AppConstants.statusPendingColor,
-            ),
-            if (proof != null &&
-                (proof['submitted_at']?.toString().isNotEmpty ?? false)) ...[
-              const SizedBox(height: 6),
-              _row(
-                'Submitted',
-                _formatWhen(proof['submitted_at'].toString()),
               ),
-            ],
-            if (screenshotUrl != null && screenshotUrl!.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.network(
-                  screenshotUrl!,
-                  height: 140,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
-                    height: 140,
-                    width: double.infinity,
-                    color: AppConstants.borderGray.withValues(alpha: 0.15),
-                    child: Icon(
-                      Icons.image_not_supported_outlined,
-                      color: AppConstants.secondary,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 14),
-            // T5: the expected amount, prominent and directly above the
-            // seller's decision buttons — the number to cross-check against
-            // their own GCash app, not memory or the screenshot alone.
-            GcashExpectedAmountBanner(total: total),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: expired ? null : onReject,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppConstants.error,
-                      side: BorderSide(
-                        color: AppConstants.error.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: const Text('Reject'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: SizedBox(
-                    height: 44,
-                    child: FilledButton(
-                      onPressed: expired ? null : onConfirm,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppConstants.success,
-                      ),
-                      child: const Text('Confirm Received'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (expired) ...[
-              const SizedBox(height: 8),
               Text(
-                'This window has lapsed — the order was (or will be) '
-                'auto-cancelled and stock released.',
-                style: AppConstants.bodyStyle(
-                  fontSize: 11,
-                  color: AppConstants.error,
-                  height: 1.3,
-                ),
+                'ORDER TOTAL',
+                style: AppConstants.monoStyle(
+                  fontSize: 9,
+                  color: AppConstants.secondary.withValues(alpha: 0.45),
+                ).copyWith(letterSpacing: 1.4),
               ),
             ],
+          ),
+          if (flagged) ...[
+            const SizedBox(height: 10),
+            GcashBanner(
+              icon: Icons.flag_outlined,
+              color: AppConstants.error,
+              text: 'Flagged by the admin — do not accept. Clear the flag from '
+                  'Payment verification before deciding.',
+            ),
           ],
-        ),
+          const SizedBox(height: 14),
+          GcashInsetTile(
+            child: Column(
+              children: [
+                GcashFactRow(label: 'Order code', value: code),
+                GcashFactRow(label: 'Reference', value: reference),
+                GcashFactRow(
+                  label: 'Sender',
+                  value: senderName,
+                  mono: false,
+                ),
+                GcashFactRow(
+                  label: 'Amount sent',
+                  value: amountPaid == null
+                      ? '—'
+                      : '₱${amountPaid.toStringAsFixed(2)}',
+                  valueColor: amountMatches
+                      ? AppConstants.success
+                      : AppConstants.error,
+                ),
+                GcashFactRow(
+                  label: 'Mismatch',
+                  value: amountMatches
+                      ? 'None — matches the order total'
+                      : 'Differs from ₱${total.toStringAsFixed(2)}',
+                  mono: false,
+                  valueColor:
+                      amountMatches ? null : AppConstants.error,
+                ),
+                GcashFactRow(
+                  label: 'Review SLA',
+                  value: slaRemaining == null
+                      ? 'Awaiting your decision'
+                      : slaPassed
+                          ? 'SLA passed — still payable'
+                          : '${_formatDuration(slaRemaining)} left',
+                  valueColor: slaPassed
+                      ? AppConstants.error
+                      : AppConstants.statusPendingColor,
+                  mono: false,
+                ),
+                if (proof != null &&
+                    (proof['submitted_at']?.toString().isNotEmpty ?? false))
+                  GcashFactRow(
+                    label: 'Submitted',
+                    value: _formatWhen(proof['submitted_at'].toString()),
+                    mono: false,
+                  ),
+              ],
+            ),
+          ),
+          if (screenshotUrl != null && screenshotUrl!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.network(
+                screenshotUrl!,
+                height: 160,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                semanticLabel: 'Customer payment screenshot',
+                errorBuilder: (_, _, _) => Container(
+                  height: 160,
+                  width: double.infinity,
+                  color: AppConstants.borderGray.withValues(alpha: 0.15),
+                  child: Icon(
+                    Icons.image_not_supported_outlined,
+                    color: AppConstants.secondary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (proof != null && reference != '—') ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _scanAndCompare(context, reference),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppConstants.primary,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                ),
+                icon: const Icon(Icons.document_scanner_outlined, size: 17),
+                label: Text(
+                  "Scan the receipt's reference",
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppConstants.primary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          // T5: the expected amount, prominent and directly above the
+          // seller's decision buttons — the number to cross-check against
+          // the platform statement, not memory or the screenshot alone.
+          GcashExpectedAmountBanner(total: total),
+          if (slaPassed) ...[
+            const SizedBox(height: 10),
+            Text(
+              'The 24 h review SLA has passed. The money is still in the '
+              'platform account and the order is NOT auto-cancelled — accept '
+              'it if the reference matches, or reject so the customer can '
+              'resubmit.',
+              style: AppConstants.bodyStyle(
+                fontSize: 11,
+                color: AppConstants.error,
+                height: 1.35,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final reject = GcashGhostPill(
+                label: 'Reject',
+                icon: Icons.close_rounded,
+                color: AppConstants.error,
+                onPressed: onReject,
+              );
+              final accept = GcashPrimaryButton(
+                label: 'Verify & accept',
+                icon: Icons.check_rounded,
+                background: AppConstants.success,
+                onPressed: onConfirm,
+              );
+              if (constraints.maxWidth < 320) {
+                return Column(
+                  children: [
+                    accept,
+                    const SizedBox(height: 10),
+                    reject,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: reject),
+                  const SizedBox(width: 10),
+                  Expanded(flex: 2, child: accept),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _row(String label, String value, {Color? valueColor}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 96,
-          child: Text(
-            label,
-            style: AppConstants.bodyStyle(
-              fontSize: 12,
-              color: AppConstants.secondary.withValues(alpha: 0.55),
-            ),
-          ),
+  /// OCR the customer's receipt and compare the detected reference with the
+  /// one they submitted. The scanner always shows its finding for
+  /// confirmation first; this method only reports whether the two agree, so
+  /// a seller still decides, but never has to read a 13-digit number off a
+  /// thumbnail by eye.
+  Future<void> _scanAndCompare(BuildContext context, String submitted) async {
+    final scanned = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const GcashRefScannerScreen()),
+    );
+    if (scanned == null || !context.mounted) return;
+
+    String digits(String v) => v.replaceAll(RegExp(r'[^0-9]'), '');
+    final want = digits(submitted);
+    final got = digits(scanned);
+    final matches = got.isNotEmpty &&
+        want.isNotEmpty &&
+        (got == want || got.endsWith(want) || want.endsWith(got));
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          matches ? 'Reference matches' : 'Reference does NOT match',
+          style: AppConstants.headlineStyle(fontSize: 19),
         ),
-        Expanded(
-          child: Text(
-            value,
-            style: AppConstants.bodyStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: valueColor ?? AppConstants.secondary,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Scanned: $got',
+              style: AppConstants.monoStyle(fontSize: 13),
             ),
-          ),
+            const SizedBox(height: 6),
+            Text(
+              'Submitted: $want',
+              style: AppConstants.monoStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              matches
+                  ? 'The receipt shows the same reference the customer typed.'
+                  : 'Do not accept yet: either the receipt belongs to another '
+                      'payment, or the customer mistyped the reference. Reject '
+                      'with a reason so they can resubmit.',
+              style: AppConstants.bodyStyle(fontSize: 12, height: 1.35),
+            ),
+          ],
         ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -764,8 +909,8 @@ class _OrderCard extends StatelessWidget {
 
 /// Prominent expected-amount display placed directly above the seller's
 /// Confirm/Reject buttons (Threat T5 mitigation — reduces seller error by
-/// giving the seller the exact number to cross-check against their own
-/// GCash app, instead of relying on memory or the screenshot alone).
+/// giving the seller the exact number to cross-check against the platform
+/// GCash statement, instead of relying on memory or the screenshot alone).
 ///
 /// This is a mitigation, not a technical control: there is no way to
 /// cryptographically verify a manual, off-platform GCash transfer.
@@ -778,37 +923,43 @@ class GcashExpectedAmountBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppConstants.primary.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppConstants.primary.withValues(alpha: 0.18),
-        ),
+        color: const Color(0xFF3A2415),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.payments_outlined,
-            size: 18,
-            color: AppConstants.primary,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Verify this exact amount in your GCash app',
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                color: AppConstants.secondary,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.payments_outlined,
+                size: 16,
+                color: kGcashReceiptMuted,
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Verify this exact amount in your GCash app',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11.5,
+                    height: 1.3,
+                    color: kGcashReceiptMuted,
+                  ),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 8),
           Text(
             '₱${total.toStringAsFixed(2)}',
             style: AppConstants.monoStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppConstants.primary,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: kGcashReceiptInk,
             ),
           ),
         ],

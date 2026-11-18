@@ -1,5 +1,5 @@
 # ============================================================
-# SoleVision - Local Backup Script  (Windows / PowerShell 5.1+)
+# CUFMAI - Local Backup Script  (Windows / PowerShell 5.1+)
 # ============================================================
 # Backs up a hosted Supabase project to your laptop:
 #   1. SQL schema dump   (supabase db dump  -> schema.sql)   - restore source

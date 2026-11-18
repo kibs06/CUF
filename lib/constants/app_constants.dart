@@ -103,6 +103,7 @@ class AppConstants {
   // proxy holds the key as the MAPTILER_API_KEY server secret and
   // rate-limits per client IP. Call shapes:
   //   GET $geocodeProxyBaseUrl/search?q=<address>      → JSON features
+  //   GET $geocodeProxyBaseUrl/reverse?lat=..&lng=..    → place + context
   //   GET $geocodeProxyBaseUrl/tiles/{z}/{x}/{y}.png   → PNG tile bytes
   static const String geocodeProxyBaseUrl =
       'https://psczvbfoybqhjeqssimw.supabase.co/functions/v1/geocode-proxy';

@@ -1,4 +1,4 @@
-# SoleVision — Seller Module Guide
+# CUFMAI — Seller Module Guide
 
 **Last Updated:** July 9, 2026  
 **Purpose:** Comprehensive reference for AI agents working on the Seller (Artisan) side of the application.
@@ -7,7 +7,7 @@
 
 ## Quick Summary
 
-The Seller module is the core revenue-generating side of SoleVision. It provides artisans with tools to manage their store, process sales (online + POS), manage inventory, and view analytics. The seller shell has 5 tabs: Dashboard, POS, Products, Orders, Profile.
+The Seller module is the core revenue-generating side of CUFMAI. It provides artisans with tools to manage their store, process sales (online + POS), manage inventory, and view analytics. The seller shell has 5 tabs: Dashboard, POS, Products, Orders, Profile.
 
 ---
 
@@ -738,4 +738,4 @@ SellerDashboardScreen
 
 ---
 
-*SoleVision Seller Module Guide — July 9, 2026*
+*CUFMAI Seller Module Guide — July 9, 2026*

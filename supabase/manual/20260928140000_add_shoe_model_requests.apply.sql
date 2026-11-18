@@ -20,7 +20,7 @@
 -- file, only by running it.
 --
 -- HOW TO USE IT
---   1. Open the Supabase SQL Editor for the SoleVision project
+--   1. Open the Supabase SQL Editor for the CUFMAI project
 --      (psczvbfyoybqhjeqssimw -> SQL Editor -> New query).
 --   2. Paste this WHOLE file and run it once. Do not paste it in pieces and do
 --      not reorder it: the server runs one batched message as one transaction,

@@ -1,4 +1,4 @@
-# SoleVision — Profile Screen & Store Follow Architecture
+# CUFMAI — Profile Screen & Store Follow Architecture
 
 **Version:** 1.0.0  
 **Last Updated:** July 16, 2026  
@@ -68,7 +68,7 @@ ProfileScreen (StatefulWidget)
     ├── _buildSettingsCard(auth)
     │   ├── Change Password → _sendReset()
     │   ├── Terms & Privacy → placeholder
-    │   └── About SoleVision → placeholder
+    │   └── About CUFMAI → placeholder
     │
     ├── _buildSellerSection(auth) [IF seller role]
     │   └── SoleCard with FutureBuilder
@@ -91,7 +91,7 @@ ProfileScreen (StatefulWidget)
 | Order status shortcuts | 5-category icon row with counts | ✅ Working |
 | Change password | `AuthProvider.resetPassword()` → email | ✅ Working |
 | Terms & Privacy | Placeholder screen | ⚠️ Stub |
-| About SoleVision | Placeholder screen | ⚠️ Stub |
+| About CUFMAI | Placeholder screen | ⚠️ Stub |
 | Seller section | Shows store link + status + member date | ✅ Working (sellers only) |
 | Logout | Confirmation dialog → `AuthProvider.logout()` | ✅ Working |
 
@@ -145,7 +145,7 @@ ProfileScreen
 │
 ├── Change Password → sends reset email
 ├── Terms & Privacy → placeholder
-├── About SoleVision → placeholder
+├── About CUFMAI → placeholder
 │
 ├── Store (seller only) → StoreProfileScreen or CreateStoreScreen
 │
@@ -282,7 +282,7 @@ Each icon is tappable and navigates to `MyOrdersScreen` with the appropriate fil
 │  ─────────────────────────────────  │
 │  📄 Terms & Privacy           →    │
 │  ─────────────────────────────────  │
-│  ℹ️ About SoleVision          →    │
+│  ℹ️ About CUFMAI          →    │
 └─────────────────────────────────────┘
 ```
 
@@ -781,7 +781,7 @@ ORDER BY follower_count DESC, s.created_at DESC;
 | # | Issue | Severity | Details |
 |---|-------|----------|---------|
 | 1 | "Terms & Privacy" is a placeholder | Low | Shows "Coming soon" |
-| 2 | "About SoleVision" is a placeholder | Low | Shows "Coming soon" |
+| 2 | "About CUFMAI" is a placeholder | Low | Shows "Coming soon" |
 | 3 | No email change functionality | Low | Email field is locked |
 | 4 | No delete account option | Medium | Common user expectation |
 | 5 | No notification preferences | Medium | Can't opt in/out of specific notifications |
@@ -875,4 +875,4 @@ setState(() {
 
 ---
 
-*SoleVision Profile & Store Follow Architecture v1.0.0 — July 16, 2026*
+*CUFMAI Profile & Store Follow Architecture v1.0.0 — July 16, 2026*

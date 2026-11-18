@@ -1,4 +1,4 @@
-# SoleVision — Project Handoff Documentation
+# CUFMAI — Project Handoff Documentation
 
 **Version:** 1.1.0
 **Last Updated:** July 2, 2026
@@ -10,7 +10,7 @@
 
 ### What is this project?
 
-**SoleVision** is a multi-role marketplace platform connecting three types of users in the artisan footwear industry of **Carcar City, Cebu, Philippines**:
+**CUFMAI** is a multi-role marketplace platform connecting three types of users in the artisan footwear industry of **Carcar City, Cebu, Philippines**:
 
 | Role | Description | Primary Use |
 |------|-------------|-------------|
@@ -197,9 +197,9 @@ app/
 │   └── schema.sql             # Original database schema (NOTE: live DB has evolved beyond this file)
 │
 ├── docs/
-│   ├── SoleVision_Project_Documentation.md      # Full documentation v1.0
-│   ├── SoleVision_Project_Documentation2.md     # Full documentation v1.1 (with schema corrections)
-│   ├── SoleVision_Project_Documentation_Concise.md # Condensed reference
+│   ├── CUFMAI_Project_Documentation.md      # Full documentation v1.0
+│   ├── CUFMAI_Project_Documentation2.md     # Full documentation v1.1 (with schema corrections)
+│   ├── CUFMAI_Project_Documentation_Concise.md # Condensed reference
 │   ├── product_delete_and_auto_deactivation.md  # Feature changelog
 │   └── debug/                  # Session logs, reference file copies, SQL migrations
 │       ├── SESSION_LOG_JUNE_30_2026.md
@@ -412,7 +412,7 @@ npm run dev
 
 **Database:**
 1. Create Supabase project
-2. **Do NOT use `supabase/schema.sql` directly** — it's outdated. Use the schema from `docs/SoleVision_Project_Documentation2.md` as reference
+2. **Do NOT use `supabase/schema.sql` directly** — it's outdated. Use the schema from `docs/CUFMAI_Project_Documentation2.md` as reference
 3. Create storage buckets: `avatars`, `product-images`, `store-assets` (all public)
 4. Run `docs/debug/inventory_backfill.sql` once to populate inventory for existing products
 5. Add RLS DELETE policies for `products` table (see docs)
@@ -511,4 +511,4 @@ npm run dev
 
 ---
 
-*SoleVision v1.1.0 — Handoff documentation created July 2, 2026*
+*CUFMAI v1.1.0 — Handoff documentation created July 2, 2026*

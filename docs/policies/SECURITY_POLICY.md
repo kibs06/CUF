@@ -1,11 +1,11 @@
-# SoleVision Information Security Policy
+# CUFMAI Information Security Policy
 
 ## Purpose
-This policy establishes mandatory security rules to protect SoleVision's information assets — including customer data, seller data, financial records, authentication credentials, and proprietary business logic — from unauthorized access, disclosure, modification, destruction, and disruption. It ensures compliance with data protection principles and maintains trust in the platform for artisans, customers, and administrators.
+This policy establishes mandatory security rules to protect CUFMAI's information assets — including customer data, seller data, financial records, authentication credentials, and proprietary business logic — from unauthorized access, disclosure, modification, destruction, and disruption. It ensures compliance with data protection principles and maintains trust in the platform for artisans, customers, and administrators.
 
 ## Scope
 This policy applies to:
-- **All personnel**: Developers, contractors, administrators, and third-party vendors with access to SoleVision systems
+- **All personnel**: Developers, contractors, administrators, and third-party vendors with access to CUFMAI systems
 - **All environments**: Production, staging, development, and local development machines
 - **All systems**: Flutter mobile app, React admin portal, Supabase backend (PostgreSQL, Auth, Storage), GitHub repositories, CI/CD pipelines
 - **All data**: Personally identifiable information (PII), payment data, order records, inventory data, authentication tokens, API keys

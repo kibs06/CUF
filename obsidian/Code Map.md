@@ -160,7 +160,7 @@ Pure-Kotlin files (`DetectionDots`, `FootSnapshot`) are pinned by JVM suites of 
 
 ## 🔁 Quick cross-reference (file → doc by name)
 
-Looking for a specific doc? The reverse index lives in [[obsidian/Onboarding|🧑‍💻 Onboarding]] (Step 2) and the [[docs/AI/feature_file_lookup_guide|🔍 Feature file lookup guide]] (features → exact files). For DB schema shapes see [[SCHEMA_REFERENCE|SCHEMA_REFERENCE.md]] and [[docs/SoleVision_Complete_Documentation|📘 Master documentation]].
+Looking for a specific doc? The reverse index lives in [[obsidian/Onboarding|🧑‍💻 Onboarding]] (Step 2) and the [[docs/AI/feature_file_lookup_guide|🔍 Feature file lookup guide]] (features → exact files). For DB schema shapes see [[SCHEMA_REFERENCE|SCHEMA_REFERENCE.md]] and [[docs/CUFMAI_Complete_Documentation|📘 Master documentation]].
 
 ## 🔗 Related
 

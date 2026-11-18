@@ -1,4 +1,4 @@
-# SoleVision / CUFMAI — Email OTP & Device Trust
+# CUFMAI — Email OTP & Device Trust
 
 > ANQUI checklist item 16 ("Send OTP (prefer email)"), in the confirmed
 > scope: **(1) sign-up verification** and **(2) a step-up OTP challenge when

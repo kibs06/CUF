@@ -1,6 +1,6 @@
-# SoleVision — Capstone System Security Analysis
+# CUFMAI — Capstone System Security Analysis
 
-**Project:** SoleVision — AR-Powered Footwear Marketplace  
+**Project:** CUFMAI — AR-Powered Footwear Marketplace  
 **Date:** August 21, 2026  
 **Version:** 1.0
 
@@ -10,7 +10,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              SOLEVISION SYSTEM ARCHITECTURE                      │
+│                              CUFMAI SYSTEM ARCHITECTURE                      │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
                           ┌──────────────────────┐
@@ -482,4 +482,4 @@ D
 
 ---
 
-*SoleVision Security Analysis — Prepared for Capstone Documentation*
+*CUFMAI Security Analysis — Prepared for Capstone Documentation*

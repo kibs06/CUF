@@ -1,7 +1,7 @@
 # Store Architecture & Ratings — Reference
 
 **Date:** August 8, 2026
-**Scope:** How a *store* works end-to-end in SoleVision — the `stores` table, store lifecycle (one store per seller), store RLS, the customer/seller store screens, store follows — followed by a **deep dive on ratings & reviews** (the two independent rating systems and how they interact).
+**Scope:** How a *store* works end-to-end in CUFMAI — the `stores` table, store lifecycle (one store per seller), store RLS, the customer/seller store screens, store follows — followed by a **deep dive on ratings & reviews** (the two independent rating systems and how they interact).
 **Related:** `docs/AI/FOLLOWING_FEATURE_ARCHITECTURE.md` (follow feature), `docs/AI/PRODUCT_REVIEWS_ROADMAP_v2.md` (original reviews plan — superseded by the live per-order-item design), `docs/AI/SELLER_ARCHITECTURE_GRAPH.md`, `docs/AI/CUSTOMER_HOME_ARCHITECTURE.md`.
 
 ---

@@ -44,7 +44,7 @@ class UnregisteredSocialAccountException implements Exception {
 
 class AuthService {
   AuthService._({GoogleSignIn? googleSignIn})
-      : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+    : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
 
   /// An instance wired to [googleSignIn] instead of the process singleton —
   /// tests only, so the one-time initialisation is observable on a fresh
@@ -171,8 +171,8 @@ class AuthService {
   /// (common on Facebook) — the caller prompts for one so the profile row
   /// is never stuck with an empty email.
   Future<Map<String, dynamic>> _profileForSocialUser(User user) async {
-    final profile = await getProfile(user.id) ??
-        await writeProfileFromMetadata(user);
+    final profile =
+        await getProfile(user.id) ?? await writeProfileFromMetadata(user);
     final email = user.email ?? '';
     return {
       'user': {'id': user.id, 'email': email},
@@ -190,8 +190,9 @@ class AuthService {
   Future<GoogleSignInAccount> authenticateWithGoogle({
     required String serverClientId,
   }) async {
-    await (_googleInit ??=
-        _googleSignIn.initialize(serverClientId: serverClientId));
+    await (_googleInit ??= _googleSignIn.initialize(
+      serverClientId: serverClientId,
+    ));
 
     try {
       return await _googleSignIn.authenticate();
@@ -217,9 +218,9 @@ class AuthService {
   @visibleForTesting
   static String googleFailureMessage(GoogleSignInException e) =>
       e.code == GoogleSignInExceptionCode.canceled
-          ? 'Google sign-in was cancelled.'
-          : 'Google sign-in is not available right now. Use your email and '
-              'password for now.';
+      ? 'Google sign-in was cancelled.'
+      : 'Google sign-in is not available right now. Use your email and '
+            'password for now.';
 
   /// Signs in with the native Google account picker.
   ///
@@ -279,8 +280,10 @@ class AuthService {
         try {
           known = await emailExists(googleEmail);
         } catch (e) {
-          debugPrint('[AuthError] requireExistingAccount lookup failed ($e) '
-              '— proceeding with normal sign-in.');
+          debugPrint(
+            '[AuthError] requireExistingAccount lookup failed ($e) '
+            '— proceeding with normal sign-in.',
+          );
           known = true;
         }
         if (!known) throw UnregisteredSocialAccountException(googleEmail);
@@ -297,8 +300,8 @@ class AuthService {
     // Supabase verifies.
     String? accessToken;
     try {
-      final authorization =
-          await account.authorizationClient.authorizationForScopes(const []);
+      final authorization = await account.authorizationClient
+          .authorizationForScopes(const []);
       accessToken = authorization?.accessToken;
     } catch (_) {
       // Optional grant — not worth failing the sign-in over.
@@ -396,9 +399,7 @@ class AuthService {
       );
     }
     if (result.status != LoginStatus.success) {
-      throw Exception(
-        result.message ?? 'Facebook sign-in was cancelled.',
-      );
+      throw Exception(result.message ?? 'Facebook sign-in was cancelled.');
     }
     final token = result.accessToken;
     String? idToken;
@@ -461,9 +462,10 @@ class AuthService {
   Future<void> markTermsAccepted() async {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('Not signed in.');
-    await _client.from('profiles').update({
-      'terms_accepted_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', user.id);
+    await _client
+        .from('profiles')
+        .update({'terms_accepted_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('id', user.id);
   }
 
   /// Creates the Supabase auth user for a CUSTOMER signup.
@@ -568,9 +570,10 @@ class AuthService {
 
     if (existing == null) {
       // First write for this account — it also needs its role/status.
-      profileData['role'] =
-          (meta['role'] ?? AppConstants.roleCustomer).toString();
-      profileData['seller_status'] = (meta['seller_status'] ?? 'none').toString();
+      profileData['role'] = (meta['role'] ?? AppConstants.roleCustomer)
+          .toString();
+      profileData['seller_status'] = (meta['seller_status'] ?? 'none')
+          .toString();
     }
 
     // Identity fields are only applied when the metadata actually carries
@@ -679,8 +682,8 @@ class AuthService {
       'selfie_url': data.selfiePath,
       'cufmai_member_id':
           data.cufmaiMemberId != null && data.cufmaiMemberId!.trim().isNotEmpty
-              ? data.cufmaiMemberId!.trim()
-              : null,
+          ? data.cufmaiMemberId!.trim()
+          : null,
       'barangay_proof_url': data.barangayProofPath,
       'store_front_url': data.storeFrontPath,
       'product_photo_urls': data.productPhotoPaths.isEmpty
@@ -710,18 +713,15 @@ class AuthService {
     if (data.dtiCertPath != null ||
         data.birCorPath != null ||
         data.permitPath != null) {
-      await _client.from('seller_business_docs').upsert(
-        {
-          'profile_id': user.id,
-          'dti_cert_url': data.dtiCertPath,
-          'bir_cor_url': data.birCorPath,
-          'permit_url': data.permitPath,
-          'verification_status': AppConstants.bizStatusPending,
-          'submitted_at': DateTime.now().toUtc().toIso8601String(),
-          'verified_at': null,
-        },
-        onConflict: 'profile_id',
-      );
+      await _client.from('seller_business_docs').upsert({
+        'profile_id': user.id,
+        'dti_cert_url': data.dtiCertPath,
+        'bir_cor_url': data.birCorPath,
+        'permit_url': data.permitPath,
+        'verification_status': AppConstants.bizStatusPending,
+        'submitted_at': DateTime.now().toUtc().toIso8601String(),
+        'verified_at': null,
+      }, onConflict: 'profile_id');
     }
 
     final profile = await getProfile(user.id) ?? profileData;
@@ -784,9 +784,10 @@ class AuthService {
     final dateOnly = validUntil == null
         ? null
         : DateTime(validUntil.year, validUntil.month, validUntil.day);
-    final data = await _client.rpc('set_permit_valid_until', params: {
-      'p_valid_until': dateOnly?.toIso8601String().split('T').first,
-    });
+    final data = await _client.rpc(
+      'set_permit_valid_until',
+      params: {'p_valid_until': dateOnly?.toIso8601String().split('T').first},
+    );
     if (data is String && data.isNotEmpty) {
       return DateTime.tryParse(data) ?? dateOnly;
     }
@@ -802,9 +803,10 @@ class AuthService {
   /// Returns the days left when a notice was posted, else null.
   Future<int?> remindPermitExpiry({int windowDays = 30}) async {
     try {
-      final data = await _client.rpc('remind_permit_expiry', params: {
-        'p_window_days': windowDays,
-      });
+      final data = await _client.rpc(
+        'remind_permit_expiry',
+        params: {'p_window_days': windowDays},
+      );
       if (data is Map && data['reminded'] == true) {
         return (data['days_left'] as num?)?.toInt();
       }
@@ -865,9 +867,7 @@ class AuthService {
   Future<List<Map<String, dynamic>>> fetchAllBusinessVerifications() async {
     final data = await _client
         .from('seller_business_docs')
-        .select(
-          '*, profiles(id, full_name, email, store_name)',
-        )
+        .select('*, profiles(id, full_name, email, store_name)')
         .order('created_at', ascending: false);
     return (data as List).map((row) => Map<String, dynamic>.from(row)).toList();
   }
@@ -913,7 +913,6 @@ class AuthService {
     );
   }
 
-
   // ── Failed-login tracking ──────────────────────────────────────
   static const _maxFailedAttempts = 5;
   static const _lockoutMinutes = 30;
@@ -937,9 +936,10 @@ class AuthService {
           'user_agent': userAgent,
           'status': 'active',
           'failed_at': now.toIso8601String(),
-          'locked_until': now.add(Duration(minutes: _lockoutMinutes)).toIso8601String(),
-        },
-        onConflict: 'user_id')
+          'locked_until': now
+              .add(Duration(minutes: _lockoutMinutes))
+              .toIso8601String(),
+        }, onConflict: 'user_id')
         .select()
         .single();
 
@@ -969,10 +969,7 @@ class AuthService {
       // Unlock the account
       await client
           .from('failed_logins')
-          .update({
-            'status': 'active',
-            'locked_until': null,
-          })
+          .update({'status': 'active', 'locked_until': null})
           .eq('user_id', userId);
       return {
         'wasLocked': true,
@@ -1052,8 +1049,9 @@ class AuthService {
         // Still locked — increment but keep locked
         attemptCount = existingCount + 1;
         newStatus = 'locked';
-        newLockedUntil = DateTime.parse(existingLocked).toUtc().add(
-            Duration(minutes: _lockoutMinutes));
+        newLockedUntil = DateTime.parse(
+          existingLocked,
+        ).toUtc().add(Duration(minutes: _lockoutMinutes));
       } else {
         // Active, increment
         attemptCount = existingCount + 1;
@@ -1205,11 +1203,7 @@ class AuthService {
   Future<void> resetFailedCounter(String userId) async {
     await _client
         .from('failed_logins')
-        .update({
-          'attempt_count': 0,
-          'status': 'active',
-          'locked_until': null,
-        })
+        .update({'attempt_count': 0, 'status': 'active', 'locked_until': null})
         .eq('user_id', userId);
   }
 
@@ -1226,11 +1220,7 @@ class AuthService {
   Future<void> clearAllLockouts() async {
     await _client
         .from('failed_logins')
-        .update({
-          'status': 'active',
-          'attempt_count': 0,
-          'locked_until': null,
-        })
+        .update({'status': 'active', 'attempt_count': 0, 'locked_until': null})
         .neq('status', 'active');
   }
 
@@ -1250,6 +1240,55 @@ class AuthService {
     await _client.auth.updateUser(UserAttributes(password: newPassword));
   }
 
+  /// Change the password from INSIDE the app, with no e-mail round trip.
+  ///
+  /// This is the "I forgot it, but I am still signed in on this phone" path.
+  /// Supabase's own contract is what makes it work without a reset mail:
+  /// `updateUser(password:)` updates the password of the **signed-in user**
+  /// (https://supabase.com/docs/reference/dart/auth-updateuser), while a
+  /// signed-OUT recovery still needs a delivered link or OTP — no client may
+  /// set a stranger's password by typing their address, and Supabase offers no
+  /// endpoint that would.
+  ///
+  /// [signOutOtherDevices] ends every other session after the change (the
+  /// promise the Manage Login Device screen's button makes). The current
+  /// session is kept, so the customer is not thrown out mid-flow.
+  ///
+  /// Returns whether those other sessions were ended: `null` when it was not
+  /// requested, `true` when they were, `false` when the sign-out failed. That
+  /// last case is deliberately NOT an exception: the password has already
+  /// changed by then, so throwing would report a failed change that succeeded.
+  /// The caller shows it as a warning instead — the same split the ask-push
+  /// flow uses between "the fact" and "the follow-up".
+  Future<bool?> changePassword(
+    String newPassword, {
+    bool signOutOtherDevices = false,
+  }) async {
+    if (_client.auth.currentUser == null) {
+      throw AuthException(
+        'Sign in again to change your password.',
+        code: 'session_missing',
+      );
+    }
+
+    await updatePassword(newPassword);
+
+    if (!signOutOtherDevices) return null;
+
+    try {
+      await _client.auth.signOut(scope: SignOutScope.others);
+      return true;
+    } catch (e) {
+      // Best-effort by design. The password change is the fact; ending the
+      // other sessions is a follow-up that this device cannot verify anyway
+      // if the response is lost.
+      debugPrint(
+        '[Auth] password changed, but ending other sessions failed: $e',
+      );
+      return false;
+    }
+  }
+
   /// Send account lockout notification email to the account owner.
   /// Uses the existing email-sending function (Supabase resetPasswordForEmail)
   /// which sends a password reset link. The reset form will check for
@@ -1264,7 +1303,8 @@ class AuthService {
       redirectTo: DeepLinkService.authRecoveryRedirect,
     );
     debugPrint(
-        '[Auth] Lockout notification email sent to: $email (Supabase reset password)');
+      '[Auth] Lockout notification email sent to: $email (Supabase reset password)',
+    );
   }
 
   /// Calculate remaining minutes until lockout expires
@@ -1277,7 +1317,6 @@ class AuthService {
     final difference = lockedUntil.difference(now).inSeconds;
     return difference.clamp(0, _lockoutMinutes * 60);
   }
-
 
   /// Update the user's email address.
   ///

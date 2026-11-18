@@ -1,4 +1,4 @@
-# Feature File Lookup Guide — SoleVision
+# Feature File Lookup Guide — CUFMAI
 
 This document maps 8 product improvements to their relevant file paths, existing logic, and what's missing. Designed to be given to an AI assistant (e.g. Claude Code, Cursor, GitHub Copilot Chat) with read/write access to the project.
 

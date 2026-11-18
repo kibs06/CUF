@@ -522,7 +522,7 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
   String _subtitleFor(int step) {
     switch (step) {
       case 0:
-        return 'Your login details for SoleVision.';
+        return 'Your login details for CUFMAI.';
       case 1:
         return 'A government ID and a selfie help admins confirm it’s really you.';
       case 2:
@@ -666,7 +666,7 @@ class _AccountStep extends StatelessWidget {
             _InfoBanner(
               icon: Icons.refresh_rounded,
               text:
-                  'You’re re-applying with your existing SoleVision account — no new password needed.',
+                  'You’re re-applying with your existing CUFMAI account — no new password needed.',
             ),
             const SizedBox(height: AuthSpacing.s16),
           ],
@@ -944,7 +944,7 @@ class _IdentityStepState extends State<_IdentityStep> {
           _InfoBanner(
             icon: Icons.lock_outline_rounded,
             text:
-                'Your photos are stored privately and only viewed by SoleVision admins during review.',
+                'Your photos are stored privately and only viewed by CUFMAI admins during review.',
           ),
           const SizedBox(height: AuthSpacing.s24),
           SolePrimaryAuthButton(
@@ -1168,7 +1168,7 @@ class _CommunityStepState extends State<_CommunityStep> {
           _InfoBanner(
             icon: Icons.people_outline_rounded,
             text:
-                'Why do we ask? SoleVision is a marketplace for Carcar City’s shoe artisans. Proving your CUFMAI membership — or that you live and work in the area — keeps the marketplace authentic.',
+                'Why do we ask? CUFMAI is a marketplace for Carcar City’s shoe artisans. Proving your CUFMAI membership — or that you live and work in the area — keeps the marketplace authentic.',
           ),
           const SizedBox(height: AuthSpacing.s16),
           SegmentedButton<bool>(
@@ -1586,7 +1586,7 @@ class _StorefrontStep extends StatelessWidget {
                 children: [
                   const TextSpan(
                     text: 'By submitting, you agree to be reviewed by a '
-                        'SoleVision admin before selling, and to our ',
+                        'CUFMAI admin before selling, and to our ',
                   ),
                   WidgetSpan(
                     alignment: PlaceholderAlignment.middle,

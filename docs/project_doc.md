@@ -1,4 +1,4 @@
-# SoleVision — Complete Project Documentation
+# CUFMAI — Complete Project Documentation
 
 **Version:** 1.2.0  
 **Last Updated:** July 3, 2026  
@@ -36,7 +36,7 @@
 
 ## 1. Project Overview
 
-SoleVision is a multi-role marketplace connecting **customers**, **sellers** (artisans), and **admins** for handcrafted shoe retail in Carcar City, Cebu.
+CUFMAI is a multi-role marketplace connecting **customers**, **sellers** (artisans), and **admins** for handcrafted shoe retail in Carcar City, Cebu.
 
 | Role | Primary Use |
 |------|-------------|
@@ -880,5 +880,5 @@ await client.from('profiles').update({
 
 ---
 
-*SoleVision v1.2.0 — Comprehensive project documentation generated July 3, 2026.*
-*Synthesized from: PROJECT_HANDOFF.md, SoleVision_Project_Documentation2.md, SoleVision_Project_Documentation_Concise.md, SESSION_LOG_JULY_2_3_2026.md, SESSION_DOCUMENTATION_JULY_3_2026.md, all FIX spec files, createOrder/addToCart/AR reference docs, and codebase analysis.*
+*CUFMAI v1.2.0 — Comprehensive project documentation generated July 3, 2026.*
+*Synthesized from: PROJECT_HANDOFF.md, CUFMAI_Project_Documentation2.md, CUFMAI_Project_Documentation_Concise.md, SESSION_LOG_JULY_2_3_2026.md, SESSION_DOCUMENTATION_JULY_3_2026.md, all FIX spec files, createOrder/addToCart/AR reference docs, and codebase analysis.*

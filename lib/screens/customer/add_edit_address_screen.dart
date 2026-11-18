@@ -4,16 +4,15 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-
 
 import '../../constants/app_constants.dart';
 import '../../models/address_model.dart';
 import '../../providers/address_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/reverse_geocode_service.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_text_field.dart';
@@ -63,6 +62,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   final _provinceController = TextEditingController();
   final _cityController = TextEditingController();
   final _barangayController = TextEditingController();
+  final _purokController = TextEditingController();
   final _streetController = TextEditingController();
   final _landmarkController = TextEditingController();
   String _label = 'Home';
@@ -94,6 +94,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     _provinceController.dispose();
     _cityController.dispose();
     _barangayController.dispose();
+    _purokController.dispose();
     _streetController.dispose();
     _landmarkController.dispose();
     super.dispose();
@@ -106,6 +107,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     _provinceController.text = addr.province;
     _cityController.text = addr.cityMunicipality;
     _barangayController.text = addr.barangay;
+    _purokController.text = addr.purok;
     _streetController.text = addr.streetAddress;
     _landmarkController.text = addr.landmark ?? '';
     _label = addr.label;
@@ -251,7 +253,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _locationMessage = 'Location services are off — drag the pin to your address';
+        _locationMessage =
+            'Location services are off — drag the pin to your address';
         if (mounted) setState(() => _isLocating = false);
         return;
       }
@@ -262,13 +265,15 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       }
 
       if (permission == LocationPermission.denied) {
-        _locationMessage = 'Location access denied — drag the pin to set your delivery address';
+        _locationMessage =
+            'Location access denied — drag the pin to set your delivery address';
         if (mounted) setState(() => _isLocating = false);
         return;
       }
 
       if (permission == LocationPermission.deniedForever) {
-        _locationMessage = 'Location permission off in Settings — drag the pin manually';
+        _locationMessage =
+            'Location permission off in Settings — drag the pin manually';
         if (mounted) setState(() => _isLocating = false);
         return;
       }
@@ -298,7 +303,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       await _reverseGeocode();
     } catch (e) {
       debugPrint('Auto-locate error: $e');
-      _locationMessage = 'Could not get location — drag the pin to your address';
+      _locationMessage =
+          'Could not get location — drag the pin to your address';
       if (mounted) setState(() => _isLocating = false);
     }
   }
@@ -396,64 +402,29 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     if (!mounted) return;
     setState(() => _isReverseGeocoding = true);
 
-    String? readable;
-    try {
-      final geocoding = Geocoding();
-      final placemarks = await geocoding.placemarkFromCoordinates(
-        _currentCenter.latitude,
-        _currentCenter.longitude,
-      );
+    final result = await const ReverseGeocodeService().lookupWithDeviceFallback(
+      latitude: _currentCenter.latitude,
+      longitude: _currentCenter.longitude,
+    );
+    if (!mounted) return;
 
-      if (placemarks.isNotEmpty) {
-        final place = placemarks.first;
-        _regionController.text = place.administrativeArea ?? '';
-        _provinceController.text = place.subAdministrativeArea ?? '';
-        _cityController.text = place.locality ?? place.subLocality ?? '';
-        _barangayController.text = place.thoroughfare ?? '';
-        // Pre-fill street with name + subThoroughfare if available
-        final streetParts = <String>[
-          if (place.name != null &&
-              place.name!.isNotEmpty &&
-              place.name != place.thoroughfare &&
-              place.name != place.locality)
-            place.name!,
-          if (place.subThoroughfare != null) place.subThoroughfare!,
-          if (place.thoroughfare != null) place.thoroughfare!,
-        ];
-        if (streetParts.isNotEmpty) {
-          _streetController.text = streetParts.join(' ');
-        }
-        final parts = <String>[
-          _streetController.text.trim(),
-          _barangayController.text.trim(),
-          _cityController.text.trim(),
-          _provinceController.text.trim(),
-        ].where((s) => s.isNotEmpty).toList();
-        if (parts.isEmpty) {
-          parts.addAll(<String>[
-            if ((place.locality ?? '').isNotEmpty) place.locality!,
-            if ((place.subLocality ?? '').isNotEmpty &&
-                place.subLocality != place.locality)
-              place.subLocality!,
-            if ((place.administrativeArea ?? '').isNotEmpty)
-              place.administrativeArea!,
-          ]);
-        }
-        if (parts.isNotEmpty) readable = parts.join(', ');
-      }
-    } catch (e) {
-      debugPrint('Reverse geocoding error: $e');
-      // Not critical — fields remain editable
+    if (result != null) {
+      _regionController.text = result.region;
+      _provinceController.text = result.province;
+      _cityController.text = result.city;
+      _barangayController.text = result.barangay;
+      _purokController.text = result.purok;
+      // Street / House No. stays for the customer: reverse geocoding often
+      // returns only a road name (or a Plus Code), not their house number.
     }
+    final readable = result?.areaLabel;
 
-    if (mounted) {
-      setState(() {
-        _isReverseGeocoding = false;
-        if (readable != null && readable.isNotEmpty) {
-          _readableAddress = readable;
-        }
-      });
-    }
+    setState(() {
+      _isReverseGeocoding = false;
+      _readableAddress = readable != null && readable.trim().isNotEmpty
+          ? readable.trim()
+          : null;
+    });
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -480,6 +451,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         province: _provinceController.text.trim(),
         cityMunicipality: _cityController.text.trim(),
         barangay: _barangayController.text.trim(),
+        purok: _purokController.text.trim(),
         streetAddress: _streetController.text.trim(),
         landmark: _landmarkController.text.trim().isEmpty
             ? null
@@ -499,9 +471,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              _isEditing ? 'Address updated.' : 'Address saved.',
-            ),
+            content: Text(_isEditing ? 'Address updated.' : 'Address saved.'),
             backgroundColor: AppConstants.success,
           ),
         );
@@ -541,28 +511,31 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       children: [
         // MapTiler tiles via flutter_map
         FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _currentCenter,
-                initialZoom: 16,
-                onPositionChanged: (position, hasGesture) {
-                  if (hasGesture && mounted) {
-                    setState(() => _currentCenter = position.center);
-                    _scheduleReverseGeocode();
-                  }
-                },
-              ),
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: _currentCenter,
+            initialZoom: 16,
+            onPositionChanged: (position, hasGesture) {
+              if (hasGesture && mounted) {
+                setState(() => _currentCenter = position.center);
+                _scheduleReverseGeocode();
+              }
+            },
+          ),
           children: [
             TileLayer(
               // Tiles proxy through geocode-proxy so the MapTiler key
               // never ships in the app (Threat T6).
-              urlTemplate: '${AppConstants.geocodeProxyBaseUrl}/tiles/{z}/{x}/{y}.png',
+              urlTemplate:
+                  '${AppConstants.geocodeProxyBaseUrl}/tiles/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.solevision.app',
             ),
             // MapTiler attribution (required by usage policy)
             const RichAttributionWidget(
               attributions: [
-                TextSourceAttribution('© MapTiler © OpenStreetMap contributors'),
+                TextSourceAttribution(
+                  '© MapTiler © OpenStreetMap contributors',
+                ),
               ],
               showFlutterMapAttribution: false,
             ),
@@ -648,21 +621,35 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         // Friendly status message (permission denied, fallback, etc.)
         if (!_isLocating && _locationMessage != null)
           Positioned(
-            top: MediaQuery.of(context).padding.top + 12 + 56 + (_showPredictions ? 180 : 0),
+            top:
+                MediaQuery.of(context).padding.top +
+                12 +
+                56 +
+                (_showPredictions ? 180 : 0),
             left: 16,
             right: 16,
             child: Card(
               color: Colors.white.withValues(alpha: 0.95),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, size: 18, color: AppConstants.primary),
+                    const Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: AppConstants.primary,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         _locationMessage!,
-                        style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.secondary),
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          color: AppConstants.secondary,
+                        ),
                       ),
                     ),
                   ],
@@ -674,7 +661,11 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         // Reverse geocoding indicator
         if (_isReverseGeocoding)
           Positioned(
-            top: MediaQuery.of(context).padding.top + 12 + 56 + (_locationMessage != null ? 60 : 0),
+            top:
+                MediaQuery.of(context).padding.top +
+                12 +
+                56 +
+                (_locationMessage != null ? 60 : 0),
             left: 0,
             right: 0,
             child: const Center(
@@ -762,7 +753,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                         _readableAddress ??
                             (_isLocating
                                 ? 'Finding your location…'
-                                : 'Locating address — drag the pin'),
+                                : 'Pinned location'),
                         style: AppConstants.bodyStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -829,11 +820,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
           ),
           prefixIcon: Padding(
             padding: EdgeInsets.only(left: 14, right: 8),
-            child: Icon(
-              Icons.search,
-              size: 20,
-              color: AppConstants.secondary,
-            ),
+            child: Icon(Icons.search, size: 20, color: AppConstants.secondary),
           ),
           prefixIconConstraints: const BoxConstraints(
             minWidth: 0,
@@ -852,21 +839,21 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                   ),
                 )
               : _searchController.text.isNotEmpty
-                  ? GestureDetector(
-                      onTap: () {
-                        _searchController.clear();
-                        _searchAddress('');
-                      },
-                      child: Padding(
-                        padding: EdgeInsets.only(right: 14),
-                        child: Icon(
-                          Icons.close,
-                          size: 18,
-                          color: AppConstants.secondary,
-                        ),
-                      ),
-                    )
-                  : null,
+              ? GestureDetector(
+                  onTap: () {
+                    _searchController.clear();
+                    _searchAddress('');
+                  },
+                  child: Padding(
+                    padding: EdgeInsets.only(right: 14),
+                    child: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: AppConstants.secondary,
+                    ),
+                  ),
+                )
+              : null,
           suffixIconConstraints: const BoxConstraints(
             minWidth: 0,
             minHeight: 0,
@@ -899,8 +886,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
           itemCount: _searchError != null
               ? 1
               : _searchPredictions.isEmpty
-                  ? 1
-                  : _searchPredictions.length,
+              ? 1
+              : _searchPredictions.length,
           itemBuilder: (context, index) {
             // Error state
             if (_searchError != null) {
@@ -991,10 +978,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     );
   }
 
-  Widget _circleButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
+  Widget _circleButton({required IconData icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1124,6 +1108,13 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     ),
                     const SizedBox(height: 16),
                     SoleTextField(
+                      labelText: 'Purok / Sitio (Optional)',
+                      hintText: 'e.g. Purok 3 or Sitio San Isidro',
+                      controller: _purokController,
+                      prefixIcon: Icons.pin_drop_outlined,
+                    ),
+                    const SizedBox(height: 16),
+                    SoleTextField(
                       labelText: 'Street Address / House No.',
                       hintText: 'House #, Unit, Building, Street',
                       controller: _streetController,
@@ -1174,8 +1165,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                         ),
                         SoleSwitch(
                           value: _isDefault,
-                          onChanged: (val) =>
-                              setState(() => _isDefault = val),
+                          onChanged: (val) => setState(() => _isDefault = val),
                         ),
                       ],
                     ),

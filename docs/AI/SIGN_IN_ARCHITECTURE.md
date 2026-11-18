@@ -1,4 +1,4 @@
-# SoleVision — Sign In / Account Entry Architecture & UI Design
+# CUFMAI — Sign In / Account Entry Architecture & UI Design
 
 > Condensed reference for AI agents working on authentication / the merged
 > front-door screen. Derived from the live codebase:

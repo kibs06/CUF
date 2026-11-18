@@ -3,7 +3,7 @@
 **Date:** September 15, 2026
 **Status:** 12 of the 17 rows shipped, 3 partial, 0 missing, 2 need client clarification. **Items 1, 5, 7, 14 and 16 closed Sep 15, 2026.** Item 3 counts as shipped *with an open gap* — the iOS panel is still not tappable. Item 16 is code-complete and verified end-to-end against a real stack (including the server-side gate and the admin support view, both verified over real HTTP), but needs two dashboard toggles plus one deliberate `set_device_enforcement(true)` before it is live — until that switch is thrown the gate is installed but not enforcing. The support view that makes a lockout ticket investigable (Manage Users → ⋮ → Account Security) ships with it.
 **Source:** `updates-checklist (1).md` (store-owner update request, 17 items)
-**Scope:** SoleVision / CUFMAI Flutter app + Supabase backend (the customer + seller app)
+**Scope:** CUFMAI Flutter app + Supabase backend (the customer + seller app)
 
 ---
 

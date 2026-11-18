@@ -1,4 +1,4 @@
-# SoleVision — Session Log: July 2–3, 2026
+# CUFMAI — Session Log: July 2–3, 2026
 
 **Date Range:** July 2, 2026 → July 3, 2026  
 **Focus:** Checkout flow overhaul, stock validation, error handling, stock mismatch fix, and multiple bug fixes  
@@ -20,7 +20,7 @@
 
 ## Session Overview
 
-Over two days of intensive debugging and feature work, we tackled the entire checkout and order placement pipeline in SoleVision. The session started with fundamental issues in how orders were created (only first item getting an order_item, wrong pricing, fake order IDs) and evolved into a comprehensive overhaul of error handling, stock validation, and customer-facing messaging.
+Over two days of intensive debugging and feature work, we tackled the entire checkout and order placement pipeline in CUFMAI. The session started with fundamental issues in how orders were created (only first item getting an order_item, wrong pricing, fake order IDs) and evolved into a comprehensive overhaul of error handling, stock validation, and customer-facing messaging.
 
 ### Key Themes
 - **Data flow integrity:** Cart items lose critical data (size, stock) during server sync due to missing columns and broken JOINs
@@ -233,7 +233,7 @@ Order creation:
 
 ### The Two Stock Tables
 
-SoleVision has **two** stock-tracking tables:
+CUFMAI has **two** stock-tracking tables:
 
 | Table | Primary Key | Used By | Notes |
 |-------|-------------|---------|-------|

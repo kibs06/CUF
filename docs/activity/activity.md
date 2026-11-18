@@ -1,16 +1,16 @@
-# CAPSTONE-BASED THREAT MODELING ACTIVITY "SOLEVISION: AN AR-POWERED FOOTWEAR MARKETPLACE"
+# CAPSTONE-BASED THREAT MODELING ACTIVITY "CUFMAI: AN AR-POWERED FOOTWEAR MARKETPLACE"
 
 **Submitted to:**
 MR. RUMSIE DEGUITOS
 
 **Submitted by:**
-SOLEVISION DEVELOPMENT TEAM
+CUFMAI DEVELOPMENT TEAM
 
 ---
 
 ## System Description
 
-**SOLEVISION: An AR-Powered Footwear Marketplace** is a cross-platform mobile application and web admin portal developed to connect local artisan shoemakers directly with customers, featuring augmented reality (AR) foot measurement to help buyers find the perfect fit before ordering. The system integrates AI-assisted foot scanning, real-time messaging, and digital payment processing to modernize the local footwear industry while maintaining secure and centralized records management.
+**CUFMAI: An AR-Powered Footwear Marketplace** is a cross-platform mobile application and web admin portal developed to connect local artisan shoemakers directly with customers, featuring augmented reality (AR) foot measurement to help buyers find the perfect fit before ordering. The system integrates AI-assisted foot scanning, real-time messaging, and digital payment processing to modernize the local footwear industry while maintaining secure and centralized records management.
 
 ### Who will use the system?
 
@@ -22,7 +22,7 @@ The system provides functions for **AR foot measurement** (guided wall-calibrati
 
 ### What devices, applications, databases, networks, or external services does it use?
 
-SOLEVISION operates using **Android and iOS smartphones** (Flutter cross-platform), **web browsers** (admin portal built with Vue.js and Vite), and **Supabase cloud infrastructure** (PostgreSQL database, authentication, file storage, edge functions, and realtime subscriptions). The system uses **Firebase Cloud Messaging** for push notifications, **Google ML Kit** for on-device AR foot measurement (pose detection, selfie segmentation), **MapTiler** for map tiles and geocoding, **GCash/PayMongo** for digital payment processing, and **GitHub Releases** for self-hosted APK distribution. It operates over **HTTPS/REST** APIs and **WebSocket** connections for real-time features.
+CUFMAI operates using **Android and iOS smartphones** (Flutter cross-platform), **web browsers** (admin portal built with Vue.js and Vite), and **Supabase cloud infrastructure** (PostgreSQL database, authentication, file storage, edge functions, and realtime subscriptions). The system uses **Firebase Cloud Messaging** for push notifications, **Google ML Kit** for on-device AR foot measurement (pose detection, selfie segmentation), **MapTiler** for map tiles and geocoding, **GCash/PayMongo** for digital payment processing, and **GitHub Releases** for self-hosted APK distribution. It operates over **HTTPS/REST** APIs and **WebSocket** connections for real-time features.
 
 ### What types of information does it collect, process, store, or transmit?
 
@@ -51,7 +51,7 @@ The system collects and processes **user identity information** (email, password
                     └────────┼──────────────┼──────────┘
                              │              │
               ┌──────────────┴──────────────┴──────────────┐
-              │           SOLEVISION MOBILE APP             │
+              │           CUFMAI MOBILE APP             │
               │  ┌─────────────────────────────────────┐   │
               │  │  Login & Authentication              │   │
               │  │  AR Foot Measurement & Scanning      │   │
@@ -132,7 +132,7 @@ SUPPORTING INFRASTRUCTURE:
 | **Audit Logs** | Database, Supabase Auth | Records user activities, authentication events, and system changes for accountability. |
 | **Backup Data** | Supabase Managed Backups, GitHub | Provides recovery capability in case of data loss or system failure. |
 | **Push Notification Tokens** | Firebase FCM, Database | Links user devices for targeted push notification delivery. |
-| **SOLEVISION Mobile App** | Flutter, Supabase SDK, ML Kit | Provides the main customer and seller interface with all marketplace functions. |
+| **CUFMAI Mobile App** | Flutter, Supabase SDK, ML Kit | Provides the main customer and seller interface with all marketplace functions. |
 | **Admin Portal (Web)** | Vue.js, Vite, Supabase JS | Provides the administrator interface for user management and platform oversight. |
 | **Supabase Backend** | PostgreSQL, Edge Functions, Auth | Hosts the database, authentication, storage, and serverless compute. |
 | **Firebase Cloud Messaging** | Google Cloud Infrastructure | Delivers push notifications to customer and seller mobile devices. |
@@ -185,7 +185,7 @@ SUPPORTING INFRASTRUCTURE:
 
 ## RISK RATIONALE
 
-The major risks identified in the Threat Model are important because **SOLEVISION handles sensitive personal, biometric, financial, and identity verification information** while operating a real-time marketplace that processes payments and stores government-issued identification documents.
+The major risks identified in the Threat Model are important because **CUFMAI handles sensitive personal, biometric, financial, and identity verification information** while operating a real-time marketplace that processes payments and stores government-issued identification documents.
 
 ### Unauthorized Access
 Unauthorized access could expose confidential customer personal information (names, addresses, phone numbers), financial data (payment references, order history), and critically sensitive verification documents (government-issued IDs, selfies). This could compromise user privacy, enable identity theft, and violate the Philippine Data Privacy Act.
@@ -264,7 +264,7 @@ The system processes personal data of Philippine citizens without documented pri
 |-------|--------------|--------|---------------|----------------|-----------|
 | **Customer Profiles (PII)** | Unauthorized user / Insider | Stolen credentials or unauthorized access | Weak access controls, public profile SELECT | Confidential personal information (email, phone, address) may be exposed, enabling identity theft | Role-Based Access Control (RLS), strong authentication, restrict public profile columns |
 | **User Accounts** | External attacker | Brute-force or credential theft | Weak passwords, no MFA, no account lockout | A compromised account can allow unauthorized access to all user data and marketplace functions | Strong password policy, MFA, account lockout, secure session management |
-| **SOLEVISION Mobile App** | Cyber attacker | SQL injection / malicious input | Insufficient input validation, Edge Function gaps | Attackers may access, modify, or delete database information through unvalidated inputs | Input validation, parameterized queries, Edge Function JWT verification |
+| **CUFMAI Mobile App** | Cyber attacker | SQL injection / malicious input | Insufficient input validation, Edge Function gaps | Attackers may access, modify, or delete database information through unvalidated inputs | Input validation, parameterized queries, Edge Function JWT verification |
 | **Order & Transaction Records** | Insider / Cyber attacker | Unauthorized database access | Excessive privileges, weak RLS enforcement | Unauthorized modification could compromise financial records and order integrity | Least-privilege RLS, database access controls, audit logging |
 | **Verification Documents** | Unauthorized user / Insider | Stolen credentials or storage policy error | Private bucket misconfiguration, no access monitoring | Government IDs and selfies could be exposed leading to identity theft | Private storage bucket, owner-only RLS, admin access logging, regular policy audits |
 | **AR Foot Measurements** | Insider / Accidental user | Manipulated or incorrect input | Lack of human verification for accuracy | Incorrect foot measurements lead to wrong size recommendations and customer dissatisfaction | Manual fallback entry, measurement confidence scoring, customer confirmation step |
@@ -282,7 +282,7 @@ The system processes personal data of Philippine citizens without documented pri
 
 ---
 
-*SOLEVISION — Empowering local Filipino artisans with modern technology to reach more customers and deliver perfectly-fitted footwear.*
+*CUFMAI — Empowering local Filipino artisans with modern technology to reach more customers and deliver perfectly-fitted footwear.*
 
 *Generated with Codebuff 🤖*
 *Co-Authored-By: Codebuff <noreply@codebuff.com>*

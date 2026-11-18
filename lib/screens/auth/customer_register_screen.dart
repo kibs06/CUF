@@ -318,7 +318,7 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
       eyebrow: 'CUSTOMER',
       title: 'Create account',
       subtitle:
-          'Join SoleVision to discover handcrafted footwear from Carcar’s artisans.',
+          'Join CUFMAI to discover handcrafted footwear from Carcar’s artisans.',
       child: Form(
         key: _formKey,
         child: Column(

@@ -239,7 +239,7 @@ def build_glb() -> tuple[bytes, dict]:
         )
 
     gltf = {
-        "asset": {"version": "2.0", "generator": "SoleVision placeholder shoe generator (V0 spike)"},
+        "asset": {"version": "2.0", "generator": "CUFMAI placeholder shoe generator (V0 spike)"},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
         "nodes": [{"name": "placeholder_shoe", "mesh": 0}],

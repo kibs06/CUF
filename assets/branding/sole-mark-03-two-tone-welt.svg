@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Two-tone welt — a rust welt ring around an espresso footbed, joined by a stitch">
-  <title>SoleVision mark 03 — Two-Tone Welt</title>
+  <title>CUFMAI mark 03 — Two-Tone Welt</title>
   <!-- Welt ring: the outer leather that gets stitched to the upper. -->
   <path fill="#B5622E" d="M256,64 C200,64 160,110 160,176 C160,240 182,268 182,300 C182,342 170,378 170,404 C170,450 208,470 256,470 C304,470 342,450 342,404 C342,378 330,342 330,300 C330,268 352,240 352,176 C352,110 312,64 256,64 Z"/>
   <!-- Footbed: the same form, scaled down inside the welt. -->

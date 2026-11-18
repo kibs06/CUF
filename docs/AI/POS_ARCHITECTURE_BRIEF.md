@@ -1,4 +1,4 @@
-# SoleVision POS — Architecture Brief
+# CUFMAI POS — Architecture Brief
 
 > Concise, code-verified reference for AI agents working on the Point of Sale system.
 > **Last updated:** August 6, 2026 — verified against `pos_screen.dart`, `supabase_service.dart`, `order_service.dart`.

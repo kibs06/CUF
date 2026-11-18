@@ -94,7 +94,7 @@ D/FlutterRenderer( 2147): Width is zero. 0,0
 **Approach:** Create a minimal red screen to isolate whether the issue is in the widget tree or the rendering pipeline.
 
 **Implementation:**
-- Replaced entire `SplashScreen.build()` with minimal `Scaffold(backgroundColor: Colors.red, body: Text('SOLEVISION DIAGNOSTIC'))`
+- Replaced entire `SplashScreen.build()` with minimal `Scaffold(backgroundColor: Colors.red, body: Text('CUFMAI DIAGNOSTIC'))`
 - Kept `initState` with animation controller (unused but harmless)
 
 **Build:** Succeeded.
@@ -130,7 +130,7 @@ D/FlutterRenderer( 2147): Width is zero. 0,0
 1. Set up remote: `git remote add origin https://github.com/kibs06/CUF.git`
 2. Renamed branch: `git branch -M main`
 3. Staged all files: `git add -A`
-4. Committed: `git commit -m "feat: SoleVision marketplace - Flutter + Supabase backend"`
+4. Committed: `git commit -m "feat: CUFMAI marketplace - Flutter + Supabase backend"`
 5. Handled merge conflict on README.md (kept local version)
 6. Force pushed to overwrite remote (fresh repo)
 
@@ -154,7 +154,7 @@ return await _auth.authenticate(
 
 // After (local_auth 3.0)
 return await _auth.authenticate(
-  localizedReason: 'Verify your identity to sign in to SoleVision',
+  localizedReason: 'Verify your identity to sign in to CUFMAI',
   biometricOnly: true,
   persistAcrossBackgrounding: true,
 );
@@ -222,7 +222,7 @@ CREATE POLICY "Sellers can insert into own store, admins any"
 
 | Commit | Message | Files Changed |
 |--------|---------|---------------|
-| `3f6969b` | feat: SoleVision marketplace - Flutter + Supabase backend | 84 files |
+| `3f6969b` | feat: CUFMAI marketplace - Flutter + Supabase backend | 84 files |
 | `b8805e5` | Merge branch 'main' of https://github.com/kibs06/CUF | README conflict resolved |
 
 ---

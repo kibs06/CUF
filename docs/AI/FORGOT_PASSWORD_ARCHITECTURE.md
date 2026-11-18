@@ -126,8 +126,12 @@ absorbed in-process (all three landed on Oct 12, 2026, below):
 3. `tool/apply_live_auth_mail.dart` writes the live fields in the same `PATCH`
    it already used for SMTP and the templates: `site_url` = the portal, and
    `uri_allow_list` merged with the app's two deep links and the portal's
-   `/account` + `/**`. `--check` prints both values and three rows of its own,
-   so the destination is verifiable without opening a mailbox.
+   `/account` + `/**`. The same `PATCH` writes `supabase/templates/recovery.html`
+   as the reset mail body — versioned here because this is the one auth mail
+   whose link the whole flow depends on, and the tool refuses to apply a reset
+   template that has lost `{{ .ConfirmationURL }}`. `--check` prints both
+   destinations and the rows of its own, so the destination is verifiable
+   without opening a mailbox.
 4. `test/services/deep_link_service_test.dart` pins both deep links against
    `AndroidManifest.xml`, and `test/services/password_reset_redirect_test.dart`
    pins the recovery constant against the three call sites, the tool's
@@ -174,6 +178,50 @@ project's Site URL fallback — and Supabase hosts no reset UI of its own.
 8. The session is now a normal one: the customer is in the shell, and the old
    password no longer works (the website route instead lands them on the
    portal's `/account`, step 7 happening there)
+
+---
+
+## The no-e-mail path — change it inside the app (signed-in only)
+
+**Supabase's own rule decides what is possible here, so it is worth stating
+plainly:**[`updateUser`](https://supabase.com/docs/reference/dart/auth-updateuser)
+"updates user data for a signed-in user", and the password-reset guide
+(https://supabase.com/docs/guides/auth/passwords) reaches that call through a
+delivered link or OTP. There is **no endpoint that sets a password from an
+address alone** — and that is not a missing feature, it is the property that
+stops anyone who types somebody else's email from taking the account. So:
+
+| The customer is… | What can be done with no e-mail | Where |
+|---|---|---|
+| **signed in** on this device (restored session, biometric login, local lockout not a sign-out) | set a new password on the live session — `updateUser(password:)` | `ChangePasswordScreen` (Account → Security → Change Password, and Manage Login Device) |
+| **signed out** and has forgotten it | nothing safe: a link/OTP must be delivered, or an admin with the service role must intervene | the login screen's "Forgot password?" (e-mail link), or a support flow |
+
+**Why the signed-in case does not ask for the old password.** The customer who
+needs this screen is the one who forgot it; requiring it would send them back
+to the e-mail link the screen exists to avoid. Possession of the session is the
+proof, exactly as it is for every other signed-in action — the same reason
+`updateUser` is allowed to act on it at all. Changing the password from
+**Manage Login Device** passes `signOutOtherDevices: true`, which ends every
+other session (`SignOutScope.others`) and keeps the one in hand — the promise
+that button has always made.
+
+**A failed sign-out is a warning, not a failed change.** The password update and
+the session revocation are two calls, and only the first is the fact: by the
+time `signOut(others)` runs, the password has already changed. So
+`AuthService.changePassword` returns whether the follow-up happened (`null` not
+requested, `true` ended, `false` could not), and the screen warns *"Password
+updated, but we could not end your other sessions"* rather than throwing. A
+partial failure that reads as a failed change would send the customer to retry
+something that already succeeded — and a second retry would change the password
+again.
+
+**What this deliberately is not:** a form that accepts an address and a new
+password while signed out. That is account takeover with extra steps, and no
+Supabase client API offers it. If the project's mailer is down (the Oct 12
+status above) and the customer is signed out, the honest answers are a working
+mailer, an SMS OTP provider (phone auth — https://supabase.com/docs/guides/auth/phone-login
+needs a provider such as Twilio), or an administrator using the service role to
+generate a recovery link (`auth.admin.generateLink({type:'recovery'})`).
 
 ---
 
@@ -299,6 +347,8 @@ than restating copy of its own.
 | `lib/services/auth_service.dart` | Supabase `resetPasswordForEmail()` call and `updatePassword()` |
 | `lib/services/deep_link_service.dart` | `authRecoveryRedirect` (`solvision://auth/recovery`) + its routing predicate |
 | `lib/screens/auth/reset_password_screen.dart` | The set-new-password screen the reset link opens |
+| `lib/screens/shared/change_password_screen.dart` | In-app, no-e-mail password change on the signed-in session (Account → Security, and Manage Login Device) |
+| `test/screens/change_password_screen_test.dart` | The screen's contracts: no old password asked, exact new password handed over, server refusals mapped |
 | `lib/screens/auth_gate.dart` | Renders that screen ahead of every profile-based route |
 | `lib/main.dart` (`DeepLinkHost`) | Routes the incoming recovery link into the provider |
 | `lib/utils/auth_error_messages.dart` | Error message mapping (`weak_password`, `same_password`) |

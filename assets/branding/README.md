@@ -133,7 +133,7 @@ shrink it.
 ## Naming
 
 The app carries two names: the **association**, CUFMAI (the Android launcher
-label), and the **product**, SoleVision (`com.solevision.app`, and the docs under
+label), and the **product**, CUFMAI (`com.solevision.app`, and the docs under
 `docs/`). The C in this mark is CUFMAI's. There is still no wordmark; that is the
 next piece of design work, and `DESIGN_BRIEF.md` scopes it.
 

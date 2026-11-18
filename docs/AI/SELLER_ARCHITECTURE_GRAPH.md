@@ -321,4 +321,4 @@ Quick "where do I even start" guidance for frequent request types.
 
 ---
 
-*SoleVision Seller Architecture Quick Reference — July 29, 2026*
+*CUFMAI Seller Architecture Quick Reference — July 29, 2026*

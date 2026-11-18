@@ -104,7 +104,7 @@ Both inventory triggers are `SECURITY DEFINER` (July 4 2026 fix — RLS was bloc
 
 ## 📚 Deep-dive docs
 
-- [[docs/SoleVision_Complete_Documentation|📘 Master documentation]] — 22 sections; the schema reference (Section 4)
+- [[docs/CUFMAI_Complete_Documentation|📘 Master documentation]] — 22 sections; the schema reference (Section 4)
 - [[SCHEMA_REFERENCE|SCHEMA_REFERENCE.md]] — ID types for review submission (repo root)
 - [[docs/AI_PROJECT_SUMMARY|⚡ AI Project Summary — "Database Schema"]] — tables, FK rules, triggers, RLS matrix
 - [[docs/HARDENING_SQL_QUERIES|Hardening SQL queries]]

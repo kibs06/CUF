@@ -38,6 +38,9 @@
 //
 // Env: PAYMONGO_SECRET_KEY (required), SUPABASE_URL,
 //      SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
+//      PAYMONGO_LIVEMODE ("true" = live) — MUST agree with the key's
+//      mode (sk_live_/sk_test_); a mismatch blocks checkout and is
+//      audited as checkout_session.blocked_key_mode_mismatch,
 //      PAYMONGO_SUCCESS_URL / PAYMONGO_CANCEL_URL (deep links),
 //      GCASH_PAYMENT_EXPIRY_MINUTES (default 15)
 // ══════════════════════════════════════════════════════════════════
@@ -46,8 +49,12 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   createGcashCheckoutSession,
+  PaymongoModeMismatchError,
+  paymongoConfiguredMode,
+  paymongoKeyMode,
   resolveInventorySize,
 } from "../_shared/paymongo.ts";
+import { notifyAdminsPaymentModeMismatch } from "../_shared/admin_alert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,6 +93,81 @@ function computeFeeCents(orderTotalCents: number, rateBps: number, vatBps: numbe
   if (rTotal >= 1) throw new Error("Invalid fee config: all-in rate >= 100%");
   const chargedCents = Math.ceil(orderTotalCents / (1 - rTotal));
   return { chargedCents, feeCents: chargedCents - orderTotalCents };
+}
+
+/// Append-only audit row for a blocked mode mismatch, spam-capped the same
+/// way the rejected-signature path is (100 rows/hour). A misconfigured deploy
+/// sends EVERY checkout attempt through this branch, so 100 rows is ample
+/// evidence and keeps payment_webhook_events from filling up; the suppression
+/// is logged, so the incident is never silent.
+const MODE_MISMATCH_AUDIT_CAP_PER_HOUR = 100;
+
+async function auditModeMismatch(
+  serviceClient: any,
+  row: {
+    orderId?: string | null;
+    keyMode: string;
+    configuredMode: string;
+    eventType: string;
+  },
+): Promise<void> {
+  try {
+    const { count } = await serviceClient
+      .from("payment_webhook_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", row.eventType)
+      .gte("received_at", new Date(Date.now() - 3600_000).toISOString());
+    if ((count ?? 0) >= MODE_MISMATCH_AUDIT_CAP_PER_HOUR) {
+      console.error(
+        `[CREATE-PI] mode-mismatch audit suppressed (cap ${MODE_MISMATCH_AUDIT_CAP_PER_HOUR}/h reached)`,
+      );
+      return;
+    }
+    const auditKey = `mode-${crypto.randomUUID()}`;
+    const { error } = await serviceClient.from("payment_webhook_events").insert({
+      paymongo_event_id: auditKey,
+      event_type: row.eventType,
+      order_id: row.orderId ?? null,
+      status: "failed",
+      livemode: row.configuredMode === "live",
+      redacted_payload: {
+        event_id: auditKey,
+        type: row.eventType,
+        resource_id: null,
+        status: "failed",
+        key_mode: row.keyMode,
+        configured_mode: row.configuredMode,
+      },
+    });
+    if (error) {
+      console.error("[CREATE-PI] mode-mismatch audit write failed:", error.message);
+    }
+
+    // First write in the hourly window rings the admin bell; later ones are
+    // audit-only, so a misconfigured deploy cannot spam every admin. The call
+    // is best-effort and swallowed: the caller still returns its 503.
+    if (!error && (count ?? 0) === 0) {
+      try {
+        await notifyAdminsPaymentModeMismatch(serviceClient, {
+          source: "checkout",
+          disposition: "blocked",
+          detail:
+            "Online checkout was refused before any order was created because " +
+            "the gateway key and the configured mode disagree.",
+          keyMode: row.keyMode,
+          configuredMode: row.configuredMode,
+          orderId: row.orderId ?? null,
+        });
+      } catch {
+        // The helper swallows internally; this guards against future changes.
+      }
+    }
+  } catch (e) {
+    console.error(
+      "[CREATE-PI] could not write mode-mismatch audit:",
+      (e as any)?.message ?? e,
+    );
+  }
 }
 
 serve(async (req: Request) => {
@@ -153,6 +235,29 @@ serve(async (req: Request) => {
     .toUpperCase();
 
   const serviceClient = createClient(supabaseUrl, serviceKey);
+
+  // ── Mode guard — refuse to run checkout on a mismatched gateway ──
+  // The secret key decides whether a session is TEST or LIVE; the
+  // PAYMONGO_LIVEMODE flag only labels what we record. If they disagree,
+  // a customer would pay in the wrong environment and the order would sit
+  // at awaiting_payment with the books claiming otherwise. Checked BEFORE
+  // any order row exists, so a misconfigured deploy can never churn out
+  // cancelled orders. The audit row carries both modes for diagnosis.
+  const keyMode = paymongoKeyMode();
+  const configuredMode = paymongoConfiguredMode();
+  if (keyMode !== configuredMode) {
+    const message = new PaymongoModeMismatchError(keyMode, configuredMode).message;
+    console.error(`[CREATE-PI] BLOCKED — ${message}`);
+    await auditModeMismatch(serviceClient, {
+      keyMode,
+      configuredMode,
+      eventType: "checkout_session.blocked_key_mode_mismatch",
+    });
+    // Never expose the gateway's configuration state to the customer.
+    return json(503, {
+      error: "GCash payment is temporarily unavailable. Please try again later.",
+    });
+  }
 
   // ── Per-customer mini-sweep (runs BEFORE the pending-intent lookup) ─
   // The pg_cron expiry sweep is NOT guaranteed to exist (incident
@@ -470,37 +575,65 @@ serve(async (req: Request) => {
       lineItems,
       successUrl,
       cancelUrl,
-      `Payment for SoleVision Order #${String(orderId).slice(-8)}`,
+      `Payment for CUFMAI Order #${String(orderId).slice(-8)}`,
       { order_id: orderId, idempotency_key: idempotencyKey },
     );
   } catch (e: any) {
-    console.error("[CREATE-PI] PayMongo failed:", e?.message ?? e);
+    // Defense in depth: the shared helper asserts the mode too. If that is
+    // what tripped (env changed mid-request, or a future caller bypassed the
+    // pre-check), record it under its own event type so the incident is
+    // never mistaken for a generic gateway failure.
+    const modeMismatch = e instanceof PaymongoModeMismatchError ? e : null;
+    const eventType = modeMismatch
+      ? "checkout_session.blocked_key_mode_mismatch"
+      : "checkout_session.create_failed";
+    console.error(
+      modeMismatch
+        ? `[CREATE-PI] BLOCKED — ${e.message}`
+        : `[CREATE-PI] PayMongo failed: ${e?.message ?? e}`,
+    );
     // No money moved and no stock held — close the order for audit.
     await serviceClient
       .from("orders")
       .update({
         status: "cancelled",
         payment_status: "failed",
-        cancellation_reason: "Payment gateway error",
+        cancellation_reason: modeMismatch
+          ? "Payment gateway misconfigured (test/live mismatch)"
+          : "Payment gateway error",
         cancellation_details: String(e?.message ?? "PayMongo error").slice(0, 500),
         cancelled_at: new Date().toISOString(),
       })
       .eq("id", orderId);
     // Append-only audit row (synthetic key — not a real webhook event).
-    const errKey = `err-${crypto.randomUUID()}`;
-    await (serviceClient.from("payment_webhook_events").insert({
-      paymongo_event_id: errKey,
-      event_type: "checkout_session.create_failed",
-      order_id: orderId,
-      status: "failed",
-      livemode: Deno.env.get("PAYMONGO_LIVEMODE") === "true",
-      redacted_payload: {
-        event_id: errKey,
-        type: "checkout_session.create_failed",
-        resource_id: null,
+    if (modeMismatch) {
+      await auditModeMismatch(serviceClient, {
+        orderId,
+        keyMode: modeMismatch.keyMode,
+        configuredMode: modeMismatch.configuredMode,
+        eventType,
+      });
+    } else {
+      const errKey = `err-${crypto.randomUUID()}`;
+      await (serviceClient.from("payment_webhook_events").insert({
+        paymongo_event_id: errKey,
+        event_type: eventType,
+        order_id: orderId,
         status: "failed",
-      },
-    }) as any);
+        livemode: paymongoConfiguredMode() === "live",
+        redacted_payload: {
+          event_id: errKey,
+          type: eventType,
+          resource_id: null,
+          status: "failed",
+        },
+      }) as any);
+    }
+    if (modeMismatch) {
+      return json(503, {
+        error: "GCash payment is temporarily unavailable. Please try again later.",
+      });
+    }
     return json(502, { error: "Payment provider unavailable. Please try again." });
   }
 
@@ -508,7 +641,7 @@ serve(async (req: Request) => {
   const expiryMinutes = Number(Deno.env.get("GCASH_PAYMENT_EXPIRY_MINUTES") ?? 15);
   const expiresAt = new Date(Date.now() + expiryMinutes * 60_000).toISOString();
 
-  const livemode = Deno.env.get("PAYMONGO_LIVEMODE") === "true";
+  const livemode = paymongoConfiguredMode() === "live";
   const { error: piErr } = await serviceClient.from("payment_intents").insert({
     customer_id: userId,
     order_id: orderId,
@@ -552,7 +685,7 @@ serve(async (req: Request) => {
         : "checkout_session.persist_failed",
       order_id: orderId,
       status: "failed",
-      livemode: Deno.env.get("PAYMONGO_LIVEMODE") === "true",
+      livemode: paymongoConfiguredMode() === "live",
       redacted_payload: {
         event_id: dupKey,
         type: "checkout_session.persist_failed",

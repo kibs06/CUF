@@ -386,3 +386,27 @@ body {
   border-radius: 8px;
 }
 
+
+/* ── Platform GCash page ───────────────────────────────────────────────
+   Staggered entry for the stacked panels. Transform/opacity only, and it
+   stands down for visitors who ask for reduced motion. */
+@keyframes gcash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.gcash-rise {
+  animation: gcash-rise 760ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gcash-rise {
+    animation: none;
+  }
+}

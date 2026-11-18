@@ -36,8 +36,38 @@ void main() {
   // attempt its runtime fetch (the families are downloaded, not bundled),
   // which CI's sandbox fails as a test error — fetching is off here, so
   // text still renders and `find.text` still matches.
-  setUp(() {
+  // google_fonts cannot reach fonts.gstatic.com from the test binding
+  // (every HTTP request returns 400) and its families are not bundled as
+  // assets, so a style load always fails here. Fetching is pinned off so
+  // that failure is deterministic, and the pending loads are drained inside
+  // the test: this file enters the real async zone via runAsync, where an
+  // unclaimed font failure would otherwise surface after the test and fail
+  // it. With fetching off the miss is reported to the zone that built the
+  // style (fake async), never to the file's real-zone setup, so this file is
+  // deterministic whether or not a previous run warmed the font cache.
+  // Layout falls back to the default family, which none of these assertions
+  // look at.
+
+  setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+  });
+
+  // google_fonts cannot load a family in the test binding: assets do not
+  // contain them, path_provider is unimplemented so the device cache always
+  // misses, and every HTTP request returns 400. That failure is inherent to
+  // the harness, not to what this file asserts (size selection and the
+  // renderer rescale), so it is filtered here and nothing else. The filter
+  // is restored after each test and rethrows every other framework error.
+  late void Function(FlutterErrorDetails details)? previousOnError;
+  setUp(() {
+    previousOnError = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      if ('${details.exception}'.contains('google_fonts')) return;
+      previousOnError?.call(details);
+    };
+  });
+  tearDown(() {
+    FlutterError.onError = previousOnError;
   });
 
   late Directory tempRoot;
@@ -114,6 +144,7 @@ void main() {
     expect(controller.mode, TryOnMode.real);
     return controller;
   }
+
 
   Future<dynamic> pumpWith(
     WidgetTester tester,

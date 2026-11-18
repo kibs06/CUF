@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/biometric_service.dart';
+import '../../services/passkey_service.dart';
 import '../../utils/auth_error_messages.dart';
 import '../../widgets/app_error_toast.dart';
 import '../../widgets/auth/dark_auth_text_field.dart';
@@ -79,6 +82,13 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
   bool _biometricEnabled = false;
   bool _biometricLoading = false;
 
+  // Passkey state. Sign-in is discoverable, so no email is needed.
+  bool _passkeyLoading = false;
+
+  bool get _passkeysSupported =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
   // Mode-switch state.
   AuthEntryMode _mode = AuthEntryMode.create;
 
@@ -125,11 +135,7 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
       // Wait for the first frame so the overlay renders on top
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        LockoutOverlay.show(
-          context,
-          email: '',
-          remainingMinutes: 30,
-        );
+        LockoutOverlay.show(context, email: '', remainingMinutes: 30);
       });
     }
   }
@@ -175,15 +181,15 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
 
   // ─── Navigation (create mode) ─────────────────────────────────────────
   void _openCustomer() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CustomerRegisterScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const CustomerRegisterScreen()));
   }
 
   void _openSeller() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SellerApplicationFlow()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SellerApplicationFlow()));
   }
 
   // ─── Sign-in logic (carried over from the legacy LoginScreen) ─────────
@@ -302,6 +308,26 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
   void _showError(String message) {
     // Root-overlay toast — floats above the video/content and the keyboard.
     AppErrorToast.show(context, message: message);
+  }
+
+  /// Opens the platform passkey picker and lets Supabase verify the signed
+  /// challenge. AuthGate observes the resulting signed-in event, so there is
+  /// no navigation here (the same contract as password login).
+  Future<void> _loginWithPasskey() async {
+    if (_passkeyLoading) return;
+    setState(() => _passkeyLoading = true);
+    try {
+      final response = await PasskeyService.instance.signIn();
+      if (!mounted) return;
+      if (response.session == null) {
+        _showError('Passkey sign-in did not return a session.');
+      }
+    } catch (e) {
+      if (!mounted || isPasskeyCancellation(e)) return;
+      _showError(passkeyErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _passkeyLoading = false);
+    }
   }
 
   /// Offer biometric enrollment after a successful email/password login.
@@ -451,58 +477,59 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
           fit: StackFit.expand,
           children: [
             const VideoHeroBackground(),
-          SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AuthSpacing.s24,
-                    AuthSpacing.s8,
-                    AuthSpacing.s24,
-                    0,
+            SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AuthSpacing.s24,
+                      AuthSpacing.s8,
+                      AuthSpacing.s24,
+                      0,
+                    ),
+                    child: _buildHeader(),
                   ),
-                  child: _buildHeader(),
-                ),
-                // Middle (video) + bottom-anchored content block. When the
-                // content fits it is pinned to the bottom; when it overflows
-                // (short device, large text, keyboard up) the scroll view
-                // takes over — nothing ever clips.
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(
-                          AuthSpacing.s24,
-                          AuthSpacing.s12,
-                          AuthSpacing.s24,
-                          AuthSpacing.s16,
-                        ),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight -
-                                AuthSpacing.s12 -
-                                AuthSpacing.s16,
+                  // Middle (video) + bottom-anchored content block. When the
+                  // content fits it is pinned to the bottom; when it overflows
+                  // (short device, large text, keyboard up) the scroll view
+                  // takes over — nothing ever clips.
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(
+                            AuthSpacing.s24,
+                            AuthSpacing.s12,
+                            AuthSpacing.s24,
+                            AuthSpacing.s16,
                           ),
-                          child: IntrinsicHeight(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [_buildContent(auth)],
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minHeight:
+                                  constraints.maxHeight -
+                                  AuthSpacing.s12 -
+                                  AuthSpacing.s16,
+                            ),
+                            child: IntrinsicHeight(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [_buildContent(auth)],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
   }
 
   /// Pinned top block: static CUFMAI eyebrow + the animated title/subtitle
@@ -538,8 +565,9 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
           exitTo: _isForward ? -1.0 : 1.0,
           alignment: Alignment.topCenter,
           incoming: _titleBlockFor(_mode),
-          outgoing:
-              _previousMode == null ? null : _titleBlockFor(_previousMode!),
+          outgoing: _previousMode == null
+              ? null
+              : _titleBlockFor(_previousMode!),
         ),
       ],
     );
@@ -552,10 +580,7 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
       children: [
         Text(
           signin ? 'Welcome back' : 'Create your account',
-          style: AppConstants.headlineStyle(
-            fontSize: 28,
-            color: Colors.white,
-          ),
+          style: AppConstants.headlineStyle(fontSize: 28, color: Colors.white),
         ),
         const SizedBox(height: AuthSpacing.s8),
         // Subtitle in a fixed two-line slot: the two subtitles differ in
@@ -595,8 +620,9 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
       // empty video space above grows/shrinks.
       alignment: Alignment.bottomCenter,
       incoming: _contentFor(_mode, auth),
-      outgoing:
-          _previousMode == null ? null : _contentFor(_previousMode!, auth),
+      outgoing: _previousMode == null
+          ? null
+          : _contentFor(_previousMode!, auth),
     );
   }
 
@@ -627,7 +653,7 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
           link: 'Apply to sell',
           fontSize: 14,
           underlineLink: true,
-          semanticsLabel: 'A shoemaker or artisan? Apply to sell on SoleVision',
+          semanticsLabel: 'A shoemaker or artisan? Apply to sell on CUFMAI',
           onTap: _openSeller,
         ),
         const SizedBox(height: AuthSpacing.s16),
@@ -730,6 +756,13 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
                 boxShadow: _heroButtonShadow,
               ),
             ),
+            // Real WebAuthn passkey sign-in. Discoverable credentials mean
+            // this works without an email typed above. The platform picker
+            // handles the account choice.
+            if (_passkeysSupported) ...[
+              const SizedBox(height: AuthSpacing.s12),
+              _buildPasskeyButton(),
+            ],
             const SizedBox(height: AuthSpacing.s16),
             // Same social buttons as create mode, but unknown Gmails bounce
             // to create mode instead of auto-provisioning (sign-in is for
@@ -756,6 +789,44 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
               onTap: () => _switchMode(AuthEntryMode.create),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Passkey CTA — an outlined pill that sits under the password CTA without
+  /// competing with it. Uses the same dark-video treatment as the other auth
+  /// actions.
+  Widget _buildPasskeyButton() {
+    return SizedBox(
+      height: 50,
+      child: OutlinedButton.icon(
+        onPressed: _passkeyLoading ? null : _loginWithPasskey,
+        icon: _passkeyLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.key_rounded, size: 21),
+        label: Text(
+          _passkeyLoading ? 'Waiting for device…' : 'Sign in with Passkey',
+          style: AppConstants.bodyStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.38)),
+          backgroundColor: Colors.white.withValues(alpha: 0.07),
+          shape: RoundedRectangleBorder(
+            borderRadius: AppConstants.buttonRadius,
+          ),
         ),
       ),
     );
@@ -793,10 +864,7 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
           child: GestureDetector(
             onTap: _biometricLoading ? null : _loginWithBiometrics,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 14,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               decoration: BoxDecoration(
                 color: AppConstants.surfaceLight,
                 borderRadius: AppConstants.buttonRadius,
@@ -909,15 +977,13 @@ class _SlideSwap extends StatelessWidget {
       children: [
         // Outgoing: settle → slide away in the exit direction, fading out.
         SlideTransition(
-          position: Tween<Offset>(
-            begin: Offset.zero,
-            end: Offset(exitTo, 0),
-          ).animate(
-            // One shared curve for both directions so the two children
-            // mirror each other exactly — a mismatched easeIn/easeOut made
-            // one child lag the other mid-transition.
-            CurvedAnimation(parent: animation, curve: _swapCurve),
-          ),
+          position: Tween<Offset>(begin: Offset.zero, end: Offset(exitTo, 0))
+              .animate(
+                // One shared curve for both directions so the two children
+                // mirror each other exactly — a mismatched easeIn/easeOut made
+                // one child lag the other mid-transition.
+                CurvedAnimation(parent: animation, curve: _swapCurve),
+              ),
           child: FadeTransition(
             opacity: Tween<double>(begin: 1, end: 0).animate(animation),
             child: ExcludeSemantics(excluding: true, child: outgoing),
@@ -928,9 +994,7 @@ class _SlideSwap extends StatelessWidget {
           position: Tween<Offset>(
             begin: Offset(-exitTo, 0),
             end: Offset.zero,
-          ).animate(
-            CurvedAnimation(parent: animation, curve: _swapCurve),
-          ),
+          ).animate(CurvedAnimation(parent: animation, curve: _swapCurve)),
           child: FadeTransition(
             opacity: Tween<double>(begin: 0, end: 1).animate(animation),
             child: incoming,
@@ -1016,20 +1080,21 @@ class _CenteredLinkRowState extends State<_CenteredLinkRow> {
                     TextSpan(text: widget.prefix),
                     TextSpan(
                       text: widget.link,
-                      style: AppConstants.bodyStyle(
-                        fontSize: widget.fontSize,
-                        fontWeight: FontWeight.bold,
-                        // Pinned light: the hero behind this row is dark in both
-                        // modes, and the prefix beside it is pinned white too.
-                        color: AppConstants.inkInverse,
-                      ).copyWith(
-                        decoration: widget.underlineLink
-                            ? TextDecoration.underline
-                            : TextDecoration.none,
-                        decorationColor: widget.underlineLink
-                            ? AppConstants.inkInverse.withValues(alpha: 0.8)
-                            : null,
-                      ),
+                      style:
+                          AppConstants.bodyStyle(
+                            fontSize: widget.fontSize,
+                            fontWeight: FontWeight.bold,
+                            // Pinned light: the hero behind this row is dark in both
+                            // modes, and the prefix beside it is pinned white too.
+                            color: AppConstants.inkInverse,
+                          ).copyWith(
+                            decoration: widget.underlineLink
+                                ? TextDecoration.underline
+                                : TextDecoration.none,
+                            decorationColor: widget.underlineLink
+                                ? AppConstants.inkInverse.withValues(alpha: 0.8)
+                                : null,
+                          ),
                     ),
                   ],
                 ),

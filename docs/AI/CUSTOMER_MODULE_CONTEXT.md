@@ -1,4 +1,4 @@
-# SoleVision — Customer Module AI Context
+# CUFMAI — Customer Module AI Context
 
 > Condensed reference for AI agents working on the customer side.
 > Derived from CUSTOMER_MODULE_DOCUMENTATION.md v1.0.0 (July 16, 2026).
