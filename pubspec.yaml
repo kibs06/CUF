@@ -111,6 +111,7 @@ dependencies:
   pdf: ^3.13.1
   printing: ^5.15.1
   passkeys: ^2.24.2
+  android_intent_plus: ^6.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

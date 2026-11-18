@@ -616,7 +616,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           style: AppConstants.headlineStyle(fontSize: 17),
         ),
         content: Text(
-          'The reserved items are released and this payment window closes.\n\n'
+          'This payment window closes and nothing is charged.\n\n'
           'Only cancel if you have NOT sent any money yet. If you already '
           'paid, submit the proof instead — a transfer with no proof attached '
           'cannot be verified.',

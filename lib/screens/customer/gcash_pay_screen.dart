@@ -12,8 +12,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/direct_gcash_service.dart';
+import '../../services/gcash_launcher.dart';
 import '../../services/upload_service.dart';
 import '../../utils/gcash_receipt_parser.dart';
+import '../../utils/payout_account.dart';
 import '../../widgets/gcash_flow_kit.dart';
 import 'tracking_screen.dart';
 
@@ -365,6 +367,69 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
     );
   }
 
+  /// Copy the GCash number — digits only — and put GCash in front of the
+  /// customer.
+  ///
+  /// Two details matter here. The clipboard gets the digits alone: a number
+  /// stored as "0961 579 8280" is rejected by GCash's send-to field, and the
+  /// customer cannot see why. And the app launches straight after the copy,
+  /// because the paste is the next thing they need to do — nothing is
+  /// prefilled (GCash has no public deep link into send-money), so the
+  /// clipboard is the only hand-off there is.
+  Future<void> _copyGcashNumber() async {
+    final raw = (widget.gcashNumber ?? '').trim();
+    final digits = normalizeGcashNumber(raw);
+    final value = digits.isEmpty ? raw : digits;
+    if (value.isEmpty) return;
+
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Number copied — opening GCash…'),
+        backgroundColor: AppConstants.success,
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    final result = await GcashLauncher.open();
+    if (!mounted) return;
+    messenger.hideCurrentSnackBar();
+    switch (result) {
+      case GcashLaunchResult.opened:
+        // The customer is already looking at GCash; this is what greets them
+        // on the way back if they return without sending.
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('$value is copied — paste it as the GCash number'),
+            backgroundColor: AppConstants.success,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      case GcashLaunchResult.notInstalled:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '$value is copied, but GCash is not installed on this phone. '
+              'Paste it wherever you send from.',
+            ),
+            backgroundColor: AppConstants.statusPendingColor,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      case GcashLaunchResult.unsupported:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('$value is copied — open GCash and paste it'),
+            backgroundColor: AppConstants.success,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -655,8 +720,9 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
             GcashCopyRow(
               label: 'GCash number',
               value: widget.gcashNumber!,
-              onCopy: () => _copyToClipboard(widget.gcashNumber!),
-              semanticsLabel: 'Copy GCash number',
+              onCopy: _copyGcashNumber,
+              semanticsLabel:
+                  'Copy GCash number and open GCash to send the payment',
             ),
         ],
       ),

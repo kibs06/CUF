@@ -26,7 +26,7 @@ packages:
     source: hosted
     version: "12.1.0"
   android_intent_plus:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: android_intent_plus
       sha256: "4d4bbd619d698cbee3c400ba89246ecb0f525146b0ae05389f62ede47abd5bec"

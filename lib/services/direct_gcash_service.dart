@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../utils/proof_rejection.dart';
 import 'upload_service.dart';
 
 /// Result of creating a gateway-free GCash checkout
@@ -294,9 +295,16 @@ class DirectGcashService {
   }
 
   /// Step 3 (seller): accept the proof → the order enters the normal
-  /// pipeline. The money is in the PLATFORM account; the admin still has to
-  /// confirm it in the statement before any payout, which is why this is not
-  /// the last step of the money trail.
+  /// pipeline, and this is where its units are taken out of stock.
+  ///
+  /// The checkout never reserved them: the customer had not paid yet. If the
+  /// item sold out while the payment was pending, the server refuses the
+  /// deduction and this call throws with the reason, so the seller rejects
+  /// the proof (→ refund) instead of shipping stock that does not exist.
+  ///
+  /// The money is in the PLATFORM account; the admin still has to confirm it
+  /// in the statement before any payout, which is why this is not the last
+  /// step of the money trail.
   Future<void> verifyPayment(String orderId) async {
     try {
       await _client.rpc('verify_gcash_payment', params: {
@@ -313,13 +321,23 @@ class DirectGcashService {
   /// Step 3 (seller): reject the proof with a reason.
   ///
   /// Attempts 1 and 2 return the order to the customer with a fresh payment
-  /// window; the third rejection cancels the order and releases the stock.
-  Future<void> rejectProof(String orderId, String reason) async {
+  /// window; the third rejection cancels the order. Stock is not touched by a
+  /// rejection: an unpaid order never took any (see verifyPayment, which is
+  /// the only place stock leaves the shelf).
+  /// The returned outcome is what the caller has to tell the seller — the two
+  /// answers are different events, not two phrasings of one.
+  Future<ProofRejectionOutcome> rejectProof(
+    String orderId,
+    String reason,
+  ) async {
     try {
-      await _client.rpc('reject_gcash_proof', params: {
+      final result = await _client.rpc('reject_gcash_proof', params: {
         'p_order_id': orderId,
         'p_reason': reason,
       });
+      return ProofRejectionOutcome.fromJson(
+        result is Map ? Map<String, dynamic>.from(result) : const {},
+      );
     } catch (e) {
       throw _toException(
         e,

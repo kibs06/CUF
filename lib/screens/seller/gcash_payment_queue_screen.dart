@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
 import '../../services/direct_gcash_service.dart';
+import '../../utils/proof_rejection.dart';
 import '../../widgets/gcash_flow_kit.dart';
 import 'gcash_ref_scanner_screen.dart';
 import 'seller_earnings_screen.dart';
@@ -90,6 +91,8 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
             'id, customer_id, total_amount, order_code, '
             'payment_confirmation_deadline, review_deadline, '
             'created_at, payment_flagged, gcash_payment_proofs(*), '
+            'subtotal_amount, discount_amount, '
+            'order_items(*, products(name)), '
             'profiles!orders_customer_id_fkey(full_name)',
           )
           .eq('store_id', storeId)
@@ -234,11 +237,33 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Where the money is, before the seller taps: the transfer has
+            // already left the customer, and a reject is a decision about the
+            // proof — the return trip is a manual transfer by CUFMAI, not
+            // something this button does. Saying it here is the difference
+            // between a considered reject and a refund the customer has to
+            // chase.
+            Text(
+              'The customer has already sent this money to the platform\'s '
+              'GCash account. Rejecting rejects the proof only — it does not '
+              'send the money back.',
+              style: AppConstants.bodyStyle(fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 8),
             Text(
               'Order #$shortId goes back to the customer with your reason so '
-              'they can submit a corrected proof. On their 3rd rejection the '
-              'order is cancelled and the items released to stock.',
+              'they can submit a corrected proof, and CUFMAI refunds the '
+              'amount to them manually. On their 3rd rejection the order is '
+              'cancelled and the items are released to stock.',
               style: AppConstants.bodyStyle(fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            GcashBanner(
+              icon: Icons.warning_amber_rounded,
+              color: AppConstants.error,
+              text: 'Only reject when you cannot find this transfer in your '
+                  'GCash statement — a refund is a manual transfer, not a '
+                  'button.',
             ),
             const SizedBox(height: 14),
             TextField(
@@ -272,18 +297,25 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
     if (rejected != true || !mounted) return;
 
     try {
-      await _service.rejectProof(orderId, reasonController.text.trim());
+      // The RPC answers with what it did: back to the customer, or cancelled
+      // on the third rejection. Read it instead of assuming the harmless one —
+      // "they can correct it" is a lie on the order that just ended.
+      final outcome =
+          await _service.rejectProof(orderId, reasonController.text.trim());
       if (!mounted) return;
+      final notice = proofRejectionNotice(outcome);
       setState(() => _orders.removeWhere((o) => o['id'].toString() == orderId));
       if (_storeId != null) {
         unawaited(_loadHistory(Supabase.instance.client, _storeId!));
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Proof rejected — the customer can correct it (3 attempts total).',
-          ),
-          backgroundColor: AppConstants.success,
+        SnackBar(
+          content: Text(notice.text),
+          backgroundColor: notice.refundOwed
+              ? AppConstants.statusPendingColor
+              : AppConstants.success,
+          // Long enough to read when it is the refund sentence.
+          duration: Duration(seconds: notice.refundOwed ? 8 : 4),
         ),
       );
     } on DirectGcashException catch (e) {
@@ -622,6 +654,11 @@ class GcashOrderCard extends StatelessWidget {
     final senderName = proof?['sender_name']?.toString() ?? '—';
     final amountPaid = (proof?['amount_paid'] as num?)?.toDouble();
     final code = order['order_code']?.toString() ?? '—';
+    final items = order['order_items'] is List
+        ? (order['order_items'] as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList()
+        : <Map<String, dynamic>>[];
     final flagged = order['payment_flagged'] == true;
 
     final slaRemaining = reviewDeadline?.difference(now);
@@ -675,6 +712,10 @@ class GcashOrderCard extends StatelessWidget {
               text: 'Flagged by the admin — do not accept. Clear the flag from '
                   'Payment verification before deciding.',
             ),
+          ],
+          if (items.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _productsTile(items),
           ],
           const SizedBox(height: 14),
           GcashInsetTile(
@@ -742,21 +783,67 @@ class GcashOrderCard extends StatelessWidget {
           ),
           if (screenshotUrl != null && screenshotUrl!.isNotEmpty) ...[
             const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Image.network(
-                screenshotUrl!,
-                height: 160,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                semanticLabel: 'Customer payment screenshot',
-                errorBuilder: (_, _, _) => Container(
-                  height: 160,
-                  width: double.infinity,
-                  color: AppConstants.borderGray.withValues(alpha: 0.15),
-                  child: Icon(
-                    Icons.image_not_supported_outlined,
-                    color: AppConstants.secondary,
+            // The crop is enough to recognise a receipt, not enough to read a
+            // reference or a clock off it — tapping opens the full picture.
+            GestureDetector(
+              onTap: () => _openProofViewer(context, screenshotUrl!),
+              child: Semantics(
+                button: true,
+                label: 'Customer payment screenshot. Tap to open it full size.',
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    children: [
+                      Image.network(
+                        screenshotUrl!,
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        semanticLabel: 'Customer payment screenshot',
+                        errorBuilder: (_, _, _) => Container(
+                          height: 160,
+                          width: double.infinity,
+                          color: AppConstants.borderGray.withValues(alpha: 0.15),
+                          child: Icon(
+                            Icons.image_not_supported_outlined,
+                            color: AppConstants.secondary,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 8,
+                        bottom: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.zoom_out_map,
+                                size: 13,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Tap to expand',
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -809,15 +896,16 @@ class GcashOrderCard extends StatelessWidget {
           const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, constraints) {
+              // No glyphs on either decision: at this size the mark crowded
+              // the word and read as two separate targets.
               final reject = GcashGhostPill(
                 label: 'Reject',
-                icon: Icons.close_rounded,
                 color: AppConstants.error,
                 onPressed: onReject,
               );
               final accept = GcashPrimaryButton(
                 label: 'Verify & accept',
-                icon: Icons.check_rounded,
+                showIcon: false,
                 background: AppConstants.success,
                 onPressed: onConfirm,
               );
@@ -838,6 +926,151 @@ class GcashOrderCard extends StatelessWidget {
                 ],
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// What the money is for, line by line.
+  ///
+  /// The order total alone cannot settle a proof: ₱1.00 is the right transfer
+  /// for a ₱1.00 item and the wrong one for a ₱500 shirt, and the seller has
+  /// to make that call from the card. Showing the item, its size, how many and
+  /// what the line costs turns "does this look right?" into a comparison.
+  Widget _productsTile(List<Map<String, dynamic>> items) {
+    var subtotal = 0.0;
+    final rows = <Widget>[];
+    for (final item in items) {
+      final product = item['products'];
+      final rawName = product is Map ? product['name']?.toString() : null;
+      final name = (rawName ?? '').trim();
+      final qty = (item['quantity'] as num?)?.toInt() ?? 1;
+      final unit = (item['unit_price'] as num?)?.toDouble() ?? 0;
+      final line = unit * qty;
+      subtotal += line;
+      final size = item['size']?.toString().trim() ?? '';
+      final detail = [
+        if (size.isNotEmpty) 'Size $size',
+        if (qty > 1) '$qty × ₱${unit.toStringAsFixed(2)}',
+      ].join(' · ');
+      rows.add(
+        _productRow(
+          name: name.isEmpty ? 'Product' : name,
+          detail: detail,
+          amount: '₱${line.toStringAsFixed(2)}',
+        ),
+      );
+    }
+
+    // The customer paid total_amount, not the goods subtotal, so the block has
+    // to reach that number or a correct payment looks short. The fee is taken
+    // from the order itself, never assumed: the server writes
+    // subtotal_amount (goods, before any voucher) and discount_amount, and
+    // total_amount = goods + delivery − discount. Deriving delivery from those
+    // keeps this correct on a pickup order (₱0), after a fee change, and on an
+    // order placed with a voucher.
+    final total = (order['total_amount'] as num?)?.toDouble() ?? 0;
+    final discount = (order['discount_amount'] as num?)?.toDouble() ?? 0;
+    final serverSubtotal = (order['subtotal_amount'] as num?)?.toDouble();
+    final goods = serverSubtotal ?? subtotal;
+    final delivery = total - goods + discount;
+    final voucher = order['voucher_code']?.toString().trim() ?? '';
+
+    return GcashInsetTile(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'PRODUCTS',
+            style: AppConstants.monoStyle(
+              fontSize: 9.5,
+              color: AppConstants.secondary.withValues(alpha: 0.5),
+            ).copyWith(letterSpacing: 1.1),
+          ),
+          const SizedBox(height: 8),
+          ...rows,
+          Divider(
+            height: 1,
+            color: AppConstants.primary.withValues(alpha: 0.12),
+          ),
+          const SizedBox(height: 7),
+          _productRow(
+            name: 'Goods',
+            detail: '',
+            amount: '₱${goods.toStringAsFixed(2)}',
+          ),
+          _productRow(
+            name: 'Delivery',
+            detail: '',
+            amount: '₱${delivery.toStringAsFixed(2)}',
+          ),
+          if (discount > 0)
+            _productRow(
+              name: 'Voucher',
+              detail: voucher.isEmpty ? '' : voucher,
+              amount: '− ₱${discount.toStringAsFixed(2)}',
+            ),
+          _productRow(
+            name: 'Total',
+            detail: '',
+            amount: '₱${total.toStringAsFixed(2)}',
+            emphasised: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _productRow({
+    required String name,
+    required String detail,
+    required String amount,
+    bool emphasised = false,
+  }) {
+    final ink = emphasised
+        ? AppConstants.secondary
+        : AppConstants.secondary.withValues(alpha: 0.9);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppConstants.bodyStyle(
+                    fontSize: emphasised ? 13.5 : 13,
+                    fontWeight: emphasised ? FontWeight.w800 : FontWeight.w700,
+                    height: 1.25,
+                    color: emphasised ? ink : null,
+                  ),
+                ),
+                if (detail.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Text(
+                      detail,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        color: AppConstants.secondary.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            amount,
+            style: AppConstants.monoStyle(
+              fontSize: emphasised ? 14 : 13,
+              fontWeight: FontWeight.w700,
+              color: emphasised ? AppConstants.secondary : AppConstants.primary,
+            ),
           ),
         ],
       ),
@@ -917,6 +1150,96 @@ class GcashOrderCard extends StatelessWidget {
     final h = local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour);
     final ampm = local.hour >= 12 ? 'PM' : 'AM';
     return '${local.month}/${local.day} $h:${local.minute.toString().padLeft(2, '0')} $ampm';
+  }
+}
+
+/// Full-screen, pinch-zoomable proof screenshot.
+///
+/// Loading and failure are both said out loud on the black backdrop, so an
+/// empty viewer never reads as a proof with nothing on it. Closing is the X;
+/// the seller lands back on the same card with its decision still unmade.
+void _openProofViewer(BuildContext context, String url) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.92),
+    builder: (_) => _ProofImageViewer(url: url),
+  );
+}
+
+class _ProofImageViewer extends StatelessWidget {
+  final String url;
+
+  const _ProofImageViewer({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(8),
+      child: SizedBox(
+        width: size.width - 16,
+        height: size.height - 80,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              minScale: 1,
+              maxScale: 6,
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, progress) => progress == null
+                    ? child
+                    : const SizedBox(
+                        height: 200,
+                        width: 200,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                errorBuilder: (_, _, _) => Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.image_not_supported_outlined,
+                        color: Colors.white70,
+                        size: 40,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Could not load the screenshot. Check your connection '
+                        'and tap the proof again.',
+                        textAlign: TextAlign.center,
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          height: 1.4,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                tooltip: 'Close',
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
