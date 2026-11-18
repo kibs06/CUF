@@ -352,16 +352,17 @@ select throws_ok(
   '28: a seller cannot mark their own payout paid'
 );
 
--- ── 29. stock really is held, and really is returned ───────────
--- Product b1 starts at 10. Order 1 was cancelled (stock back), orders 2
--- and 3 are live: 10 − 2 = 8. If the reservation trigger never fired this
--- reads 10; if a cancellation did not release, it reads 7.
+-- ── 29. stock follows the money, not the checkout ──────────────
+-- Product b1 starts at 10. Order 1 was cancelled without paying, order 3 is
+-- only under review (its proof was flagged), and order 2 was VERIFIED: one
+-- unit is out, 10 − 1 = 9. If checkout still reserved, this reads 7; if
+-- verification did not deduct, it reads 10.
 select is(
   (select stock from public.inventory
     where product_id = 'c0000000-0000-0000-0000-0000000000b1'
       and size = '40'),
-  8,
-  '29: live checkouts hold stock and the cancelled one gave it back'
+  9,
+  '29: only the verified order took a unit; unpaid checkouts take none'
 );
 
 select * from finish();

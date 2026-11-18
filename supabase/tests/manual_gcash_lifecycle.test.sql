@@ -206,8 +206,8 @@ select ok(
 select is(
   (select stock from public.inventory
     where product_id = 'e0000000-0000-0000-0000-0000000000b1' and size = '40'),
-  9,
-  '8: the unit is held for the 30-minute payment window'
+  10,
+  '8: checkout takes no stock — the unit is charged only when the payment is verified'
 );
 
 -- ── cross-store cart: refused before anything is charged or reserved ──
@@ -223,8 +223,8 @@ select throws_ok(
 select is(
   (select stock from public.inventory
     where product_id = 'e0000000-0000-0000-0000-0000000000b1' and size = '40'),
-  9,
-  '10: the refused cart reserved nothing'
+  10,
+  '10: the refused cart took nothing'
 );
 
 -- ══ 3. Proof submit → payment_under_review ═══════════════════════
@@ -319,8 +319,8 @@ select is(
 select is(
   (select stock from public.inventory
     where product_id = 'e0000000-0000-0000-0000-0000000000b1' and size = '40'),
-  7,
-  '20: a rejected (but live) order keeps its hold — o1, o2 and o3 all hold one'
+  10,
+  '20: a rejected (but live) order holds nothing — an unpaid order never takes stock'
 );
 
 insert into r values ('p1b', pg_temp.submit(
@@ -376,8 +376,8 @@ select is(
 select is(
   (select stock from public.inventory
     where product_id = 'e0000000-0000-0000-0000-0000000000b1' and size = '40'),
-  8,
-  '27: the third rejection released exactly one unit (o2 and o3 still hold one)'
+  10,
+  '27: the third rejection returns nothing, because nothing was ever taken'
 );
 
 -- o3's duplicates are settled: the customer cancels it, so the expiry sweep
@@ -408,6 +408,20 @@ select ok(
      from public.orders
     where id = (select (j ->> 'order_id')::uuid from r where k = 'o2')),
   '31: the seller decision is stamped and the SLA cleared'
+);
+
+-- The point of this migration: verification, not checkout, is what takes
+-- the unit. o2 is the first order here whose payment was accepted.
+select is(
+  (select stock from public.inventory
+    where product_id = 'e0000000-0000-0000-0000-0000000000b1' and size = '40'),
+  9,
+  '31b: verifying the payment is what removes the unit from stock'
+);
+select ok(
+  (select stock_deducted_at is not null from public.orders
+    where id = (select (j ->> 'order_id')::uuid from r where k = 'o2')),
+  '31c: the order records that its stock has been taken'
 );
 
 -- Another store's seller cannot verify it.
@@ -724,13 +738,13 @@ select throws_ok(
 reset role;
 
 -- ══ 12. Stock ends where the money says it should ════════════════
--- 10 to start; o1 released, o2 + o4 paid, o6 under review, o3/o5 cancelled:
--- 3 units are still held.
+-- 10 to start. Only the two VERIFIED orders (o2 and o4) took a unit:
+-- o1/o3/o5 were cancelled and never held anything, o6 is only under review.
 select is(
   (select stock from public.inventory
     where product_id = 'e0000000-0000-0000-0000-0000000000b1' and size = '40'),
-  7,
-  '66: held stock equals the live orders, no leak and no inflation'
+  8,
+  '66: stock leaves the shelf only for orders whose payment was verified'
 );
 
 select * from finish();

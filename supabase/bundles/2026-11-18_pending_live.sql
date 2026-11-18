@@ -2,7 +2,7 @@
 -- PENDING LIVE MIGRATIONS — 2026-11-18 (project psczvbfoybqhjeqssimw)
 --
 -- Paste this whole file into the Supabase SQL Editor and run it once.
--- It is eight unapplied migrations, in version order, copied verbatim:
+-- It is eleven unapplied migrations, in version order, copied verbatim:
 --
 --   1/8  20261118051000  admins can read payment proofs (the queue said
 --                        "no proof submitted" for orders that had one)
@@ -20,6 +20,15 @@
 --                        attempts cannot be filed back to back
 --   8/8  20261118120000  the same window now covers bulk reservation
 --                        deposits — one clock for both proof families
+--   9/9  20261118130000  a 3rd rejection cancels the order but the money is
+--                        already with the platform — that is a refund owed,
+--                        with the proof's reference in an admin queue
+--  10/10  20261118150000  the delivery line is the admin setting, not a
+--                        constant: raising the fee in the portal moves the
+--                        voucher quote and the order repricing with it
+--  11/11  20261118160000  stock leaves the shelf when the payment is
+--                        verified, not when the customer presses "Complete
+--                        Payment" — an unpaid GCash checkout holds nothing
 --
 -- Section 1 is the file's PART 1 (the policy) only. Its PART 2 is a
 -- read-only self-check that impersonates an admin and ends in ROLLBACK —
@@ -33,7 +42,10 @@
 -- index on public.orders. 7/8 adds the proof window; 8/8 replaces BOTH
 -- submit_gcash_proof and submit_bulk_reservation_deposit_proof and moves that
 -- window into one shared helper, so it must follow 7/8 (the version it
--- extends), and no later file may copy the inline version instead.
+-- extends), and no later file may copy the inline version instead. 9/9 is
+-- independent of 1–8 but must stay last: it replaces
+-- cancel_awaiting_gcash_order (from 20260808230000) and widens
+-- orders.payment_status, and the admin queue it adds reads both.
 --
 -- Both apply paths were measured on a fresh local database, not argued:
 -- `supabase db reset` replays the lineage from empty with all eight files in
@@ -2008,3 +2020,1044 @@ $$;
 
 REVOKE ALL ON FUNCTION public.submit_bulk_reservation_deposit_proof FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.submit_bulk_reservation_deposit_proof TO authenticated;
+
+-- ──────────────────────────────────────────────────────────────────
+-- 9/9  20261118130000_rejected_payment_refunds
+--      A 3rd rejection cancels the order, but the customer's money is
+--      already in the platform GCash account. That cancellation now
+--      records `refund_pending` instead of `failed`, and the admin gets
+--      a queue with the proof's reference, amount and screenshot so the
+--      refund is a task instead of a memory.
+-- ──────────────────────────────────────────────────────────────────
+
+-- ══════════════════════════════════════════════════════════════════
+-- 20261118130000_rejected_payment_refunds.sql
+--
+-- A 3rd rejection cancels the order — but the customer's money is already in
+-- the platform GCash account, and nothing recorded that. `cancel_awaiting_
+-- gcash_order` wrote payment_status = 'failed' for every cancellation, which
+-- says "no money arrived" about an order whose receipt, reference and amount
+-- are sitting in gcash_payment_proofs. The money owed back existed only in the
+-- mind of whoever happened to read the rejection.
+--
+-- This file makes that a fact on the row and a task an admin can work through:
+--
+--   1. orders.payment_status admits 'refund_pending' and 'refunded'.
+--   2. A cancellation sets 'refund_pending' when the order has a proof (money
+--      may have moved) and keeps 'failed' when it has none. Data-driven, so
+--      the expiry sweep and the customer's own cancel — neither of which can
+--      run on an order with a proof — are unaffected.
+--   3. admin_list_refund_owed(): the queue, carrying the proof's reference,
+--      sender, amount and screenshot path so the refund can be matched to a
+--      real GCash transfer.
+--   4. admin_mark_refund_refunded(order, reference): closes the task with the
+--      GCash reference of the refund, stamps who did it and when, writes the
+--      payment-event log and tells the customer their money is back.
+--
+-- Admin-only, checked inside the functions (is_admin()), so GRANT to
+-- authenticated is safe. Nothing here moves money: the transfer is still made
+-- by hand in GCash; this is the ledger of what is owed and what was sent.
+--
+-- Depends on: 20260808230000 (cancel_awaiting_gcash_order),
+--             20261118040000 (reject_gcash_proof, the 3-attempt path).
+-- ══════════════════════════════════════════════════════════════════
+
+begin;
+
+-- ──────────────────────────────────────────────────────────────────
+-- 1. The two new payment states
+--    refund_pending = the proof was rejected for the last time; the money is
+--                     with the platform and an admin owes the customer a
+--                     transfer.
+--    refunded        = that transfer happened; the reference is on the row.
+-- ──────────────────────────────────────────────────────────────────
+alter table public.orders
+  drop constraint if exists orders_payment_status_check;
+
+alter table public.orders
+  add constraint orders_payment_status_check
+  check (payment_status in
+    ('paid', 'unpaid', 'pending', 'failed', 'refund_pending', 'refunded'));
+
+-- ──────────────────────────────────────────────────────────────────
+-- 2. The refund's own paper trail
+-- ──────────────────────────────────────────────────────────────────
+alter table public.orders
+  add column if not exists refund_reference  text,
+  add column if not exists refunded_at       timestamptz,
+  add column if not exists refunded_by       uuid
+    references public.profiles(id) on delete set null,
+  add column if not exists refund_note       text;
+
+comment on column public.orders.refund_reference is
+  'GCash reference of the refund CUFMAI sent back to the customer, after a 3rd rejection cancelled an order whose money had already arrived.';
+comment on column public.orders.refunded_at is
+  'When an admin recorded the refund transfer. NULL while payment_status = refund_pending.';
+comment on column public.orders.refunded_by is
+  'Admin who sent the refund. Kept for the same reason refunded_at is.';
+
+-- ──────────────────────────────────────────────────────────────────
+-- 3. Cancellation records what is owed
+--
+--    Same function as 20260808230000, with one change: payment_status is no
+--    longer hard-coded to 'failed'. An order that has a proof row may have
+--    been paid, so cancelling it leaves a debt instead of a failure.
+--
+--    Everything else is held exactly as it was, because this helper is the
+--    single cancellation path for every reason: guarded transition, stock
+--    released once, the append-only event, and the recipient guard on the
+--    customer notification (a NULL customer must skip the notice, not abort
+--    the sweep — see docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md).
+-- ──────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.cancel_awaiting_gcash_order(
+  p_order_id uuid,
+  p_reason   text,
+  p_details  text,
+  p_event    text,          -- 'rejected' | 'expired' | 'cancelled_by_customer'
+  p_actor_id uuid,          -- NULL for the automated sweep
+  p_notify_customer boolean
+) RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_customer_id  uuid;
+  v_updated      int;
+  v_short_id     text;
+  v_refund_owed  boolean := false;
+  r              record;
+BEGIN
+  -- Money already sent? A proof row is the only evidence the platform has,
+  -- and a cancellation only reaches this point after a customer submitted —
+  -- or tried to. Read before the UPDATE so the notification can say it too.
+  SELECT EXISTS (
+    SELECT 1 FROM public.gcash_payment_proofs WHERE order_id = p_order_id
+  ) INTO v_refund_owed;
+
+  -- Guarded transition: only transitions an order that is still awaiting.
+  -- Row lock serializes concurrent confirm/reject/expiry/cancel.
+  UPDATE public.orders
+     SET status = 'cancelled',
+         payment_status = CASE WHEN v_refund_owed THEN 'refund_pending'
+                               ELSE 'failed' END,
+         cancellation_reason = p_reason,
+         cancellation_details = p_details,
+         cancelled_at = now()
+   WHERE id = p_order_id
+     AND status = 'awaiting_payment_confirmation'
+   RETURNING customer_id INTO v_customer_id;
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+
+  IF v_updated = 0 THEN
+    RETURN false;  -- already confirmed/rejected/expired/cancelled
+  END IF;
+
+  -- Release reserved stock exactly once (serialized with the row lock
+  -- acquired by the UPDATE above).
+  FOR r IN
+      DELETE FROM public.order_items
+      WHERE order_id = p_order_id
+      RETURNING product_id, size, quantity
+  LOOP
+    UPDATE public.inventory
+       SET stock = stock + r.quantity
+     WHERE product_id = r.product_id
+       AND regexp_replace(size, '\D', '', 'g')
+         = regexp_replace(r.size, '\D', '', 'g');
+  END LOOP;
+
+  -- Audit event (append-only).
+  INSERT INTO public.order_payment_events (order_id, event_type, actor_id, notes)
+  VALUES (p_order_id, p_event, p_actor_id, p_details);
+
+  -- Customer in-app notification (lands in notifications, read on open).
+  -- The RECIPIENT is checked: orders.customer_id is nullable while
+  -- notifications.user_id is not, and a NULL here would abort the whole sweep
+  -- loop rather than skip one notice.
+  IF p_notify_customer AND v_customer_id IS NOT NULL THEN
+    v_short_id := left(p_order_id::text, 8);
+    INSERT INTO public.notifications (user_id, order_id, category, title, message)
+    VALUES (
+      v_customer_id,
+      p_order_id,
+      'returns',
+      CASE WHEN p_event = 'expired' THEN 'Payment window expired'
+           WHEN p_event = 'cancelled_by_customer' THEN 'GCash checkout cancelled'
+           WHEN v_refund_owed THEN 'Payment rejected — refund on the way'
+           ELSE 'Payment rejected' END,
+      'Order #' || v_short_id || ' — ' || p_details ||
+        CASE WHEN v_refund_owed
+             THEN '. The money you sent is in the platform GCash account and ' ||
+                  'CUFMAI will send it back to your GCash.'
+             ELSE '' END
+    );
+  END IF;
+
+  RETURN true;
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────────
+-- 4. The queue: what the platform may owe, with the evidence
+-- ──────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.admin_list_refund_owed(
+  p_include_refunded boolean DEFAULT false
+) RETURNS TABLE (
+  r_order_id           uuid,
+  r_order_code         text,
+  r_order_status       text,
+  r_payment_status     text,
+  r_total              numeric,
+  r_cancelled_at       timestamptz,
+  r_cancel_reason      text,
+  r_store_id           uuid,
+  r_store_name         text,
+  r_customer_id        uuid,
+  r_customer_name      text,
+  r_proof_id           uuid,
+  r_reference          text,
+  r_sender             text,
+  r_amount_paid        numeric,
+  r_screenshot_path    text,
+  r_proof_submitted_at timestamptz,
+  r_proof_paid_at      timestamptz,
+  r_attempt_no         int,
+  r_rejection_reason   text,
+  r_refund_reference   text,
+  r_refunded_at        timestamptz
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Only admins can see refunds owed'
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
+    SELECT o.id, o.order_code, o.status::text, o.payment_status::text,
+           o.total_amount, o.cancelled_at, o.cancellation_reason,
+           s.id, s.name, o.customer_id, c.full_name,
+           pr.id, pr.reference_number, pr.sender_name, pr.amount_paid,
+           pr.screenshot_url, pr.submitted_at, pr.paid_at, pr.attempt_no,
+           pr.rejection_reason,
+           o.refund_reference, o.refunded_at
+      FROM public.orders o
+      JOIN public.stores s ON s.id = o.store_id
+      LEFT JOIN public.profiles c ON c.id = o.customer_id
+      -- The LAST attempt is the one whose rejection cancelled the order, so
+      -- that is the reference an admin must match in the GCash statement.
+      LEFT JOIN LATERAL (
+        SELECT gp.*
+          FROM public.gcash_payment_proofs gp
+         WHERE gp.order_id = o.id
+         ORDER BY gp.attempt_no DESC
+         LIMIT 1
+      ) pr ON true
+     WHERE o.payment_status = 'refund_pending'
+        OR (p_include_refunded AND o.payment_status = 'refunded')
+     ORDER BY COALESCE(o.cancelled_at, o.created_at) DESC;
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────────
+-- 5. Closing the task
+--    Takes the GCash reference of the transfer: without it the row would claim
+--    a refund nobody can trace, which is the same gap one step later.
+-- ──────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.admin_mark_refund_refunded(
+  p_order_id  uuid,
+  p_reference text,
+  p_notes     text DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_reference text;
+  v_notes     text;
+  v_customer  uuid;
+  v_amount    numeric;
+  v_short_id  text;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Only admins can record a refund'
+      USING ERRCODE = '42501';
+  END IF;
+
+  v_reference := btrim(COALESCE(p_reference, ''));
+  IF length(v_reference) < 4 THEN
+    RAISE EXCEPTION 'Record the GCash reference of the refund';
+  END IF;
+  v_notes := NULLIF(btrim(COALESCE(p_notes, '')), '');
+
+  UPDATE public.orders
+     SET payment_status = 'refunded',
+         refund_reference = v_reference,
+         refunded_at = now(),
+         refunded_by = auth.uid(),
+         refund_note = v_notes
+   WHERE id = p_order_id
+     AND payment_status = 'refund_pending'
+   RETURNING customer_id, total_amount INTO v_customer, v_amount;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'That order is not waiting for a refund';
+  END IF;
+
+  INSERT INTO public.order_payment_events (order_id, event_type, actor_id, notes)
+  VALUES (p_order_id, 'refunded', auth.uid(),
+          'Refund sent manually: ' || v_reference ||
+          COALESCE(' — ' || v_notes, ''));
+
+  IF v_customer IS NOT NULL THEN
+    v_short_id := left(p_order_id::text, 8);
+    INSERT INTO public.notifications (user_id, order_id, category, title, message)
+    VALUES (
+      v_customer,
+      p_order_id,
+      'returns',
+      'Refund sent',
+      'Order #' || v_short_id || ' — CUFMAI sent ₱' ||
+        to_char(COALESCE(v_amount, 0), 'FM999999990.00') ||
+        ' back to your GCash (ref ' || v_reference || ').'
+    );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'order_id', p_order_id,
+    'payment_status', 'refunded',
+    'reference', v_reference
+  );
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────────
+-- 6. The event type the closing step writes
+--
+--    Re-stated as the FULL list, not this file's addition alone: the v2
+--    lifecycle types from 20261118030000 (resubmitted, seller_verified,
+--    admin_verified, flagged, unflagged, funds_reconciled) are written by
+--    submit_gcash_proof and the admin RPCs on ordinary days, and a CHECK that
+--    forgot them would fail the second proof attempt, not the refund one.
+-- ──────────────────────────────────────────────────────────────────
+ALTER TABLE public.order_payment_events
+  DROP CONSTRAINT IF EXISTS order_payment_events_event_type_check;
+
+ALTER TABLE public.order_payment_events
+  ADD CONSTRAINT order_payment_events_event_type_check
+  CHECK (event_type IN
+    ('created', 'proof_submitted', 'confirmed', 'rejected', 'expired',
+     'cancelled_by_customer',
+     'resubmitted', 'seller_verified', 'admin_verified',
+     'flagged', 'unflagged', 'funds_reconciled',
+     'refunded'));
+
+COMMENT ON TABLE public.order_payment_events IS
+  'Append-only payment lifecycle log. event_type: created / proof_submitted / confirmed / rejected / expired / cancelled_by_customer / resubmitted / seller_verified / admin_verified / flagged / unflagged / funds_reconciled / refunded. actor_id = the user who acted (NULL for the automated expiry sweep). Written only by SECURITY DEFINER RPCs.';
+
+-- ──────────────────────────────────────────────────────────────────
+-- 7. Grants — admin-gated inside, so authenticated may call
+-- ──────────────────────────────────────────────────────────────────
+REVOKE ALL ON FUNCTION public.admin_list_refund_owed(boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_list_refund_owed(boolean) TO authenticated;
+
+REVOKE ALL ON FUNCTION public.admin_mark_refund_refunded(uuid, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_mark_refund_refunded(uuid, text, text) TO authenticated;
+
+REVOKE ALL ON FUNCTION public.cancel_awaiting_gcash_order(uuid, text, text, text, uuid, boolean)
+  FROM PUBLIC, anon, authenticated;
+
+-- ──────────────────────────────────────────────────────────────────
+-- 10/10  20261118150000_delivery_fee_from_platform_settings
+--      online_delivery_fee() returned a literal 100 while the checkout
+--      RPCs charged platform_settings.delivery_fee_amount. Two numbers for
+--      one line: the voucher quote kept the old fee, and the orders
+--      repricing trigger wrote it back. Now there is one number.
+-- ──────────────────────────────────────────────────────────────────
+
+-- ══════════════════════════════════════════════════════════════════
+-- Migration: the delivery line comes from platform_settings
+-- Date: 2026-11-18
+--
+-- Purpose: `public.online_delivery_fee()` — the one place the voucher
+--          preview and the orders BEFORE-INSERT repricing take the delivery
+--          line from — returned the literal 100.
+--
+--          `platform_settings.delivery_fee_amount` already exists, is
+--          admin-editable, and is what the manual-GCash checkout RPCs charge.
+--          Two numbers for one line meant an admin raising the fee changed the
+--          amount charged but not the voucher quote, and the repricing trigger
+--          would have written the OLD fee back over the new total.
+--
+--          From here on there is exactly one number: the settings row. 100 is
+--          only the fallback when that row is absent — the seeded value, so a
+--          database without settings behaves exactly as before.
+--
+-- STABLE, not IMMUTABLE: it now reads a table, and a function that lies about
+-- that can be folded into a plan-time constant. SECURITY DEFINER so the
+-- trigger, the signed-in preview and the anon-facing paths all see the same
+-- number instead of depending on the caller's RLS grant on platform_settings.
+-- ══════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.online_delivery_fee()
+RETURNS numeric
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(
+    (SELECT ps.delivery_fee_amount
+       FROM public.platform_settings ps
+      WHERE ps.id = 1),
+    100::numeric
+  );
+$$;
+
+COMMENT ON FUNCTION public.online_delivery_fee() IS
+  'The online delivery line, read from platform_settings.delivery_fee_amount — the same admin-editable value the checkout RPCs charge. Falls back to 100 (the seeded default) when no settings row exists. SECURITY DEFINER so the voucher preview and the orders trigger see one number regardless of the caller.';
+
+-- ══════════════════════════════════════════════════════════════════
+-- VERIFICATION QUERIES (run after applying)
+-- ══════════════════════════════════════════════════════════════════
+-- SELECT public.online_delivery_fee();                    -- the current fee
+-- SELECT delivery_fee_amount FROM public.platform_settings WHERE id = 1;
+-- UPDATE public.platform_settings SET delivery_fee_amount = 150 WHERE id = 1;
+-- SELECT public.online_delivery_fee();                    -- now 150
+
+-- ──────────────────────────────────────────────────────────────────
+-- 11/11  20261118160000_stock_charged_on_payment
+--      create_gcash_checkout deducted inventory for the 30-minute pay
+--      window, so an UNPAID order took units out of the seller's stock.
+--      Now checkout only checks availability; verify_gcash_payment (and the
+--      admin override) deduct, and a cancellation returns stock only if the
+--      order's `stock_deducted_at` says it was really taken.
+-- ──────────────────────────────────────────────────────────────────
+
+-- ══════════════════════════════════════════════════════════════════
+-- Migration: stock leaves the shelf when the money arrives, not when the
+--            customer presses "Complete Payment"
+-- Date: 2026-11-18
+--
+-- The problem: create_gcash_checkout() deducted inventory for every line as
+-- soon as the order was created (a 30-minute "hold" for the pay window).
+-- Understanding the intent, the effect on the seller's product list was that
+-- an UNPAID order — a customer who merely opened the GCash screen, and might
+-- never pay — took units out of stock. A checkout that was then abandoned,
+-- expired or cancelled churned the number again. Sellers saw stock disappear
+-- for money that never arrived.
+--
+-- The rule from here:
+--   • create_gcash_checkout  — checks availability, takes nothing;
+--   • verify_gcash_payment   — the seller accepts the proof → stock is
+--                              deducted in the same transaction;
+--   • admin_verify_payment   — same deduction on the admin override;
+--   • cancel (any cause)     — returns stock only if it was actually taken.
+--
+-- `orders.stock_deducted_at` is the ledger bit that makes this exact: NULL
+-- means "nothing has been taken for this order", set means "it has". Every
+-- release path reads it, so the two directions can never both run — which is
+-- what made the old reserve/release pair safe, and what the new asymmetry
+-- needs instead.
+--
+-- Backfill: orders created BEFORE this file were charged at creation, so
+-- their units are already gone. They are stamped with created_at, which stops
+-- verification from deducting a second time and keeps a later cancellation
+-- honest (it returns what was really taken). Cancelled orders are skipped:
+-- their release already happened.
+--
+-- Trade-off, stated plainly: without a hold, two customers can pay for the
+-- last pair. The seller's verification is where that surfaces — the guarded
+-- decrement refuses to go below zero and the seller is told the item sold out
+-- while the payment was pending, so the order goes to the rejection → refund
+-- path rather than shipping inventory that does not exist.
+-- ══════════════════════════════════════════════════════════════════
+
+-- ────────────────────────────────────────────────────────────────
+-- 1. The ledger bit
+-- ────────────────────────────────────────────────────────────────
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS stock_deducted_at timestamptz;
+
+COMMENT ON COLUMN public.orders.stock_deducted_at IS
+  'When this order''s units were taken out of public.inventory. NULL = nothing taken yet (an unpaid GCash checkout), set = the stock is out and any cancellation must return it. Written only by verify_gcash_payment / admin_verify_payment, cleared by cancel_awaiting_gcash_order.';
+
+UPDATE public.orders o
+   SET stock_deducted_at = o.created_at
+ WHERE o.stock_deducted_at IS NULL
+   AND o.payment_method = 'gcash'
+   AND o.status <> 'cancelled'
+   AND EXISTS (
+     SELECT 1 FROM public.order_items oi WHERE oi.order_id = o.id
+   );
+
+-- ────────────────────────────────────────────────────────────────
+-- 2. create_gcash_checkout — availability only, no deduction
+--    Body is otherwise identical to 20261118040000.
+-- ────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.create_gcash_checkout(
+  p_items            jsonb,   -- [{product_id, size, quantity}]
+  p_delivery_address text,
+  p_shipping_address jsonb
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_item            jsonb;
+  v_product_uuid    uuid;
+  v_cart_size       text;
+  v_qty             int;
+  v_price           numeric;
+  v_list_price      numeric;
+  v_sale_price      numeric;
+  v_sale_start      timestamptz;
+  v_sale_end        timestamptz;
+  v_name            text;
+  v_store_id        uuid;
+  v_first_store     uuid := NULL;
+  v_resolved_size   text;
+  v_subtotal        numeric := 0;
+  v_delivery_fee    numeric := 100;
+  v_total           numeric;
+  v_order_id        uuid;
+  v_deadline        timestamptz;
+  v_code            text;
+  v_store_name      text;
+  v_acct            record;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Please sign in to check out';
+  END IF;
+
+  IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
+    RAISE EXCEPTION 'No items to order';
+  END IF;
+
+  SELECT * INTO v_acct
+    FROM public.platform_payment_accounts
+   WHERE is_active
+   LIMIT 1;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Online GCash is being set up. Please use cash on pickup for now.'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT delivery_fee_amount INTO v_delivery_fee
+    FROM public.platform_settings WHERE id = 1;
+  v_delivery_fee := COALESCE(v_delivery_fee, 100);
+
+  DROP TABLE IF EXISTS _checkout_items;
+  CREATE TEMP TABLE _checkout_items (
+    product_id uuid NOT NULL,
+    size       text NOT NULL,
+    quantity   int NOT NULL,
+    unit_price numeric NOT NULL
+  ) ON COMMIT DROP;
+
+  FOR v_item IN SELECT value FROM jsonb_array_elements(p_items) LOOP
+    v_qty := COALESCE((v_item->>'quantity')::int, 0);
+    IF v_item->>'product_id' IS NULL OR v_qty <= 0 THEN
+      RAISE EXCEPTION 'Each item needs a product_id and a quantity greater than zero';
+    END IF;
+    BEGIN
+      v_product_uuid := (v_item->>'product_id')::uuid;
+    EXCEPTION WHEN others THEN
+      RAISE EXCEPTION 'Invalid product reference in cart';
+    END;
+
+    v_cart_size := COALESCE(v_item->>'size', '');
+
+    SELECT price, sale_price, sale_starts_at, sale_ends_at, name, store_id
+      INTO v_list_price, v_sale_price, v_sale_start, v_sale_end,
+           v_name, v_store_id
+      FROM public.products
+     WHERE id = v_product_uuid;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'One of your items is no longer available. Please refresh your cart.';
+    END IF;
+
+    IF v_first_store IS NULL THEN
+      v_first_store := v_store_id;
+    ELSIF v_store_id <> v_first_store THEN
+      RAISE EXCEPTION 'Your cart has items from more than one store. Please check out one store at a time.'
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    IF v_sale_price IS NOT NULL
+       AND v_sale_price > 0
+       AND v_sale_price < v_list_price
+       AND (v_sale_start IS NULL OR v_sale_start <= now())
+       AND (v_sale_end   IS NULL OR v_sale_end   >= now())
+    THEN
+      v_price := v_sale_price;
+    ELSE
+      v_price := v_list_price;
+    END IF;
+
+    v_subtotal := v_subtotal + (v_price * v_qty);
+
+    SELECT size INTO v_resolved_size
+      FROM public.inventory
+     WHERE product_id = v_product_uuid
+       AND stock > 0
+       AND regexp_replace(size, '\D', '', 'g')
+         = regexp_replace(v_cart_size, '\D', '', 'g')
+     LIMIT 1;
+    IF v_resolved_size IS NULL AND v_cart_size = '' THEN
+      SELECT size INTO v_resolved_size
+        FROM public.inventory
+       WHERE product_id = v_product_uuid AND stock > 0
+       LIMIT 1;
+    END IF;
+    IF v_resolved_size IS NULL THEN
+      RAISE EXCEPTION 'Size "%" is no longer available for %. Please update your cart.',
+        v_cart_size, v_name
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    INSERT INTO _checkout_items (product_id, size, quantity, unit_price)
+    VALUES (v_product_uuid, v_resolved_size, v_qty, v_price);
+  END LOOP;
+
+  IF v_subtotal <= 0 THEN
+    RAISE EXCEPTION 'Order total must be greater than zero';
+  END IF;
+  v_total := v_subtotal + v_delivery_fee;
+
+  -- Enough stock to pay for, with nothing taken: the units stay sellable
+  -- until this order's payment is verified.
+  FOR v_item IN SELECT to_jsonb(t) FROM _checkout_items t LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM public.inventory i
+       WHERE i.product_id = (v_item->>'product_id')::uuid
+         AND i.stock >= (v_item->>'quantity')::int
+         AND regexp_replace(i.size, '\D', '', 'g')
+           = regexp_replace(v_item->>'size', '\D', '', 'g')
+    ) THEN
+      RAISE EXCEPTION 'Insufficient stock for % (size %). Please update your cart.',
+        (SELECT name FROM public.products WHERE id = (v_item->>'product_id')::uuid),
+        v_item->>'size'
+        USING ERRCODE = 'P0001';
+    END IF;
+  END LOOP;
+
+  v_code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+
+  BEGIN
+    INSERT INTO public.orders (
+      customer_id, store_id, status, fulfillment, total_amount,
+      payment_method, payment_status, notes, shipping_address, source,
+      payment_confirmation_deadline, payment_account_id, order_code
+    ) VALUES (
+      auth.uid(), v_first_store, 'awaiting_payment_confirmation', 'pickup',
+      v_total, 'gcash', 'pending', p_delivery_address, p_shipping_address,
+      'online', now() + interval '30 minutes', v_acct.id, v_code
+    )
+    RETURNING id, payment_confirmation_deadline INTO v_order_id, v_deadline;
+  EXCEPTION WHEN unique_violation THEN
+    IF EXISTS (
+      SELECT 1 FROM public.orders
+       WHERE customer_id = auth.uid()
+         AND status = 'awaiting_payment_confirmation'
+    ) THEN
+      RAISE EXCEPTION 'You already have a GCash checkout awaiting confirmation. Complete or cancel it first.';
+    END IF;
+    RAISE EXCEPTION 'We could not start your checkout. Please try again.';
+  END;
+
+  INSERT INTO public.order_items (order_id, product_id, size, quantity, unit_price)
+  SELECT v_order_id, product_id, size, quantity, unit_price
+    FROM _checkout_items;
+
+  -- Nothing is deducted here (see the header). stock_deducted_at stays NULL,
+  -- which is what verify_gcash_payment reads to know the units are still on
+  -- the shelf.
+  INSERT INTO public.order_payment_events (order_id, event_type, actor_id, notes)
+  VALUES (v_order_id, 'created', auth.uid(),
+          'Order created, awaiting GCash payment to the platform account (stock is not held; it is taken when the payment is verified)');
+
+  SELECT name INTO v_store_name FROM public.stores WHERE id = v_first_store;
+
+  RETURN jsonb_build_object(
+    'order_id', v_order_id,
+    'store_id', v_first_store,
+    'total_amount', v_total,
+    'payment_confirmation_deadline', v_deadline,
+    'store_name', v_store_name,
+    'order_code', v_code,
+    'payment_account_id', v_acct.id,
+    'gcash_qr_url', v_acct.qr_url,
+    'gcash_number', v_acct.gcash_number,
+    'gcash_account_name', v_acct.account_name
+  );
+END;
+$$;
+
+-- ────────────────────────────────────────────────────────────────
+-- 3. verify_gcash_payment — the money is confirmed, so the stock goes
+--    Body is otherwise identical to 20261118040000.
+-- ────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.verify_gcash_payment(p_order_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_owner      uuid;
+  v_customer   uuid;
+  v_flagged    boolean;
+  v_status     text;
+  v_proof      record;
+  v_updated    int;
+  v_short_id   text;
+  v_stock_at   timestamptz;
+  v_item       record;
+  v_name       text;
+BEGIN
+  SELECT s.owner_id, o.customer_id, o.payment_flagged, o.status,
+         o.stock_deducted_at
+    INTO v_owner, v_customer, v_flagged, v_status, v_stock_at
+    FROM public.orders o
+    JOIN public.stores s ON s.id = o.store_id
+   WHERE o.id = p_order_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found';
+  END IF;
+  IF v_owner <> auth.uid() THEN
+    RAISE EXCEPTION 'Only the store owner can verify this payment';
+  END IF;
+  IF v_status <> 'payment_under_review' THEN
+    RAISE EXCEPTION 'This order is not awaiting payment verification';
+  END IF;
+  IF COALESCE(v_flagged, false) THEN
+    RAISE EXCEPTION 'This payment is flagged by an admin. It must be cleared before you can accept it.';
+  END IF;
+
+  SELECT * INTO v_proof
+    FROM public.gcash_payment_proofs
+   WHERE order_id = p_order_id AND status = 'pending'
+   ORDER BY attempt_no DESC
+   LIMIT 1;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'The customer has no proof awaiting review';
+  END IF;
+
+  -- The payment is real: take the units now. Guarded, so it can never go
+  -- below zero — and if the item sold out while this payment was pending the
+  -- verification fails instead of shipping stock that does not exist.
+  --
+  -- v_stock_at is non-NULL for orders created under the old reserve-at-
+  -- checkout rule (backfilled in section 1): their units are already out and
+  -- deducting again would double-charge the seller's stock.
+  IF v_stock_at IS NULL THEN
+    FOR v_item IN
+      SELECT product_id, size, quantity
+        FROM public.order_items
+       WHERE order_id = p_order_id
+    LOOP
+      UPDATE public.inventory
+         SET stock = stock - v_item.quantity
+       WHERE product_id = v_item.product_id
+         AND regexp_replace(size, '\D', '', 'g')
+           = regexp_replace(v_item.size, '\D', '', 'g')
+         AND stock >= v_item.quantity;
+
+      IF NOT FOUND THEN
+        SELECT name INTO v_name FROM public.products WHERE id = v_item.product_id;
+        RAISE EXCEPTION 'Insufficient stock for % (size %). It sold out while this payment was pending — reject the proof so the customer is refunded, or restock it and verify again.',
+          COALESCE(v_name, 'this item'), v_item.size
+          USING ERRCODE = 'P0001';
+      END IF;
+    END LOOP;
+
+    UPDATE public.orders
+       SET stock_deducted_at = now()
+     WHERE id = p_order_id
+       AND stock_deducted_at IS NULL;
+  END IF;
+
+  UPDATE public.gcash_payment_proofs
+     SET status = 'verified',
+         reviewed_by = auth.uid(),
+         reviewed_at = now()
+   WHERE id = v_proof.id;
+
+  UPDATE public.orders
+     SET status = 'pending',
+         payment_status = 'paid',
+         payment_verified_at = now(),
+         seller_verified_at = now(),
+         seller_verified_by = auth.uid(),
+         review_deadline = NULL
+   WHERE id = p_order_id
+     AND status = 'payment_under_review';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  IF v_updated = 0 THEN
+    RAISE EXCEPTION 'This order is no longer awaiting verification';
+  END IF;
+
+  INSERT INTO public.order_payment_events (order_id, event_type, actor_id, notes)
+  VALUES (p_order_id, 'seller_verified', auth.uid(),
+          'Reference ' || v_proof.reference_number || ' accepted by the store' ||
+          CASE WHEN v_stock_at IS NULL THEN ' (stock deducted)' ELSE '' END);
+
+  INSERT INTO public.gcash_payment_decision_audit
+    (order_id, seller_id, reference_number, amount_shown_to_seller, decision, source)
+  VALUES (p_order_id, auth.uid(), v_proof.reference_number, v_proof.amount_paid,
+          'confirmed', 'queue');
+
+  v_short_id := left(p_order_id::text, 8);
+  IF v_customer IS NOT NULL THEN
+    INSERT INTO public.notifications (user_id, order_id, category, title, message)
+    VALUES (v_customer, p_order_id, 'processing',
+            'Payment verified',
+            'Order #' || v_short_id || ' — the store verified your GCash payment. They will start preparing your order.');
+  END IF;
+
+  RETURN jsonb_build_object(
+    'order_id', p_order_id,
+    'status', 'pending',
+    'payment_status', 'paid'
+  );
+END;
+$$;
+
+-- ────────────────────────────────────────────────────────────────
+-- 4. admin_verify_payment — the same deduction on the admin override
+-- ────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.admin_verify_payment(p_order_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_customer uuid;
+  v_status   text;
+  v_flagged  boolean;
+  v_stock_at timestamptz;
+  v_proof    record;
+  v_short_id text;
+  v_item     record;
+  v_name     text;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Only admins can verify a payment on the store''s behalf';
+  END IF;
+
+  SELECT customer_id, status, payment_flagged, stock_deducted_at
+    INTO v_customer, v_status, v_flagged, v_stock_at
+    FROM public.orders
+   WHERE id = p_order_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found';
+  END IF;
+  IF v_status NOT IN ('payment_under_review', 'awaiting_payment_confirmation') THEN
+    RAISE EXCEPTION 'This order is not awaiting payment verification';
+  END IF;
+
+  SELECT * INTO v_proof
+    FROM public.gcash_payment_proofs
+   WHERE order_id = p_order_id AND status = 'pending'
+   ORDER BY attempt_no DESC
+   LIMIT 1;
+
+  -- Money confirmed by an admin is money confirmed: same guarded deduction as
+  -- the seller path, and skipped for orders whose units were already taken at
+  -- checkout under the old rule.
+  IF v_stock_at IS NULL THEN
+    FOR v_item IN
+      SELECT product_id, size, quantity
+        FROM public.order_items
+       WHERE order_id = p_order_id
+    LOOP
+      UPDATE public.inventory
+         SET stock = stock - v_item.quantity
+       WHERE product_id = v_item.product_id
+         AND regexp_replace(size, '\D', '', 'g')
+           = regexp_replace(v_item.size, '\D', '', 'g')
+         AND stock >= v_item.quantity;
+
+      IF NOT FOUND THEN
+        SELECT name INTO v_name FROM public.products WHERE id = v_item.product_id;
+        RAISE EXCEPTION 'Insufficient stock for % (size %). It sold out while this payment was pending — reject or cancel the order and refund the customer.',
+          COALESCE(v_name, 'this item'), v_item.size
+          USING ERRCODE = 'P0001';
+      END IF;
+    END LOOP;
+
+    UPDATE public.orders
+       SET stock_deducted_at = now()
+     WHERE id = p_order_id
+       AND stock_deducted_at IS NULL;
+  END IF;
+
+  -- v_proof.id, not FOUND: FOUND at this point describes the last inventory
+  -- UPDATE in the loop above, not the proof SELECT.
+  IF v_proof.id IS NOT NULL THEN
+    UPDATE public.gcash_payment_proofs
+       SET status = 'verified',
+           reviewed_by = auth.uid(),
+           reviewed_at = now()
+     WHERE id = v_proof.id;
+  END IF;
+
+  UPDATE public.orders
+     SET status = 'pending',
+         payment_status = 'paid',
+         payment_verified_at = now(),
+         review_deadline = NULL,
+         payment_flagged = false,
+         payment_flag_reason = NULL
+   WHERE id = p_order_id
+     AND status IN ('payment_under_review', 'awaiting_payment_confirmation');
+
+  INSERT INTO public.order_payment_events (order_id, event_type, actor_id, notes)
+  VALUES (p_order_id, 'admin_verified', auth.uid(),
+          'Payment verified by an admin' ||
+          CASE WHEN v_proof.id IS NOT NULL
+               THEN ' (reference ' || v_proof.reference_number || ')' ELSE '' END);
+
+  v_short_id := left(p_order_id::text, 8);
+  IF v_customer IS NOT NULL THEN
+    INSERT INTO public.notifications (user_id, order_id, category, title, message)
+    VALUES (v_customer, p_order_id, 'processing',
+            'Payment verified',
+            'Order #' || v_short_id || ' — your GCash payment was verified. The store will start preparing your order.');
+  END IF;
+
+  RETURN jsonb_build_object('order_id', p_order_id, 'status', 'pending');
+END;
+$$;
+
+-- ────────────────────────────────────────────────────────────────
+-- 5. Cancellation returns only what was taken
+--    Same helper as 20261118130000 (refund bookkeeping untouched); the only
+--    change is that the stock release is conditional on the ledger bit.
+-- ────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.cancel_awaiting_gcash_order(
+  p_order_id uuid,
+  p_reason   text,
+  p_details  text,
+  p_event    text,          -- 'rejected' | 'expired' | 'cancelled_by_customer'
+  p_actor_id uuid,          -- NULL for the automated sweep
+  p_notify_customer boolean
+) RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_customer_id  uuid;
+  v_updated      int;
+  v_short_id     text;
+  v_refund_owed  boolean := false;
+  v_stock_at     timestamptz;
+  r              record;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM public.gcash_payment_proofs WHERE order_id = p_order_id
+  ) INTO v_refund_owed;
+
+  UPDATE public.orders
+     SET status = 'cancelled',
+         payment_status = CASE WHEN v_refund_owed THEN 'refund_pending'
+                               ELSE 'failed' END,
+         cancellation_reason = p_reason,
+         cancellation_details = p_details,
+         cancelled_at = now()
+   WHERE id = p_order_id
+     AND status = 'awaiting_payment_confirmation'
+   RETURNING customer_id, stock_deducted_at INTO v_customer_id, v_stock_at;
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+
+  IF v_updated = 0 THEN
+    RETURN false;  -- already confirmed/rejected/expired/cancelled
+  END IF;
+
+  -- Return the units ONLY if this order really took them. An unpaid checkout
+  -- never did (stock_deducted_at is NULL), so cancelling it must not put stock
+  -- back that another customer's order is holding.
+  IF v_stock_at IS NOT NULL THEN
+    FOR r IN
+        DELETE FROM public.order_items
+        WHERE order_id = p_order_id
+        RETURNING product_id, size, quantity
+    LOOP
+      UPDATE public.inventory
+         SET stock = stock + r.quantity
+       WHERE product_id = r.product_id
+         AND regexp_replace(size, '\D', '', 'g')
+           = regexp_replace(r.size, '\D', '', 'g');
+    END LOOP;
+
+    UPDATE public.orders
+       SET stock_deducted_at = NULL
+     WHERE id = p_order_id;
+  ELSE
+    DELETE FROM public.order_items WHERE order_id = p_order_id;
+  END IF;
+
+  INSERT INTO public.order_payment_events (order_id, event_type, actor_id, notes)
+  VALUES (p_order_id, p_event, p_actor_id, p_details);
+
+  IF p_notify_customer AND v_customer_id IS NOT NULL THEN
+    v_short_id := left(p_order_id::text, 8);
+    INSERT INTO public.notifications (user_id, order_id, category, title, message)
+    VALUES (
+      v_customer_id,
+      p_order_id,
+      'returns',
+      CASE WHEN p_event = 'expired' THEN 'Payment window expired'
+           WHEN p_event = 'cancelled_by_customer' THEN 'GCash checkout cancelled'
+           WHEN v_refund_owed THEN 'Payment rejected — refund on the way'
+           ELSE 'Payment rejected' END,
+      'Order #' || v_short_id || ' — ' || p_details ||
+        CASE WHEN v_refund_owed
+             THEN '. The money you sent is in the platform GCash account and ' ||
+                  'CUFMAI will send it back to your GCash.'
+             ELSE '' END
+    );
+  END IF;
+
+  RETURN true;
+END;
+$$;
+
+-- ────────────────────────────────────────────────────────────────
+-- 6. Grants (re-stated; CREATE OR REPLACE keeps the ACL, this makes the
+--    intent visible next to the bodies)
+-- ────────────────────────────────────────────────────────────────
+REVOKE EXECUTE ON FUNCTION public.create_gcash_checkout(jsonb, text, jsonb) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.create_gcash_checkout(jsonb, text, jsonb) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.verify_gcash_payment(uuid) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.verify_gcash_payment(uuid) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.admin_verify_payment(uuid) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.admin_verify_payment(uuid) TO authenticated;
+
+REVOKE ALL ON FUNCTION public.cancel_awaiting_gcash_order(uuid, text, text, text, uuid, boolean)
+  FROM PUBLIC, anon, authenticated;
+
+-- ══════════════════════════════════════════════════════════════════
+-- VERIFICATION QUERIES (run after applying)
+-- ══════════════════════════════════════════════════════════════════
+-- SELECT count(*) FROM public.orders
+--  WHERE payment_method = 'gcash' AND stock_deducted_at IS NULL
+--    AND status = 'awaiting_payment_confirmation';   -- unpaid: nothing held
+-- SELECT stock_deducted_at IS NOT NULL AS charged, count(*)
+--   FROM public.orders WHERE payment_method = 'gcash'
+--   GROUP BY 1;
+
+
+commit;
