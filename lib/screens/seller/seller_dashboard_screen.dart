@@ -35,6 +35,7 @@ import 'seller_notification_center_screen.dart';
 import 'seller_inbox_screen.dart';
 import 'reports_screen.dart';
 import 'gcash_payment_queue_screen.dart';
+import 'seller_earnings_screen.dart';
 import 'create_store_screen.dart';
 import 'pickup_reservations_screen.dart';
 
@@ -712,6 +713,53 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   // ─── Block 1: Bento Metrics Grid (real data) ─────────────────────
+  /// Wallet shortcut into Earnings & payouts, in the top-right of the sales
+  /// card: "how much did I make" and "where is it" are the same question,
+  /// and the only other route was the wallet icon inside the GCash queue.
+  Widget _buildPayoutShortcut() {
+    return Semantics(
+      button: true,
+      label: 'Earnings and payouts',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SellerEarningsScreen()),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: SellerTheme.creamText.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: SellerTheme.creamText.withValues(alpha: 0.22),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                size: 13,
+                color: SellerTheme.creamText,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Earnings',
+                style: AppConstants.bodyStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: SellerTheme.creamText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMetricsGrid(_DashboardData data) {
     final storeRating = data.store?['rating'];
     // Only surface the star once the store actually has reviews
@@ -748,13 +796,22 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Eyebrow label — cream on espresso, tracked, no dot.
-                Text(
-                  "TODAY'S SALES",
-                  style: AppConstants.bodyStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: SellerTheme.creamText.withValues(alpha: 0.7),
-                  ).copyWith(letterSpacing: 1.6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "TODAY'S SALES",
+                        style: AppConstants.bodyStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: SellerTheme.creamText.withValues(alpha: 0.7),
+                        ).copyWith(letterSpacing: 1.6),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildPayoutShortcut(),
+                  ],
                 ),
                 const SizedBox(height: 18),
                 // Today's value
@@ -1559,6 +1616,11 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
                       style: AppConstants.bodyStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
+                        // The card's cream gradient is the same in both
+                        // modes, so its ink must be pinned dark too — the
+                        // brightness-aware default goes near-white on dark
+                        // and vanished against this background.
+                        color: SellerTheme.espressoDark,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1570,9 +1632,11 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
                                 : 'No payments waiting'),
                       style: AppConstants.bodyStyle(
                         fontSize: 12,
+                        // Same reason: dark ink on the fixed cream card,
+                        // not the page-relative muted grey.
                         color: has
                             ? SellerTheme.amberDark
-                            : SellerTheme.textMuted,
+                            : SellerTheme.espressoMid,
                       ),
                     ),
                   ],
