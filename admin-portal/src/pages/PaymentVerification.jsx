@@ -231,7 +231,12 @@ export default function PaymentVerification() {
                           </Detail>
                           <Detail label="Order code">{row.order_code ?? '—'}</Detail>
                           <Detail label="Attempt">
-                            {proof.attempt_no} · {formatDateTime(proof.submitted_at)}
+                            {proof.attempt_no} · received {formatDateTime(proof.submitted_at)}
+                          </Detail>
+                          <Detail label="Receipt time (claimed)">
+                            {proof.paid_at
+                              ? formatDateTime(proof.paid_at)
+                              : 'Not readable on the receipt'}
                           </Detail>
                           <Detail label="Proof state">{proof.status}</Detail>
                           {proof.status === 'rejected' && proof.rejection_reason ? (

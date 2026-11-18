@@ -124,9 +124,11 @@ const MANUAL_COLUMNS = [
   'payment_verified_at, gcash_transaction_id, gcash_reference_number,',
   'funds_reconciled_at, payment_account_id,',
   'stores(name), profiles!orders_customer_id_fkey(full_name),',
+  // submitted_at is the server's arrival stamp (pinned by trigger, immutable);
+  // paid_at is what the receipt claims and is customer-influenced.
   'gcash_payment_proofs(id, reference_number, sender_name, amount_paid,',
   '  screenshot_url, screenshot_hash, attempt_no, status, rejection_reason,',
-  '  submitted_at)',
+  '  submitted_at, paid_at)',
 ].join(' ')
 
 export function useManualPayments() {

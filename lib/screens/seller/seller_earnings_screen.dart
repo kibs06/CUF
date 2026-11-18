@@ -212,12 +212,16 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
         const SizedBox(height: 12),
         GcashRiseIn(
           order: 2,
-          child: GcashPrimaryButton(
-            label: 'Request payout now',
+          // A slide, not a tap: asking the platform to send money is the one
+          // action here that should not be one stray thumb away.
+          child: GcashSlideToConfirm(
+            label: 'Slide to request payout',
+            busyLabel: 'Requesting…',
+            disabledLabel: 'Nothing to request yet',
             icon: Icons.send_rounded,
-            loading: _requesting,
-            onPressed:
-                _requesting || _pendingOrders == 0 ? null : _requestPayout,
+            enabled: _pendingOrders > 0,
+            busy: _requesting,
+            onConfirm: _requestPayout,
           ),
         ),
         const SizedBox(height: 6),

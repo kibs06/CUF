@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../models/address_model.dart';
 import '../../providers/address_provider.dart';
@@ -598,6 +599,52 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // BUILD
   // ═══════════════════════════════════════════════════════════════
 
+  /// Take the customer to the GCash checkout they already have open, from the
+  /// "awaiting confirmation" refusal. The tracking screen is the right
+  /// destination rather than the pay screen: it renders the live countdown and
+  /// carries both endings (finish paying, or cancel the order), and it loads the
+  /// platform account itself — the pay screen expects those details to be handed
+  /// to it by the flow that created the order.
+  Future<void> _openPendingGcashCheckout() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    try {
+      final pending = await DirectGcashService().fetchPendingCheckout();
+      if (!mounted) return;
+      if (pending == null) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'That checkout is no longer open. Place the order again.',
+            ),
+          ),
+        );
+        return;
+      }
+      final order = await Supabase.instance.client
+          .from('orders')
+          .select('*')
+          .eq('id', pending.id)
+          .single();
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => OrderTrackingScreen(order: order),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[CHECKOUT] open pending gcash failed: $e');
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open your pending checkout. Find it under My Orders.',
+          ),
+        ),
+      );
+    }
+  }
+
   // MANUAL GCASH FLOW: the server creates the order (stock reserved, 30-min
   // pay window) and returns the PLATFORM GCash account + order code. The
   // customer pays in their own GCash app and submits the proof on the next
@@ -662,11 +709,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } on DirectGcashException catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
+      // The one-open-order cap is not a dead end: the order it is complaining
+      // about is the customer's own, waiting to be paid or cancelled. Make the
+      // message itself a way into it.
+      final hasOpenCheckout = e.code == '23505';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.message),
+          content: GestureDetector(
+            onTap: hasOpenCheckout ? _openPendingGcashCheckout : null,
+            child: Text(e.message),
+          ),
+          action: hasOpenCheckout
+              ? SnackBarAction(
+                  label: 'Open',
+                  textColor: Colors.white,
+                  onPressed: _openPendingGcashCheckout,
+                )
+              : null,
           backgroundColor: AppConstants.error,
-          duration: const Duration(seconds: 5),
+          duration: Duration(seconds: hasOpenCheckout ? 8 : 5),
         ),
       );
     } catch (e) {

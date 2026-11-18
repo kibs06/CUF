@@ -50,6 +50,42 @@ void main() {
     });
   });
 
+  group('GcashReceiptParser.parse — the receipt clock', () {
+    test('reads the stamp GCash prints under the reference', () {
+      final parsed = GcashReceiptParser.parse(const [
+        'Amount Sent',
+        'PHP 650.00',
+        'Ref No. 4043 676 687260',
+        'Nov 17, 2026 07:41 AM',
+      ]);
+      // 07:41 in Manila (UTC+8) is 23:41Z the evening before. The value is
+      // UTC, so it does not move with this test machine's timezone.
+      expect(parsed.paidAt, DateTime.utc(2026, 11, 16, 23, 41));
+      expect(parsed.paidAt!.isUtc, isTrue);
+      expect(parsed.paidAtLine, 'Nov 17, 2026 07:41 AM');
+    });
+
+    test('reads a day-first stamp and a pm clock', () {
+      final parsed = GcashReceiptParser.parse(const [
+        'Amount Sent 1,250.00',
+        '17 Nov 2026, 7:05 PM',
+      ]);
+      expect(parsed.paidAt, DateTime.utc(2026, 11, 17, 11, 5));
+    });
+
+    test('midnight reads as 00:xx, not 12:xx', () {
+      final parsed = GcashReceiptParser.parse(const [
+        'Nov 18, 2026 12:30 AM',
+      ]);
+      expect(parsed.paidAt, DateTime.utc(2026, 11, 17, 16, 30));
+    });
+
+    test('a date without a clock is not a time', () {
+      final parsed = GcashReceiptParser.parse(const ['Nov 17, 2026']);
+      expect(parsed.paidAt, isNull);
+    });
+  });
+
   group('GcashReceiptParser.parse — what it must not do', () {
     test('never treats the reference number as the amount', () {
       final parsed = GcashReceiptParser.parse(const [

@@ -8,12 +8,21 @@
 ///     already the app's single answer to "which number on this receipt is the
 ///     Ref No.?" (label-first, then a scored fallback);
 ///   * the **amount sent** — the money-looking figure on the receipt, scored so
-///     an "Amount Sent" line beats a balance, a fee or a stray price.
+///     an "Amount Sent" line beats a balance, a fee or a stray price;
+///   * the **time the receipt prints** — read so the reviewer can tell when the
+///     transfer happened, never surfaced as a field the customer edits.
+///
+/// The receipt's clock is a CLAIM, not evidence: it comes out of an image the
+/// customer could have edited, so it is stored as such. The time the proof
+/// actually arrived is stamped by the database, not by this app.
 ///
 /// Nothing here decides whether the payment is valid. The amount is returned so
-/// the form can PRE-FILL the field and say plainly whether it equals the order
+/// the form can fill the field and say plainly whether it equals the order
 /// total; the server re-checks the same equality when the proof is submitted.
-/// A parse miss is never fatal — manual typing stays available.
+///
+/// The form shows the reference and amount read-only: they come from the image
+/// and cannot be typed over, so a parse miss is answered with a clearer
+/// screenshot rather than by hand (the sender name is still typed).
 ///
 /// Pure Dart (no platform calls) so it is unit-testable without ML Kit.
 library;
@@ -31,10 +40,30 @@ class GcashReceiptParse {
   /// The text line the amount came from, for the read-back in the UI.
   final String? amountLine;
 
+  /// The moment the receipt itself says the transfer happened, as a UTC
+  /// instant. Null when the receipt carries no readable clock — a date on its
+  /// own is not a time.
+  ///
+  /// The printed clock is Philippine time, so the wall-clock fields are read
+  /// as Asia/Manila (UTC+8) rather than as this phone's local time: a device
+  /// set to another timezone must not shift a claim about a receipt printed
+  /// in the Philippines. The value is already normalised to UTC, so
+  /// `toUtc()` on it changes nothing.
+  ///
+  /// This is only ever what the image claims. It is sent with the proof so a
+  /// verifier can compare it with when the proof arrived, and it is never
+  /// shown to the customer as an editable field.
+  final DateTime? paidAt;
+
+  /// The line [paidAt] was read from, so the value can be traced back.
+  final String? paidAtLine;
+
   const GcashReceiptParse({
     this.reference = GcashRefExtraction.empty,
     this.amount,
     this.amountLine,
+    this.paidAt,
+    this.paidAtLine,
   });
 
   /// Nothing read — the form falls back to manual entry.
@@ -95,14 +124,100 @@ class GcashReceiptParser {
   static GcashReceiptParse parse(List<String> lines) {
     final reference = GcashRefExtractor.extract(lines);
     final hit = _findAmount(lines, reference.reference);
+    final stamp = _findDateTime(lines);
     if (hit == null) {
-      return GcashReceiptParse(reference: reference);
+      return GcashReceiptParse(
+        reference: reference,
+        paidAt: stamp?.at,
+        paidAtLine: stamp?.line,
+      );
     }
     return GcashReceiptParse(
       reference: reference,
       amount: hit.amount,
       amountLine: hit.line,
+      paidAt: stamp?.at,
+      paidAtLine: stamp?.line,
     );
+  }
+
+  /// Month names as GCash prints them; only the first three letters matter.
+  static const List<String> _months = [
+    'jan',
+    'feb',
+    'mar',
+    'apr',
+    'may',
+    'jun',
+    'jul',
+    'aug',
+    'sep',
+    'oct',
+    'nov',
+    'dec',
+  ];
+
+  /// A receipt stamp: `Nov 17, 2026 07:41 AM` or `17 Nov 2026, 7:41 PM`, with
+  /// the clock optional so a date-only receipt is not mistaken for a time.
+  static final RegExp _stamp = RegExp(
+    r'(?:'
+    r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+'
+    r'(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})'
+    r'|'
+    r'(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+'
+    r'(\d{4})'
+    r')'
+    r'(?:[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]\.?m\.?)?)?',
+    caseSensitive: false,
+  );
+
+  /// The printed clock's offset. The Philippines has been a single zone at
+  /// UTC+8 with no daylight saving since 1978, so this is a constant and not a
+  /// lookup — there is no date on a receipt where +08:00 is wrong.
+  static const Duration _manilaOffset = Duration(hours: 8);
+
+  /// The first line that carries a month, a day, a year and a clock.
+  static ({DateTime at, String line})? _findDateTime(List<String> lines) {
+    for (final raw in lines) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
+      final match = _stamp.firstMatch(line);
+      if (match == null) continue;
+
+      final month = _monthIndex(match.group(1) ?? match.group(5)!);
+      final day = int.tryParse(match.group(2) ?? match.group(4)!);
+      final year = int.tryParse(match.group(3) ?? match.group(6)!);
+      final hourText = match.group(7);
+      final minuteText = match.group(8);
+      if (month == null || day == null || year == null) continue;
+      // No clock, no time: a bare date cannot pin a transfer to an hour, and
+      // guessing 00:00 would invent evidence.
+      if (hourText == null || minuteText == null) continue;
+
+      var hour = int.parse(hourText);
+      final minute = int.parse(minuteText);
+      final half = (match.group(10) ?? '').toLowerCase().replaceAll('.', '');
+      if (half == 'pm' && hour < 12) hour += 12;
+      if (half == 'am' && hour == 12) hour = 0;
+      if (hour > 23 || minute > 59) continue;
+
+      // Reject impossible calendar days (Feb 31) instead of letting DateTime
+      // roll them forward into March. Built as UTC only so the calendar check
+      // cannot be bent by the device's zone; the offset is applied after.
+      final wall = DateTime.utc(year, month, day, hour, minute);
+      if (wall.year != year || wall.month != month || wall.day != day) continue;
+      // 07:41 printed in Manila is 23:41Z the day before — the instant the
+      // receipt means, whichever timezone this phone is set to.
+      return (at: wall.subtract(_manilaOffset), line: line);
+    }
+    return null;
+  }
+
+  static int? _monthIndex(String word) {
+    final lower = word.toLowerCase();
+    if (lower.length < 3) return null;
+    final index = _months.indexOf(lower.substring(0, 3));
+    return index < 0 ? null : index + 1;
   }
 
   /// Pick the most likely "amount sent" figure. Returns null when no line

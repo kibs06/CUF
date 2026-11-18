@@ -121,13 +121,17 @@ select throws_ok(
        '00000000-0000-0000-0000-0000000000ee', 'received', 600.00, 'gcash',
        'paid', 'pickup', 'pos', '1111111111111')
   $sql$,
-  null,
-  'duplicate key value violates unique constraint "uq_orders_gcash_reference_number_paid"',
-  '9: reused reference on a second paid order is rejected (23505)'
+  'P0001',
+  -- 20261118080000 put a guard in front of every writer, so the refusal is a
+  -- P0001 sentence naming the owning order rather than the bare 23505 from the
+  -- partial unique index.
+  'That GCash reference number is already used for order 11111111 — one transfer can only pay once.',
+  '9: reused reference on a second paid order is rejected'
 );
 
--- A PENDING order may carry the same reference — not yet confirmed.
-select lives_ok(
+-- A PENDING order may NOT carry a reference that is already paid: the
+-- transfer has been spent, whether or not this row is confirmed yet.
+select throws_ok(
   $sql$
     insert into public.orders
       (id, customer_id, store_id, status, total_amount, payment_method,
@@ -137,7 +141,9 @@ select lives_ok(
        '00000000-0000-0000-0000-0000000000ee', 'received', 400.00, 'gcash',
        'pending', 'pickup', 'pos', '1111111111111')
   $sql$,
-  '10: pending (unconfirmed) order may carry the same reference — dedupe does not over-block'
+  'P0001',
+  'That GCash reference number is already used for order 11111111 — one transfer can only pay once.',
+  '10: a paid reference cannot be reused on a pending order'
 );
 
 -- A different reference on a second paid order is accepted.

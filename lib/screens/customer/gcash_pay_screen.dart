@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
+import '../../providers/cart_provider.dart';
 import '../../services/direct_gcash_service.dart';
 import '../../services/upload_service.dart';
 import '../../utils/gcash_receipt_parser.dart';
@@ -242,6 +244,10 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
         amountPaid: amount,
         screenshotPath: uploadedPath,
         screenshotHash: hash,
+        // The receipt's own clock, read from the screenshot. Deliberately not
+        // shown as a field: the customer never sees or types it, and the
+        // server records its own arrival time separately.
+        paidAt: _receipt?.paidAt,
       );
       // 3. Ping the seller's device now — the in-app row is already
       // written by the RPC (realtime bell covers the open app); this
@@ -256,6 +262,9 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
         _submitting = false;
         _proofSubmitted = true;
       });
+      // The money has left the customer's wallet, so the lines this order paid
+      // for leave the cart now — not when a seller eventually verifies.
+      unawaited(_clearPurchasedFromCart());
     } on DirectGcashException catch (e) {
       if (!mounted) return;
       // The RPC rejected the proof — the uploaded screenshot is now
@@ -280,6 +289,39 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
         _errorMessage =
             'Could not submit your proof. Check your connection and try again.';
       });
+    }
+  }
+
+  /// Drop the lines this order paid for from the customer's cart.
+  ///
+  /// The database already owns this: `submit_gcash_proof` deletes the matching
+  /// `cart_items` rows in the same transaction that marks the order
+  /// paid-looking (20261118090000_cart_clears_on_proof.sql), so every device is
+  /// correct whether or not this runs. The call below only spares this screen's
+  /// customer a stale flash when they open the cart a second later.
+  ///
+  /// The cart is deliberately kept while an order is only *awaiting* payment —
+  /// an abandoned checkout must not empty it — so nothing here runs before a
+  /// proof is accepted. The order's own `order_items` are the source of truth
+  /// for what was bought, read through RLS as the signed-in customer.
+  Future<void> _clearPurchasedFromCart() async {
+    if (!mounted) return;
+    final cart = context.read<CartProvider>();
+    try {
+      final row = await Supabase.instance.client
+          .from('orders')
+          .select('order_items(product_id, size, quantity)')
+          .eq('id', widget.orderId)
+          .maybeSingle();
+      final items = row?['order_items'];
+      if (items is! List || items.isEmpty) return;
+      await cart.removePurchasedItems(
+        items.whereType<Map>().map(Map<String, dynamic>.from).toList(),
+      );
+    } catch (e) {
+      // Never let a cart cleanup fail the payment step the customer just
+      // completed; the cart screen reconciles on its next load.
+      debugPrint('[GCASH-PAY] cart cleanup failed: $e');
     }
   }
 
@@ -716,20 +758,26 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Read-only: this is read off the screenshot, never typed. A
+            // reference the customer can edit is a reference the customer can
+            // invent, and the whole point of the proof is that it is checked
+            // against the transfer — so the only way in is a readable receipt.
             TextFormField(
               controller: _refController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              readOnly: true,
+              showCursor: false,
               maxLength: 13,
               style: AppConstants.monoStyle(fontSize: 14),
               decoration: _decoration(
                 label: 'GCash reference number',
-                hint: 'e.g. 0011223344556',
+                hint: 'Read from your receipt',
+                helper: 'Read from your screenshot',
+                suffixIcon: _lockedIcon,
               ),
               validator: (v) {
                 final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
                 if (digits.length != 12 && digits.length != 13) {
-                  return 'Enter the 12–13 digit reference number from your receipt';
+                  return 'Attach your GCash receipt — the reference is read from it';
                 }
                 return null;
               },
@@ -748,24 +796,25 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
                   : null,
             ),
             const SizedBox(height: 14),
+            // Read-only for the same reason: the figure shown is what the
+            // receipt prints, so a mismatch is visible here instead of being
+            // typed away.
             TextFormField(
               controller: _amountController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
+              readOnly: true,
+              showCursor: false,
               style: AppConstants.monoStyle(fontSize: 14),
               decoration: _decoration(
                 label: 'Amount you sent',
                 prefix: '₱ ',
-                helper: 'Must match '
-                    '₱${widget.totalAmount.toStringAsFixed(2)} exactly',
+                helper:
+                    'Must match ₱${widget.totalAmount.toStringAsFixed(2)} exactly',
+                suffixIcon: _lockedIcon,
               ),
               validator: (v) {
                 final parsed = double.tryParse((v ?? '').trim());
                 if (parsed == null || parsed <= 0) {
-                  return 'Enter the amount you sent';
+                  return 'Attach your GCash receipt — the amount is read from it';
                 }
                 if ((parsed - widget.totalAmount).abs() > 0.009) {
                   return 'Send exactly ₱${widget.totalAmount.toStringAsFixed(2)}';
@@ -794,7 +843,7 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
             const SizedBox(height: 18),
             GcashPrimaryButton(
               label: _expired ? 'Window expired' : 'Submit proof',
-              icon: Icons.arrow_forward,
+              showIcon: false,
               loading: _submitting,
               onPressed: (_submitting || _expired) ? null : _submitProof,
             ),
@@ -804,11 +853,20 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
     );
   }
 
+  /// The small padlock that marks a field as read-only, so a customer does not
+  /// assume the app is broken when tapping it does nothing.
+  Widget get _lockedIcon => Icon(
+    Icons.lock_outline,
+    size: 15,
+    color: AppConstants.secondary.withValues(alpha: 0.45),
+  );
+
   InputDecoration _decoration({
     required String label,
     String? hint,
     String? helper,
     String? prefix,
+    Widget? suffixIcon,
   }) {
     final hairline = AppConstants.primary.withValues(alpha: 0.14);
     return InputDecoration(
@@ -817,6 +875,7 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
       helperText: helper,
       helperMaxLines: 2,
       prefixText: prefix,
+      suffixIcon: suffixIcon,
       counterText: '',
       filled: true,
       fillColor: AppConstants.primary.withValues(alpha: 0.035),

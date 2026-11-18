@@ -550,11 +550,16 @@ class CartProvider extends ChangeNotifier {
   /// Reconcile the cart against the customer's recently-PAID orders.
   ///
   /// Covers the path where the app was killed mid-GCash-payment and the
-  /// webhook confirmed while the user was away: when they next open the
+  /// payment landed while the user was away: when they next open the
   /// cart, any lines that were actually paid for are removed so they
   /// can't be accidentally re-ordered. Scoped to orders confirmed in the
   /// last 30 minutes (the awaiting_payment window) to keep the query
   /// cheap; safe to call on every cart screen load.
+  ///
+  /// "Paid" includes a manual GCash order whose proof is with the store:
+  /// it sits at `payment_under_review` and only becomes `paid` when a seller
+  /// verifies, which can happen long after this window — matching only
+  /// `paid` left those lines in the cart for good.
   Future<void> reconcilePurchasedCart() async {
     if (_userId == null || _items.isEmpty) return;
     try {
@@ -565,7 +570,7 @@ class CartProvider extends ChangeNotifier {
           .from('orders')
           .select('order_items(product_id, size, quantity)')
           .eq('customer_id', _userId!)
-          .eq('payment_status', 'paid')
+          .or('payment_status.eq.paid,status.eq.payment_under_review')
           .gte('created_at', since)
           .limit(10);
       if (orders.isEmpty) return;

@@ -278,7 +278,11 @@ select throws_ok(
     'e0000000-0000-0000-0000-000000000003',
     (select (j ->> 'order_id')::uuid from r where k = 'o3')),
   'P0001',
-  'That GCash reference number has already been used for another order',
+  -- Since 20261118080000 the cross-ledger guard fires first, so the sentence
+  -- names the order that already owns the transfer.
+  format('That GCash reference number is already used for order %s — one transfer can only pay once.',
+    (select COALESCE(order_code, left(id::text, 8)) from public.orders
+      where id = (select (j ->> 'order_id')::uuid from r where k = 'o2'))),
   '15: a reference already used on another order is refused'
 );
 select throws_ok(

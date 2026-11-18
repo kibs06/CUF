@@ -720,8 +720,21 @@ class GcashOrderCard extends StatelessWidget {
                 if (proof != null &&
                     (proof['submitted_at']?.toString().isNotEmpty ?? false))
                   GcashFactRow(
-                    label: 'Submitted',
+                    label: 'Received',
                     value: _formatWhen(proof['submitted_at'].toString()),
+                    mono: false,
+                  ),
+                // What the receipt itself says, which is not the same clock as
+                // when it arrived: a receipt that claims an earlier time than
+                // the proof it arrived in is worth a second look. When the
+                // screenshot had no readable clock, say so — showing the
+                // arrival stamp here would read as the customer's claim.
+                if (proof != null)
+                  GcashFactRow(
+                    label: 'Receipt says',
+                    value: (proof['paid_at']?.toString().isNotEmpty ?? false)
+                        ? _formatWhen(proof['paid_at'].toString())
+                        : 'Not readable on the receipt',
                     mono: false,
                   ),
               ],

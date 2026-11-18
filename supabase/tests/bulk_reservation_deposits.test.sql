@@ -195,7 +195,17 @@ select throws_ok(
       where customer_id = 'a0000000-0000-0000-0000-00000000000b'),
     '1234567890123', (select id::text from public.bulk_reservations
       where customer_id = 'a0000000-0000-0000-0000-00000000000b') || '/shot.jpg') $sql$,
-  'REFERENCE_ALREADY_USED',
+  'P0001',
+  -- Since 20261118080000 the shared guard runs on INSERT and names the owner;
+  -- its sentence replaces the RPC's own REFERENCE_ALREADY_USED here.
+  -- Read the owner from the deposit that actually holds the reference, rather
+  -- than from the reservation select: by this point several reservations exist
+  -- for the same product.
+  format('That GCash reference number is already used for %s — one transfer can only pay once.',
+    'reservation ' || left((select reservation_id::text
+      from public.bulk_reservation_deposits
+      where regexp_replace(reference_number, '\D', '', 'g') = '1234567890123'
+      limit 1), 8)),
   '24: an order- or deposit-used reference cannot confirm a second deposit');
 
 -- ══ 5. CANCEL POST-PAYMENT → FORFEIT ══════════════════════════════

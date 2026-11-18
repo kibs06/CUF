@@ -258,6 +258,14 @@ class DirectGcashService {
   ///
   /// An attempt that is rejected does not kill the order: this may be called
   /// up to 3 times per order, each with a fresh reference and screenshot.
+  ///
+  /// [paidAt] is the time the RECEIPT claims, read off the screenshot by the
+  /// parser and already resolved as Asia/Manila wall time, so it is the same
+  /// instant no matter what timezone this phone is in. It is a claim, not
+  /// evidence, so an unreadable receipt sends null rather than the phone's
+  /// clock — the caller's "now" would quietly turn an unknown time into a
+  /// confident one. The trusted arrival time is stamped by the database and
+  /// never passes through this app.
   Future<void> submitProof({
     required String orderId,
     required String referenceNumber,
@@ -275,7 +283,7 @@ class DirectGcashService {
         'p_amount_paid': amountPaid,
         'p_screenshot_url': screenshotPath,
         'p_screenshot_hash': screenshotHash,
-        'p_paid_at': (paidAt ?? DateTime.now()).toUtc().toIso8601String(),
+        'p_paid_at': paidAt?.toUtc().toIso8601String(),
       });
     } catch (e) {
       throw _toException(
