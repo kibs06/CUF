@@ -1,5 +1,57 @@
 [
   {
+    "latest_version": "1.0.92",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.92/app-release-1.0.92.apk",
+    "released_at": "2026-11-19",
+    "notes": [
+      "POS receipts now arrive as the same designed card online orders get, with the A5 PDF attached",
+      "A till sale's card names the cashier and shows cash tendered and change",
+      "The cashier types the address once and the store's mail server sends it — nothing left to finish in Gmail"
+    ]
+  },
+  {
+    "latest_version": "1.0.91",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.91/app-release-1.0.91.apk",
+    "released_at": "2026-11-19",
+    "notes": [
+      "An order cannot be marked Delivered until the customer's receipt has actually been emailed: the button is locked and says Email receipt first",
+      "Ready cards now read Send Receipt First and open the order, where the receipt is sent",
+      "The emailed receipt is the same downloadable A5 PDF the POS prints"
+    ]
+  },
+  {
+    "latest_version": "1.0.90",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.90/app-release-1.0.90.apk",
+    "released_at": "2026-11-19",
+    "notes": [
+      "The receipt step now belongs to Ready: Email receipt appears only there, with the customer's address and the send status",
+      "An order cannot be marked Delivered until the customer's receipt has actually been emailed — the order screen says so and the button stays locked",
+      "The emailed receipt is the same downloadable A5 PDF the POS prints"
+    ]
+  },
+  {
+    "latest_version": "1.0.89",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.89/app-release-1.0.89.apk",
+    "released_at": "2026-11-19",
+    "notes": [
+      "Receipts now send the same way the password and lockout emails do — straight from the app's mail function, with no extra server setup",
+      "Marking an order delivered emails the customer the receipt PDF automatically, and the Email receipt button sends it on demand",
+      "The emailed receipt is the same downloadable A5 PDF the POS prints, sent to the customer's registered address"
+    ]
+  },
+  {
+    "latest_version": "1.0.88",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.88/app-release-1.0.88.apk",
+    "released_at": "2026-11-19",
+    "notes": [
+      "POS receipts: print, share or email the sale's A5 receipt — the email carries the same PDF, and the cashier's address is remembered on the order",
+      "Online orders now email their receipt from the server once paid or marked delivered — no cashier, no Gmail draft",
+      "A failed receipt email retries on its own (5 min, 15 min, 1 h, 6 h), and the seller sees the receipt's status and last error on the order",
+      "Sellers can email a receipt with one tap from the order screen, to the customer's registered address",
+      "Admin portal: dark mode moved into the account menu; the passkey sign-in button is hidden for now"
+    ]
+  },
+  {
     "latest_version": "1.0.87",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.87/app-release-1.0.87.apk",
     "released_at": "2026-11-19",
