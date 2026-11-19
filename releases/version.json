@@ -4,7 +4,7 @@
   "released_at": "2026-11-19",
   "notes": [
     "POS receipts now arrive as the same designed card online orders get, with the A5 PDF attached",
-    "A till sale's card names the cashier and shows cash tendered and change",
-    "The cashier types the address once and the store's mail server sends it — nothing left to finish in Gmail"
+    "A till sale card names the cashier and shows cash tendered and change",
+    "The cashier types the address once and the store's mail server sends it, nothing left to finish in Gmail"
   ]
 }
