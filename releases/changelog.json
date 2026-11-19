@@ -1,5 +1,18 @@
 [
   {
+    "latest_version": "1.0.93",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.93/app-release-1.0.93.apk",
+    "released_at": "2026-11-20",
+    "notes": [
+      "Buyers are warned to send the exact GCash amount: any other figure is not matched, and money already sent is settled at the store rather than refunded online",
+      "The bulk reservation deposit screen now carries the same exact-amount warning as checkout",
+      "Every product now has 20 mock reviews with helpful votes, discussion threads and a pinned spotlight",
+      "A product's sold counter now matches its review count",
+      "Bulk holds can use vouchers and pay their deposit like any GCash order",
+      "Payout receipts, cash-on-delivery replacements and admin portal fixes"
+    ]
+  },
+  {
     "latest_version": "1.0.92",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.92/app-release-1.0.92.apk",
     "released_at": "2026-11-19",
