@@ -1,7 +1,7 @@
 {
   "latest_version": "1.0.93",
   "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.93/app-release-1.0.93.apk",
-  "released_at": "2026-11-20",
+  "released_at": "2026-11-19",
   "notes": [
     "Buyers are warned to send the exact GCash amount: any other figure is not matched, and money already sent is settled at the store rather than refunded online",
     "The bulk reservation deposit screen now carries the same exact-amount warning as checkout",
