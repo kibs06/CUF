@@ -268,6 +268,28 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
+  /// The column PostgREST says `orders` does not have, if it says so.
+  ///
+  /// Two shapes arrive for a missing column: the SQL error `column orders.x
+  /// does not exist` (42703) and the newer `Could not find the 'x' column of
+  /// 'orders' in the schema cache`. Parsing the name lets one decision succeed
+  /// against a database that is behind the app's migrations.
+  static String? _missingOrderColumn(PostgrestException error) {
+    final message = error.message;
+    final patterns = <RegExp>[
+      RegExp(
+        r'column\s+orders\.([a-z_]+)\s+does not exist',
+        caseSensitive: false,
+      ),
+      RegExp(r"could not find the '([a-z_]+)' column", caseSensitive: false),
+    ];
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(message);
+      if (match != null) return match.group(1);
+    }
+    return null;
+  }
+
   /// Seller decision on a `return_requested` order.
   ///
   /// approve=true → `replaced` (inspected + product replacement issued;
@@ -288,6 +310,7 @@ class OrderProvider extends ChangeNotifier {
     String replacementMethod = 'in_store',
     String? replacementCarrier,
     String? replacementTrackingNumber,
+    double replacementFee = 0,
   }) async {
     try {
       final newStatus = approve ? 'replaced' : 'received';
@@ -304,39 +327,49 @@ class OrderProvider extends ChangeNotifier {
         patch['replacement_carrier'] = shipped && carrier.isNotEmpty ? carrier : null;
         patch['replacement_tracking_number'] =
             shipped && tracking.isNotEmpty ? tracking : null;
-        patch['replacement_shipped_at'] = shipped && tracking.isNotEmpty
-            ? DateTime.now().toIso8601String()
-            : null;
+        // The ₱50 is cash on delivery: the courier collects it from the
+        // customer, so approval is also dispatch — there is no payment step to
+        // wait for before the parcel leaves.
+        patch['replacement_shipped_at'] =
+            shipped && tracking.isNotEmpty
+                ? DateTime.now().toIso8601String()
+                : null;
+        // Carcar City deliveries carry the fixed ₱50 shipping fee (shown to the
+        // customer as the COD amount); everything else is a counter handover
+        // and owes nothing. `replacement_fee_status` stays 'none' — it belongs
+        // to the retired prepaid-GCash flow.
+        patch['replacement_shipping_fee'] = shipped ? replacementFee : 0;
+        patch['replacement_fee_status'] = 'none';
       } else {
         patch['return_decline_reason'] = declineReason?.trim();
       }
-      try {
-        await Supabase.instance.client
-            .from('orders')
-            .update(patch)
-            .eq('id', orderId);
-      } on PostgrestException catch (e) {
-        // Server predates the replacement-path migration: keep the return
-        // decision working and drop just those columns, the same way the
-        // order selects fall back to [_storeOrderColumnsLegacy].
-        final message = e.message.toLowerCase();
-        final pathKeys =
-            patch.keys.where((k) => k.startsWith('replacement_')).toList();
-        if (pathKeys.isEmpty ||
-            !(message.contains('replacement_') ||
-                message.contains('schema cache'))) {
-          rethrow;
+      // Write the decision, dropping any column this database does not have
+      // yet and retrying. A hosted database can lag the migration list (for
+      // example `return_decline_reason`), and one unknown column used to fail
+      // the whole decision with "Failed to update the request".
+      var missingAttempts = 0;
+      while (true) {
+        try {
+          await Supabase.instance.client
+              .from('orders')
+              .update(patch)
+              .eq('id', orderId);
+          break;
+        } on PostgrestException catch (e) {
+          final column = _missingOrderColumn(e);
+          if (column == null || !patch.containsKey(column) || missingAttempts >= 5) {
+            debugPrint(
+              '[OrderProvider] Return decision write failed: ${e.message}',
+            );
+            rethrow;
+          }
+          missingAttempts++;
+          debugPrint(
+            '[OrderProvider] Server has no orders.$column — dropping it and '
+            'retrying the return decision.',
+          );
+          patch.remove(column);
         }
-        debugPrint(
-          '[OrderProvider] Replacement path not on the server yet: $message',
-        );
-        for (final key in pathKeys) {
-          patch.remove(key);
-        }
-        await Supabase.instance.client
-            .from('orders')
-            .update(patch)
-            .eq('id', orderId);
       }
 
       // Decline notification stays with the seller's chat message (and its
@@ -345,6 +378,9 @@ class OrderProvider extends ChangeNotifier {
         orderId,
         newStatus,
         notifyCustomer: approve,
+        // Approval's push goes out from `send-replacement-notice` together
+        // with the email, so its result can be reported truthfully.
+        pushCustomer: !approve,
       );
 
       // Approval only: the returned pair goes back into stock and the
@@ -367,7 +403,9 @@ class OrderProvider extends ChangeNotifier {
 
   /// Customer confirms the shipped replacement arrived (`replaced` →
   /// `replacement_received`), which is the shipped path's "done".
-  Future<bool> confirmReplacementReceived(dynamic orderId) async {
+  /// Returns null when the replacement was confirmed, or a customer-facing
+  /// sentence explaining why it was refused (the screen shows it verbatim).
+  Future<String?> confirmReplacementReceived(dynamic orderId) async {
     try {
       final newStatus = await _orderService.confirmReplacementReceived(
         orderId: orderId.toString(),
@@ -383,10 +421,16 @@ class OrderProvider extends ChangeNotifier {
       }
       notifyListeners();
       await loadMyOrders();
-      return true;
+      return null;
     } catch (e) {
       debugPrint('OrderProvider.confirmReplacementReceived error: $e');
-      return false;
+      final message = e
+          .toString()
+          .replaceFirst('Exception: ', '')
+          .trim();
+      return message.isEmpty
+          ? 'Could not confirm the replacement. Please try again.'
+          : message;
     }
   }
 

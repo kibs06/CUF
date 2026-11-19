@@ -323,10 +323,11 @@ class OrderService {
     await _db.updateOrderStatus(orderId, newStatus);
   }
 
-  /// Fetch POS transaction history for a store.
+  /// Fetch one channel's transaction history for a store.
   ///
-  /// Returns only orders with `source='pos'` (in-person sales),
-  /// scoped to the given [storeId], ordered most-recent-first.
+  /// Returns only orders whose `source` matches [source] — `'pos'` for
+  /// in-person sales, `'online'` for orders placed through the app — scoped to
+  /// the given [storeId], ordered most-recent-first.
   /// Each order includes its line items with product names.
   ///
   /// Queries orders directly by store_id + source (no 3-step chain needed)
@@ -353,24 +354,58 @@ class OrderService {
         e.message.toLowerCase().contains('does not exist');
   }
 
-  Future<List<dynamic>> _posOrderRows(String storeId, String columns) async {
-    final data = await _client
+  Future<List<dynamic>> _posOrderRows(
+    String storeId,
+    String columns,
+    String source, {
+    bool salesOnly = false,
+  }) async {
+    var query = _client
         .from('orders')
         .select(columns)
         .eq('store_id', storeId)
-        .eq('source', 'pos')
-        .order('created_at', ascending: false);
+        .eq('source', source);
+    if (salesOnly) {
+      // A history is a record of sales, so only rows a receipt can exist for:
+      // paid, or already handed over. An unpaid online order is a cart in
+      // progress and belongs in the Orders tab, not here.
+      query = query.or('payment_status.eq.paid,status.in.(delivered,received)');
+    }
+    final data = await query.order('created_at', ascending: false);
     return data as List;
   }
 
-  Future<List<Map<String, dynamic>>> fetchPosHistory(String storeId) async {
-    // Fetch POS-only orders directly (store_id + source filter)
+  /// One channel's sales for a store, newest first.
+  ///
+  /// [source] is `'pos'` for walk-in sales, `'online'` for orders placed in the
+  /// app; both are read directly by store_id + source, so the seller gets the
+  /// same rows, with their items, whichever channel they are looking at.
+  ///
+  /// [salesOnly] restricts the result to orders that are actually a sale —
+  /// `payment_status = 'paid'` or a delivered/received order — which is what the
+  /// online history uses: a pending or unpaid order has no receipt to look up,
+  /// and listing it would just duplicate the Orders tab.
+  Future<List<Map<String, dynamic>>> fetchPosHistory(
+    String storeId, {
+    String source = 'pos',
+    bool salesOnly = false,
+  }) async {
     List<dynamic> data;
     try {
-      data = await _posOrderRows(storeId, _posRowColumns);
+      data = await _posOrderRows(
+        storeId,
+        _posRowColumns,
+        source,
+        salesOnly: salesOnly,
+      );
     } on PostgrestException catch (e) {
       if (!_isUnknownCustomerEmailColumn(e)) rethrow;
-      data = await _posOrderRows(storeId, _posRowColumnsLegacy);
+      data = await _posOrderRows(
+        storeId,
+        _posRowColumnsLegacy,
+        source,
+        salesOnly: salesOnly,
+      );
     }
 
     final orders =
@@ -634,14 +669,60 @@ class OrderService {
   /// `orders`, and the function is what stamps `replacement_received_at`
   /// and tells the store's seller bell. Returns the new status.
   Future<String> confirmReplacementReceived({required String orderId}) async {
-    final data = await _client.rpc(
-      'confirm_replacement_received',
-      params: {'p_order_id': orderId},
-    );
-    if (data is Map && data['status'] != null) {
-      return data['status'].toString();
+    try {
+      final data = await _client.rpc(
+        'confirm_replacement_received',
+        params: {'p_order_id': orderId},
+      );
+      if (data is Map && data['status'] != null) {
+        return data['status'].toString();
+      }
+      return 'replacement_received';
+    } on PostgrestException catch (e) {
+      final text = e.message.toLowerCase();
+      final missingFunction = e.code == 'PGRST202' ||
+          text.contains('could not find the function') ||
+          text.contains('function public.confirm_replacement_received');
+      if (!missingFunction) {
+        // A rule rejection (already confirmed, in-store swap, not your order)
+        // is the real answer — pass its message on instead of retrying.
+        throw Exception(e.message);
+      }
+      // Hosted databases can lag the migration list. The button must still
+      // work, so the same rules run server-side in an edge function.
+      debugPrint(
+        '[OrderService] confirm_replacement_received missing on the server — '
+        'using the edge-function fallback.',
+      );
+      final fallbackError = await _confirmReplacementViaFunction(orderId);
+      if (fallbackError == null) return 'replacement_received';
+      throw Exception(fallbackError);
     }
-    return 'replacement_received';
+  }
+
+  /// Edge-function half of [confirmReplacementReceived]. Returns null on
+  /// success, or the server's own explanation when the confirmation was
+  /// refused. Never throws.
+  Future<String?> _confirmReplacementViaFunction(String orderId) async {
+    try {
+      final response = await _client.functions.invoke(
+        'confirm-replacement-received',
+        body: {'order_id': orderId},
+      );
+      final data = response.data;
+      if (data is Map && data['status'] != null) return null;
+      if (data is Map && data['error'] != null) return data['error'].toString();
+      return null;
+    } on FunctionException catch (e) {
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        return details['error'].toString();
+      }
+      return 'Could not confirm the replacement (${e.status}).';
+    } catch (e) {
+      debugPrint('[OrderService] Replacement confirmation fallback failed: $e');
+      return 'Could not confirm the replacement. Please try again.';
+    }
   }
 
   /// Reconcile stock for an approved replacement: the returned pair goes
@@ -704,6 +785,79 @@ class OrderService {
           .createSignedUrl(storagePath, 3600);
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Email the customer that the store approved their product replacement.
+  ///
+  /// The in-app notice and the push come from the status change itself; this
+  /// is the inbox channel, sent by the `send-replacement-notice` edge function
+  /// (Gmail SMTP, same account as the receipt mailer). Fire-and-forget: a mail
+  /// failure must never fail a decision that already succeeded.
+  /// Returns a short, seller-facing line describing what happened ("Email sent
+  /// to …", "No email on file", "email failed: 401"), so an approval that goes
+  /// out silently can be diagnosed instead of guessed at. Never throws.
+  Future<String> emailReplacementNotice(String orderId) async {
+    try {
+      final response = await _client.functions.invoke(
+        'send-replacement-notice',
+        body: {'order_id': orderId},
+      );
+      final data = response.data;
+      if (data is! Map) return 'Replacement notice sent.';
+      if (data['skipped'] == 'already_sent') {
+        return 'Replacement notice was already sent earlier.';
+      }
+      if (data['error'] != null) {
+        return 'Notice not sent: ${data['error']}';
+      }
+
+      final emailMap = data['email'];
+      final emailPart = data['sent_to'] != null
+          ? 'Email sent to ${data['sent_to']}'
+          : emailMap is Map && emailMap['reason'] == 'no_email'
+              ? 'No email on file'
+              : 'Email not sent';
+
+      final pushMap = data['push'];
+      if (pushMap is! Map) return '$emailPart.';
+      final delivered = pushMap['success_count'] is int
+          ? pushMap['success_count'] as int
+          : 0;
+      final devices =
+          pushMap['devices'] is int ? pushMap['devices'] as int : 0;
+      // The count is FCM's accepted-delivery answer, not a token count: 0 with
+      // registered devices means the send failed, 0 with none means there was
+      // nothing to send to. Never claim a push that did not happen.
+      final pushPart = delivered > 0
+          ? 'push delivered to $delivered device(s)'
+          : devices == 0
+              ? 'push skipped — customer has no registered device'
+              : 'push not delivered';
+      return '$emailPart · $pushPart.';
+    } on FunctionException catch (e) {
+      // The function answers 500 with `{error: "..."}` — that sentence is the
+      // only clue to the cause, so surface it instead of a bare status.
+      final details = e.details;
+      var detail = '';
+      if (details is Map) {
+        detail = (details['error'] ?? details['message'] ?? '').toString();
+      } else if (details != null) {
+        detail = details.toString();
+      }
+      if (detail.isEmpty) detail = e.reasonPhrase ?? '';
+      debugPrint(
+        '[OrderService] Replacement notice failed (${e.status}): $details',
+      );
+      final message = detail.isEmpty
+          ? 'Email not sent (${e.status}).'
+          : 'Email not sent (${e.status}): $detail';
+      return message.length > 240
+          ? '${message.substring(0, 240)}…'
+          : message;
+    } catch (e) {
+      debugPrint('[OrderService] Replacement notice email failed: $e');
+      return 'Email not sent.';
     }
   }
 

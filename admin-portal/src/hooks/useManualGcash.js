@@ -262,6 +262,28 @@ export function useMarkPayoutPaid() {
         p_receipt: receiptPath ?? '',
       })
       if (error) throw error
+
+      // The transfer is recorded at this point — nothing below may fail the
+      // admin's action. The receipt is best-effort and its outcome is returned
+      // so the page can say exactly what the seller did and didn't get.
+      try {
+        const { data, error: noticeError } = await supabase.functions.invoke(
+          'send-payout-receipt',
+          { body: { payout_id: payoutId } },
+        )
+        if (noticeError) {
+          return {
+            notice: null,
+            noticeError: noticeError.message ?? 'the receipt service refused it',
+          }
+        }
+        return { notice: data ?? null, noticeError: data?.error ?? null }
+      } catch (err) {
+        return {
+          notice: null,
+          noticeError: err?.message ?? 'the receipt could not be sent',
+        }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seller-payouts'] })

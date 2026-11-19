@@ -838,6 +838,11 @@ class SupabaseService {
     dynamic orderId,
     String newStatus, {
     bool notifyCustomer = true,
+
+    /// `false` keeps the bell row but skips the FCM push — used when the
+    /// caller sends its own notification and needs the real delivery result
+    /// (the replacement approval, sent by `send-replacement-notice`).
+    bool pushCustomer = true,
   }) async {
     final dbStatus = _mapUiStatusToDb(newStatus);
     final data = await _client
@@ -887,9 +892,8 @@ class SupabaseService {
           userId: customerId,
           category: 'returns',
           title: 'Replacement approved',
-          body: 'Order #$shortId — return approved. Bring the item to the '
-              'physical store for an on-the-spot swap, or wait for the '
-              'shipped replacement (remote takes longer).',
+          body: 'Order #$shortId — your product is being replaced. Tap to see '
+              'whether it ships to you or you collect it in store.',
           orderId: orderId.toString(),
         );
       }
@@ -926,15 +930,20 @@ class SupabaseService {
           break;
         case 'replaced':
         case 'refunded':
-          _triggerCustomerPush(
-            recipientUserId: customerId,
-            type: 'returns',
-            title: 'Replacement approved',
-            body: 'Order #$shortId — swap it in-store, or wait for the shipped '
-                'replacement. Tap to view.',
-            referenceId: orderId.toString(),
-            screen: 'order_tracking',
-          );
+          // The replacement approval sends its own push from the edge function
+          // that also mails the customer, so its snackbar can report what FCM
+          // actually accepted. Pushing here as well would double it.
+          if (pushCustomer) {
+            _triggerCustomerPush(
+              recipientUserId: customerId,
+              type: 'returns',
+              title: 'Replacement approved',
+              body: 'Order #$shortId — your product is being replaced. Tap to '
+                  'see whether it ships or you collect it in store.',
+              referenceId: orderId.toString(),
+              screen: 'order_tracking',
+            );
+          }
           break;
         case 'cancelled':
           // Fetch the cancellation reason from the order row

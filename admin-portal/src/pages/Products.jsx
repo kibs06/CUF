@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Search, LayoutGrid, List } from 'lucide-react'
 import { useToast } from '../components/ui/Toast.jsx'
 import EmptyState from '../components/ui/EmptyState.jsx'
+import Tooltip from '../components/ui/Tooltip.jsx'
 import StoreGroup from '../components/products/StoreGroup.jsx'
 import ProductDetailModal from '../components/products/ProductDetailModal.jsx'
 import Modal from '../components/ui/Modal.jsx'
@@ -79,16 +80,19 @@ export default function Products() {
             size={15}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
           />
-          <input
-            type="search"
-            placeholder="Search products..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-border bg-card py-2.5 pl-9 pr-4 text-sm text-ink placeholder-muted outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
-          />
+          <Tooltip label="Search products by name.">
+            <input
+              type="search"
+              placeholder="Search products..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-border bg-card py-2.5 pl-9 pr-4 text-sm text-ink placeholder-muted outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </Tooltip>
         </div>
 
         {/* Category filter */}
+        <Tooltip label="Show one category only.">
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
@@ -101,8 +105,10 @@ export default function Products() {
             </option>
           ))}
         </select>
+        </Tooltip>
 
         {/* Status filter */}
+        <Tooltip label="Show active or inactive products only.">
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -112,34 +118,39 @@ export default function Products() {
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
         </select>
+        </Tooltip>
 
         {/* Fix #6: Connected pill toggle with divider */}
         <div className="flex overflow-hidden rounded-xl border border-border bg-card">
-          <button
-            type="button"
-            onClick={() => setView('grid')}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors ${
-              view === 'grid'
-                ? 'bg-secondary text-white'
-                : 'text-muted hover:bg-canvas'
-            }`}
-          >
-            <LayoutGrid size={15} />
-            Grid
-          </button>
+          <Tooltip label="Show products as cards.">
+            <button
+              type="button"
+              onClick={() => setView('grid')}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors ${
+                view === 'grid'
+                  ? 'bg-secondary text-white'
+                  : 'text-muted hover:bg-canvas'
+              }`}
+            >
+              <LayoutGrid size={15} />
+              Grid
+            </button>
+          </Tooltip>
           <div className="w-px bg-border" />
-          <button
-            type="button"
-            onClick={() => setView('list')}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors ${
-              view === 'list'
-                ? 'bg-secondary text-white'
-                : 'text-muted hover:bg-canvas'
-            }`}
-          >
-            <List size={15} />
-            List
-          </button>
+          <Tooltip label="Show products as a compact list.">
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors ${
+                view === 'list'
+                  ? 'bg-secondary text-white'
+                  : 'text-muted hover:bg-canvas'
+              }`}
+            >
+              <List size={15} />
+              List
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -216,13 +227,16 @@ export default function Products() {
         title="Deactivate Product"
         footer={
           <>
-            <button
-              type="button"
-              onClick={() => setDeleteTarget(null)}
-              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-canvas"
-            >
-              Cancel
-            </button>
+            <Tooltip label="Close without changing the product.">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-canvas"
+              >
+                Cancel
+              </button>
+            </Tooltip>
+            <Tooltip label="Takes the product out of the catalog; the record stays.">
             <button
               type="button"
               onClick={handleDelete}
@@ -231,6 +245,7 @@ export default function Products() {
             >
               Deactivate
             </button>
+            </Tooltip>
           </>
         }
       >

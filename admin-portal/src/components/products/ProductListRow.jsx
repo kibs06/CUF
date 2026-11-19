@@ -48,7 +48,9 @@ export default function ProductListRow({ product, onView, onToggleActive, onDele
       </span>
 
       {/* Actions */}
-      <div className="flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+      {/* Focus-within as well as hover: a keyboard user gets no hover, and the
+          row's actions must not be unreachable. */}
+      <div className="flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         <button
           type="button"
           onClick={() => onView?.(product)}

@@ -33,6 +33,10 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local scratch output — logs and device screenshots from agent runs
+/tmp/
+/.screenshots/
+
 # Symbolication related
 app.*.symbols
 

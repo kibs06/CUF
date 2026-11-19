@@ -17,12 +17,19 @@ const _kMonths = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-/// Screen showing past POS (in-person) transactions for the current seller.
+/// The seller's transaction history for the current store: past sales with the
+/// receipt behind each one.
 ///
-/// Queries orders with `source='pos'` scoped to the seller's store,
-/// ordered most-recent-first. Cards styled as digital receipts.
+/// Two channels share this list — walk-in sales rung up at the POS
+/// (`source = 'pos'`) and orders placed online through the app — because a
+/// customer coming back with a question does not care which counter the sale
+/// came from, and the shop needs one place to find either receipt. The chips at
+/// the top switch channels; [source] only decides which one opens first.
 class PosHistoryScreen extends StatefulWidget {
-  const PosHistoryScreen({super.key});
+  /// Which channel to open on: `'pos'` for walk-in, `'online'` for app orders.
+  final String source;
+
+  const PosHistoryScreen({super.key, this.source = 'pos'});
 
   @override
   State<PosHistoryScreen> createState() => _PosHistoryScreenState();
@@ -51,9 +58,13 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
   String _sellerName = '';
   bool _storeDetailsFetched = false;
 
+  /// The channel on screen; starts from [PosHistoryScreen.source].
+  String _source = 'pos';
+
   @override
   void initState() {
     super.initState();
+    _source = widget.source;
     _wasOffline = !ConnectivityService.instance.isOnline;
     _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
       if (isOnline && _wasOffline && mounted) {
@@ -122,7 +133,13 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
         }
       }
 
-      final transactions = await _orderService.fetchPosHistory(storeId);
+      // The online channel lists sales only: a pending or unpaid order has no
+      // receipt behind it yet, and every one of them already lives in Orders.
+      final transactions = await _orderService.fetchPosHistory(
+        storeId,
+        source: _source,
+        salesOnly: _source == 'online',
+      );
       if (mounted) {
         setState(() {
           _allTransactions = transactions;
@@ -206,7 +223,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
         backgroundColor: AppConstants.chrome,
         elevation: 0,
         title: Text(
-          'POS History',
+          'Transaction history',
           style: AppConstants.bodyStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -223,6 +240,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
       ),
       body: Column(
         children: [
+          _buildChannelBar(),
           // Date range filter chips
           if (!_isLoading && _allTransactions.isNotEmpty)
             _buildFilterBar(),
@@ -230,6 +248,47 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
           Expanded(child: _buildBody()),
         ],
       ),
+    );
+  }
+
+  /// Walk-in vs online, switchable. One history, two channels — a seller asked
+  /// for "the receipt" should not have to remember which counter it came from.
+  Widget _buildChannelBar() {
+    return Container(
+      color: AppConstants.surfaceLight,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Row(
+        children: [
+          _buildChannelChip('pos', 'Walk-in'),
+          const SizedBox(width: 8),
+          _buildChannelChip('online', 'Online orders'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChannelChip(String value, String label) {
+    final selected = _source == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      showCheckmark: false,
+      selectedColor: AppConstants.primary,
+      backgroundColor: AppConstants.sellerSurface,
+      labelStyle: AppConstants.bodyStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: selected ? Colors.white : AppConstants.secondary,
+      ),
+      onSelected: (_) {
+        if (_source == value) return;
+        setState(() {
+          _source = value;
+          _allTransactions = [];
+          _error = null;
+        });
+        _loadHistory();
+      },
     );
   }
 
@@ -248,7 +307,9 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
             style: AppConstants.bodyStyle(fontSize: 13),
             decoration: InputDecoration(
               isDense: true,
-              hintText: 'Search receipt code, amount or cashier',
+              hintText: _source == 'pos'
+                  ? 'Search receipt code, amount or cashier'
+                  : 'Search receipt code, amount or customer',
               hintStyle: AppConstants.bodyStyle(
                 fontSize: 12.5,
                 color: AppConstants.secondary.withValues(alpha: 0.45),
@@ -474,7 +535,18 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
   // ---------------------------------------------------------------------------
   Widget _buildReceiptCard(Map<String, dynamic> order) {
     final total = (order['total_amount'] as num?)?.toDouble() ?? 0;
-    final paymentMethod = (order['payment_method'] ?? 'cash').toString();
+    // Online orders record 'cod'; the card should say what that means rather
+    // than echo the column value.
+    final rawPayment =
+        (order['payment_method'] ?? 'cash').toString().trim().toLowerCase();
+    final paymentMethod = switch (rawPayment) {
+      'cash' => 'Cash',
+      'gcash' => 'GCash',
+      'cod' => 'Cash on delivery',
+      '' => 'Not recorded',
+      _ => rawPayment[0].toUpperCase() + rawPayment.substring(1),
+    };
+    final isCashLike = rawPayment == 'cash' || rawPayment == 'cod';
     final items = order['order_items'] as List? ?? [];
     final itemsCount = order['items_count'] ?? items.length;
     final createdAt = order['created_at']?.toString();
@@ -490,7 +562,11 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
               order: order,
               storeName: _storeName,
               storeLocation: _storeLocation,
-              sellerName: _sellerName,
+              // Only a till sale has a cashier; an online order was not rung up
+              // by anyone, and its copy does not claim a completion tick.
+              sellerName: _source == 'pos' ? _sellerName : '',
+              badgeLabel: _source == 'pos' ? 'POS Sale' : 'Online order',
+              showCompletionMark: _source == 'pos',
             ),
           ),
         );
@@ -687,7 +763,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: paymentMethod.toLowerCase() == 'cash'
+                    color: isCashLike
                         ? AppConstants.okStockColor.withValues(alpha: 0.10)
                         : AppConstants.statusConfirmedColor.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(8),
@@ -696,11 +772,11 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        paymentMethod.toLowerCase() == 'cash'
+                        isCashLike
                             ? Icons.payments_outlined
                             : Icons.qr_code_2,
                         size: 12,
-                        color: paymentMethod.toLowerCase() == 'cash'
+                        color: isCashLike
                             ? AppConstants.okStockColor
                             : AppConstants.statusConfirmedColor,
                       ),
@@ -710,7 +786,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
                         style: AppConstants.bodyStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: paymentMethod.toLowerCase() == 'cash'
+                          color: isCashLike
                               ? AppConstants.okStockColor
                               : AppConstants.statusConfirmedColor,
                         ),
@@ -719,7 +795,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
                   ),
                 ),
                 // GCash reference number (if present)
-                if (paymentMethod.toLowerCase() == 'gcash' &&
+                if (rawPayment == 'gcash' &&
                     (order['gcash_reference_number']?.toString().isNotEmpty ?? false)) ...[
                   const SizedBox(width: 8),
                   Container(
@@ -823,12 +899,18 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
         ? (hasFilter ? 'No matches in this period' : 'No sales match your search')
         : (hasFilter
               ? 'No transactions in this period'
-              : 'No POS transactions yet');
+              : (_source == 'pos'
+                    ? 'No POS transactions yet'
+                    : 'No online sales yet'));
     final hint = searching
-        ? "Try a receipt code, an amount, the cashier's name — or clear the search."
+        ? (_source == 'pos'
+              ? "Try a receipt code, an amount, the cashier's name — or clear the search."
+              : 'Try a receipt code, an amount or a customer name — only paid or delivered orders are listed here.')
         : (hasFilter
               ? 'Try a different time range or check All.'
-              : 'Completed in-store sales will appear here.');
+              : (_source == 'pos'
+                    ? 'Completed in-store sales will appear here.'
+                    : 'Paid or delivered online orders appear here, because those are the ones with a receipt. Pending and unpaid orders stay in the Orders tab.'));
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),

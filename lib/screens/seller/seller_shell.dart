@@ -27,6 +27,7 @@ import 'custom_orders_screen.dart';
 import 'reservation_requests_screen.dart';
 import 'seller_inbox_screen.dart';
 import 'seller_notification_center_screen.dart';
+import 'seller_earnings_screen.dart';
 import 'store_reviews_screen.dart';
 import 'pos_history_screen.dart';
 import '../shared/profile_screen.dart';
@@ -137,6 +138,14 @@ class _SellerShellState extends State<SellerShell> {
             MaterialPageRoute(
               builder: (_) => const GcashPaymentQueueScreen(),
             ),
+          );
+          break;
+        case 'seller_earnings':
+          // "Payout sent" push from send-payout-receipt: the batch is paid and
+          // the receipt is in the inbox, so land on the earnings/payout
+          // history the receipt talks about.
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SellerEarningsScreen()),
           );
           break;
         case 'seller_notifications':
@@ -354,6 +363,20 @@ class _SellerShellState extends State<SellerShell> {
               color: Colors.white,
             ),
           ),
+          // Upper-right corner, read right to left: transaction history sits
+          // outermost, then the returns queue. Both are icon-only so the title
+          // keeps its room; the tooltips carry the words.
+          actions: [
+            IconButton(
+              tooltip: 'Transaction history',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const PosHistoryScreen()),
+                );
+              },
+              icon: const Icon(Icons.history, color: Colors.white),
+            ),
+          ],
         );
       case 4: // Profile
         return AppBar(

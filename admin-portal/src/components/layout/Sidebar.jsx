@@ -1,5 +1,6 @@
 import { Link, NavLink } from 'react-router-dom'
 import { useAdminNotifications } from '../../hooks/useAdminNotifications.js'
+import { SHOW_GCASH_VERIFICATION } from '../../lib/features.js'
 import { useState } from 'react'
 import {
   LayoutDashboard,
@@ -43,9 +44,11 @@ const GROUPS = [
     items: [
       { to: '/orders', label: 'Orders', icon: ShoppingCart },
       { to: '/transactions', label: 'Transactions', icon: Wallet },
-      { to: '/payment-verification', label: 'GCash Verification', icon: BadgeCheck },
+      ...(SHOW_GCASH_VERIFICATION
+        ? [{ to: '/payment-verification', label: 'GCash Verification', icon: BadgeCheck }]
+        : []),
       { to: '/payouts', label: 'Payouts', icon: Banknote },
-      { to: '/refunds', label: 'Refunds owed', icon: RotateCcw },
+      { to: '/refunds', label: 'Replacements owed', icon: RotateCcw },
     ],
   },
   {

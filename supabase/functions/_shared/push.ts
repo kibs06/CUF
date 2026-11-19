@@ -73,6 +73,13 @@ export async function getUnreadBadgeCount(
 
 // ── FCM HTTP v1 API ──────────────────────────────────────────────
 
+interface FcmResult {
+  ok: boolean;
+  /** True only when FCM says the registration itself is dead. */
+  invalidToken: boolean;
+  error?: string;
+}
+
 async function sendFcmPush(
   token: string,
   title: string,
@@ -81,7 +88,7 @@ async function sendFcmPush(
   badge: number,
   projectId: string,
   serviceAccountKey: string,
-): Promise<boolean> {
+): Promise<FcmResult> {
   try {
     const accessToken = await getAccessToken(serviceAccountKey);
 
@@ -122,24 +129,28 @@ async function sendFcmPush(
 
     if (!response.ok) {
       const error = await response.text();
-      console.error(`[FCM] Send failed: ${error}`);
+      console.error(`[FCM] Send failed (${response.status}): ${error}`);
 
-      if (error.includes("UNREGISTERED")) {
-        return false;
-      }
-      return false;
+      // ONLY a token FCM declares dead may be deleted. Treating every failure
+      // as invalid used to delete a working device's row on a transient 500 /
+      // quota error, which silenced that user's pushes until they signed in
+      // again — the "pushes suddenly stopped" symptom.
+      const invalidToken = response.status === 404 ||
+        /UNREGISTERED|INVALID_ARGUMENT|not a valid (FCM )?registration token/i
+          .test(error);
+      return { ok: false, invalidToken, error };
     }
 
-    return true;
+    return { ok: true, invalidToken: false };
   } catch (e) {
     console.error(`[FCM] Error: ${e}`);
-    return false;
+    return { ok: false, invalidToken: false, error: String(e) };
   }
 }
 
 // ── OAuth2 Access Token ──────────────────────────────────────────
 
-async function getAccessToken(serviceAccountKey: string): Promise<string> {
+export async function getAccessToken(serviceAccountKey: string): Promise<string> {
   const decoded = atob(serviceAccountKey);
   const serviceAccount = JSON.parse(decoded);
 
@@ -226,13 +237,17 @@ export async function sendPushToUser(
   userId: string,
   notification: PushNotification,
   data: Record<string, string>,
-): Promise<{ successCount: number; invalidTokensRemoved: number }> {
+): Promise<{
+  successCount: number;
+  invalidTokensRemoved: number;
+  failedCount: number;
+}> {
   const projectId = Deno.env.get("FIREBASE_PROJECT_ID") ?? "";
   const serviceAccountKey = Deno.env.get("FCM_SERVICE_ACCOUNT_KEY") ?? "";
 
   if (!projectId || !serviceAccountKey) {
     console.error("[FCM] Missing Firebase configuration");
-    return { successCount: 0, invalidTokensRemoved: 0 };
+    return { successCount: 0, invalidTokensRemoved: 0, failedCount: 0 };
   }
 
   // Compute badge count for the OS app icon
@@ -247,12 +262,12 @@ export async function sendPushToUser(
 
   if (tokenError) {
     console.error("[FCM] Token query ERROR:", JSON.stringify(tokenError));
-    return { successCount: 0, invalidTokensRemoved: 0 };
+    return { successCount: 0, invalidTokensRemoved: 0, failedCount: 0 };
   }
 
   if (!tokens || tokens.length === 0) {
     console.log("[FCM] No device tokens for user:", userId);
-    return { successCount: 0, invalidTokensRemoved: 0 };
+    return { successCount: 0, invalidTokensRemoved: 0, failedCount: 0 };
   }
 
   console.log(`[FCM] Sending to ${tokens.length} device(s) for user: ${userId}`);
@@ -260,9 +275,10 @@ export async function sendPushToUser(
   // Send to each device token
   const invalidTokens: string[] = [];
   let successCount = 0;
+  let failedCount = 0;
 
   for (const tokenRow of tokens) {
-    const sent = await sendFcmPush(
+    const result = await sendFcmPush(
       tokenRow.fcm_token,
       notification.title,
       notification.body,
@@ -272,10 +288,18 @@ export async function sendPushToUser(
       serviceAccountKey
     );
 
-    if (sent) {
+    if (result.ok) {
       successCount++;
     } else {
-      invalidTokens.push(tokenRow.fcm_token);
+      failedCount++;
+      if (result.invalidToken) {
+        invalidTokens.push(tokenRow.fcm_token);
+      } else {
+        // Transient: keep the registration so the next push can reach it.
+        console.warn(
+          `[FCM] Delivery failed for user ${userId} (kept token): ${result.error}`,
+        );
+      }
     }
   }
 
@@ -289,10 +313,15 @@ export async function sendPushToUser(
   }
 
   console.log(
-    `[FCM] Sent ${successCount}/${tokens.length} notifications to user ${userId}`
+    `[FCM] Sent ${successCount}/${tokens.length} notifications to user ${userId}` +
+      (failedCount > 0 ? ` (${failedCount} failed)` : ""),
   );
 
-  return { successCount, invalidTokensRemoved: invalidTokens.length };
+  return {
+    successCount,
+    invalidTokensRemoved: invalidTokens.length,
+    failedCount,
+  };
 }
 
 // ── CORS Headers ─────────────────────────────────────────────────

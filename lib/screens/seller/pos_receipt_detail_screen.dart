@@ -9,18 +9,31 @@ const _kMonths = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-/// Full-screen receipt view for a single POS transaction.
+/// Full-screen receipt view for one sale.
 ///
 /// Shows store name, order ID, timestamp, itemized line items,
 /// dashed tear-off divider, and total/payment summary.
 /// The same sale can leave the phone as a PDF: print it through the system
 /// dialog or hand it to the share sheet, so the customer goes home with a
 /// copy instead of only having looked at the screen.
+///
+/// It serves both channels: the till opens it the moment a sale closes, and
+/// the Orders screen opens it later for an online order, so the shop keeps its
+/// own copy of every receipt without asking the customer for theirs.
 class PosReceiptDetailScreen extends StatelessWidget {
   final Map<String, dynamic> order;
   final String storeName;
   final String storeLocation;
   final String sellerName;
+
+  /// The badge above the tear line: a counter sale reads "POS Sale", an online
+  /// order's copy says "Online order".
+  final String badgeLabel;
+
+  /// Whether to draw the completion tick. A till sale is finished when this
+  /// screen opens; an online order's copy can be opened at any stage, so it
+  /// must not claim the sale is complete.
+  final bool showCompletionMark;
 
   const PosReceiptDetailScreen({
     super.key,
@@ -28,6 +41,8 @@ class PosReceiptDetailScreen extends StatelessWidget {
     required this.storeName,
     this.storeLocation = '',
     this.sellerName = '',
+    this.badgeLabel = 'POS Sale',
+    this.showCompletionMark = true,
   });
 
   @override
@@ -115,21 +130,24 @@ class PosReceiptDetailScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // ── Success checkmark ──
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppConstants.okStockColor.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
+                    // ── Completion mark ──
+                    if (showCompletionMark) ...[
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color:
+                              AppConstants.okStockColor.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.check,
+                          size: 28,
+                          color: AppConstants.okStockColor,
+                        ),
                       ),
-                      child: Icon(
-                        Icons.check,
-                        size: 28,
-                        color: AppConstants.okStockColor,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
 
                     // ── Store name ──
                     Text(
@@ -162,7 +180,7 @@ class PosReceiptDetailScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        'POS Sale',
+                        badgeLabel,
                         style: AppConstants.bodyStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,

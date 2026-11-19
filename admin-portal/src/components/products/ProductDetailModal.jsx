@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Tooltip from '../ui/Tooltip.jsx'
 import { X, Package, Cuboid } from 'lucide-react'
 import { formatCurrency } from '../../lib/constants'
 import Badge from '../ui/Badge.jsx'
@@ -21,13 +22,15 @@ export default function ProductDetailModal({ product, onClose, onToggleActive, o
         {/* Header */}
         <div className="flex items-center justify-between border-b border-surface p-6">
           <h2 className="font-display text-xl font-bold text-ink">{product.name}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface"
-          >
-            <X size={16} className="text-muted" />
-          </button>
+          <Tooltip label="Close this product.">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-surface"
+            >
+              <X size={16} className="text-muted" />
+            </button>
+          </Tooltip>
         </div>
 
         <div className="p-6">
@@ -134,20 +137,24 @@ export default function ProductDetailModal({ product, onClose, onToggleActive, o
 
           {/* Action buttons */}
           <div className="flex gap-3 border-t border-surface pt-4">
-            <button
-              type="button"
-              onClick={() => onToggleActive?.(product)}
-              className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-surface"
-            >
-              {product.isActive ? 'Deactivate Product' : 'Activate Product'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete?.(product)}
-              className="flex-1 rounded-xl bg-danger py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700"
-            >
-              Delete Product
-            </button>
+            <Tooltip label="Hides the product from the storefront, or puts it back.">
+              <button
+                type="button"
+                onClick={() => onToggleActive?.(product)}
+                className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-surface"
+              >
+                {product.isActive ? 'Deactivate Product' : 'Activate Product'}
+              </button>
+            </Tooltip>
+            <Tooltip label="Removes the product from the catalog for good.">
+              <button
+                type="button"
+                onClick={() => onDelete?.(product)}
+                className="flex-1 rounded-xl bg-[#D64545] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#B93A3A]"
+              >
+                Delete Product
+              </button>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -196,6 +203,7 @@ function ProductModelsSection({ productId, name, onView }) {
               </div>
               <Badge label={m.status} variant={m.status} />
               {m.storage_path && (
+                <Tooltip label="Open this model in the 3D viewer.">
                 <button
                   type="button"
                   onClick={() =>
@@ -211,6 +219,7 @@ function ProductModelsSection({ productId, name, onView }) {
                 >
                   View 3D
                 </button>
+                </Tooltip>
               )}
             </div>
           ))}

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,6 +29,20 @@ class PushNotificationService {
   StreamSubscription? _foregroundSub;
   StreamSubscription? _tokenRefreshSub;
   StreamSubscription<AuthState>? _authSub;
+
+  /// Re-asserts the device token every time the app returns to the
+  /// foreground. The row can be gone server-side (token pruning, a failed
+  /// cleanup, a restore) and nothing else would put it back until the next
+  /// sign-in — which is how a user can keep using the app and still miss
+  /// every push.
+  AppLifecycleListener? _lifecycle;
+
+  /// True once this session has confirmed that a `device_tokens` row exists for
+  /// the signed-in user and this device. The old server bug deleted good rows
+  /// on transient FCM errors, so an existing user can be signed in, using the
+  /// app, and still have no row — the guard below re-creates it without a
+  /// restart or a fresh sign-in.
+  bool _registrationVerified = false;
 
   /// The last user id this device's FCM token was registered under. Used
   /// to clean the token up when that user signs out (the auth state's
@@ -94,6 +109,9 @@ class PushNotificationService {
         final user = Supabase.instance.client.auth.currentUser;
         if (user != null) {
           await _storeToken(userId: user.id, token: token);
+          // The row is confirmed for this session, so the guard on resume
+          // does not need to read it back immediately.
+          _registrationVerified = true;
         }
         if (kDebugMode) {
           debugPrint('[Push] FCM token: ${token.substring(0, 20)}...');
@@ -131,6 +149,7 @@ class PushNotificationService {
           // the user id comes from our tracked _registeredUserId.
           final prevUserId = _registeredUserId;
           _registeredUserId = null;
+          _registrationVerified = false;
           if (prevUserId != null) {
             _messaging.getToken().then((t) {
               if (t != null) _removeToken(userId: prevUserId, token: t);
@@ -140,22 +159,23 @@ class PushNotificationService {
           }
           return;
         }
+        _registrationVerified = false;
         _messaging.getToken().then((t) {
-          if (t != null) _storeToken(userId: user.id, token: t);
+          if (t != null) {
+            _storeToken(userId: user.id, token: t).then((_) {
+              _registrationVerified = true;
+            });
+          }
         }).catchError((e) {
           if (kDebugMode) debugPrint('[Push] Auth token re-register failed: $e');
         });
       });
 
       // 4c. If the session was already restored by the time init() ran
-      // (fast cold start), the listener above may have missed it — store
-      // the token immediately as well. getToken() is cached, so this is
-      // a cheap no-op when the listener already did the work.
-      final currentUser = Supabase.instance.client.auth.currentUser;
-      if (currentUser != null) {
-        final t = await _messaging.getToken();
-        if (t != null) await _storeToken(userId: currentUser.id, token: t);
-      }
+      // (fast cold start), the listener above may have missed it — verify the
+      // row now. This is the first guard: it runs before any push can be
+      // expected from this session, and repairs a row the old bug deleted.
+      await _ensureTokenRegistered();
 
       // 5. Handle foreground messages
       _foregroundSub = FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
@@ -174,6 +194,16 @@ class PushNotificationService {
         }
         _tryConsumePendingMessage();
       }
+
+      // 8. Verify on resume (see _lifecycle above). A user who keeps the app
+      // open never signs in again, so this is the only moment the missing row
+      // can be noticed without a restart.
+      _lifecycle ??= AppLifecycleListener(
+        onResume: () {
+          if (kDebugMode) debugPrint('[Push] Lifecycle resumed — verifying token row');
+          _ensureTokenRegistered();
+        },
+      );
 
       if (kDebugMode) debugPrint('[Push] Initialization complete');
     } catch (e) {
@@ -559,9 +589,45 @@ class PushNotificationService {
     }
   }
 
+  /// Makes sure a `device_tokens` row exists for the signed-in user and this
+  /// device, without requiring a restart or a new sign-in.
+  ///
+  /// It reads before it writes: after the first successful check this session
+  /// it does nothing more (one SELECT per app resume at most), and it only
+  /// writes when the row is genuinely missing — which is the state the old
+  /// server-side token deletion left existing users in.
+  Future<void> _ensureTokenRegistered({bool force = false}) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    if (_registrationVerified && !force) return;
+
+    try {
+      final token = await _messaging.getToken();
+      if (token == null) return;
+
+      final existing = await Supabase.instance.client
+          .from('device_tokens')
+          .select('id')
+          .eq('customer_id', user.id)
+          .eq('fcm_token', token)
+          .maybeSingle();
+
+      if (existing == null) {
+        if (kDebugMode) {
+          debugPrint('[Push] Token row missing for ${user.id} — re-registering.');
+        }
+        await _storeToken(userId: user.id, token: token);
+      }
+      _registrationVerified = true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[Push] Token verification failed: $e');
+    }
+  }
+
   // ── Cleanup ─────────────────────────────────────────────────────
 
   void dispose() {
+    _lifecycle?.dispose();
     _foregroundSub?.cancel();
     _tokenRefreshSub?.cancel();
     _authSub?.cancel();

@@ -402,7 +402,7 @@ export default function Banners() {
                 <>
                   <ImageIcon size={32} className="mb-2 text-border" />
                   <p className="text-sm text-muted">Click to upload</p>
-                  <p className="text-xs text-border">PNG, JPG, WebP</p>
+                  <p className="text-xs text-muted">PNG, JPG, WebP</p>
                 </>
               )}
             </div>

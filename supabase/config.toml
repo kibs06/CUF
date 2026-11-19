@@ -567,6 +567,26 @@ verify_jwt = false
 [functions.send-order-receipt]
 verify_jwt = true
 
+# send-replacement-notice emails the customer that their replacement was
+# approved. Called by the seller app with the seller's own session, so the
+# gateway JWT check stays ON and the function additionally requires the caller
+# to own the order's store (or be an admin).
+[functions.send-replacement-notice]
+verify_jwt = true
+
+# send-payout-receipt emails and pushes the seller their payout receipt. Called
+# by the admin portal right after `mark_payout_paid` with the admin's own
+# session, so the gateway JWT check stays ON and the function additionally
+# requires `is_admin()` (or the service-role key) before it sends anything.
+[functions.send-payout-receipt]
+verify_jwt = true
+
+# confirm-replacement-received is the customer-side fallback for a database
+# without the `confirm_replacement_received` SQL function. Called with the
+# customer's own session; the function checks `orders.customer_id` itself.
+[functions.confirm-replacement-received]
+verify_jwt = true
+
 # create-gcash-payment-intent and get-payment-status use the default
 # (verify_jwt = true) — they require the customer's JWT.
 

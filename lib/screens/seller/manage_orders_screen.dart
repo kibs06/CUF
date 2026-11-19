@@ -55,7 +55,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     'Confirmed',
     'Ready',
     'Delivered',
-    'Returns',
+    'Replacements',
     'Cancelled',
   ];
   StreamSubscription<bool>? _connectivitySub;
@@ -778,7 +778,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
         'delivered': 'delivered',
       };
       final statusFilter = _tabs[_tabIndex].toLowerCase();
-      if (statusFilter == 'returns') {
+      if (statusFilter == 'replacements') {
         filteredOrders = allOrders
             .where((o) {
               final s = (o['status'] ?? '').toString().toLowerCase();
@@ -818,7 +818,10 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
           // Tab bar
           Container(
             color: AppConstants.surfaceLight,
-            child: TabBar(
+            child: Row(
+              children: [
+                Expanded(
+                  child: TabBar(
               controller: _tabController,
               isScrollable: true,
               labelColor: AppConstants.secondary,
@@ -877,6 +880,9 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
                   ),
                 );
               }).toList(),
+                  ),
+                ),
+              ],
             ),
           ),
           // Orders list

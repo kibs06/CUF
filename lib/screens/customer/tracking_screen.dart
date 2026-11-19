@@ -35,7 +35,8 @@ class OrderTrackingScreen extends StatefulWidget {
   State<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
 }
 
-class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
+class _OrderTrackingScreenState extends State<OrderTrackingScreen>
+    with WidgetsBindingObserver {
   late Map<String, dynamic> _order;
   bool _isUpdating = false;
 
@@ -76,11 +77,52 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _order = Map<String, dynamic>.from(widget.order);
     _loadStatusHistory();
+    _refreshOrder();
     _startCountdownIfNeeded();
     _initPaymentState();
     _reconcilePurchasedCart();
+  }
+
+  /// Cash-on-delivery note on a shipped Carcar City replacement: the fixed
+  /// ₱50 is handed to the courier when the replacement arrives, so there is no
+  /// GCash reference to send — the customer only confirms it was received.
+  Widget _buildCodFeeNote(double amount) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppConstants.statusPendingColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppConstants.statusPendingColor.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.payments_outlined,
+            size: 16,
+            color: AppConstants.statusPendingColor,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '₱${amount.toStringAsFixed(0)} replacement shipping fee — pay it in '
+              'cash to the courier on delivery. Nothing to send in advance.',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// If this order is already paid/conflict (e.g. the webhook confirmed
@@ -108,9 +150,31 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
     _paymentTimer?.cancel();
     super.dispose();
+  }
+
+  /// Re-reads the order row this screen was opened with.
+  ///
+  /// The screen receives a snapshot from the list, and approval happens after
+  /// that snapshot — so `replacement_method` (and the fee/route fields) can be
+  /// missing here and make the card offer an action the server will refuse
+  /// (e.g. Confirm on an in-store handover). Re-reading keeps the card honest.
+  Future<void> _refreshOrder() async {
+    try {
+      final row = await Supabase.instance.client
+          .from('orders')
+          .select('*')
+          .eq('id', _order['id'])
+          .maybeSingle();
+      if (row != null && mounted) {
+        setState(() => _order = Map<String, dynamic>.from(row));
+      }
+    } catch (e) {
+      debugPrint('[Tracking] Order refresh failed: $e');
+    }
   }
 
   /// Fetch order_status_history rows to populate real timestamps.
@@ -1134,15 +1198,28 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _isUpdating = true);
-    final ok = await context
+    // Null means confirmed; anything else is the server's own explanation and
+    // is shown as-is — "please try again" hides a rule the customer can act on.
+    final error = await context
         .read<OrderProvider>()
         .confirmReplacementReceived(_order['id']);
+    if (!mounted) return;
+    final ok = error == null;
+    // A refusal is often "this screen is out of date" (an in-store handover
+    // recorded after the list snapshot). Pick up the row so the card stops
+    // offering the action, then show the server's sentence.
+    if (!ok) await _refreshOrder();
     if (!mounted) return;
 
     setState(() {
       _isUpdating = false;
       if (ok) _order['status'] = AppConstants.statusReplacementReceived;
     });
+    // An in-store swap is finished at the counter by design — the refusal was
+    // the stale card asking for something that does not apply, so say that
+    // instead of showing an error for a completed replacement.
+    final handedOverInStore = !ok &&
+        (_order['replacement_method']?.toString() ?? '') == 'in_store';
     if (ok) {
       // The RPC already wrote the store's bell row; this push covers the
       // seller's closed/background app, the same split as the return
@@ -1161,10 +1238,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok
-            ? 'Replacement received. This return is closed.'
-            : 'Could not confirm the replacement. Please try again.'),
-        backgroundColor: ok ? AppConstants.success : AppConstants.error,
+        content: Text(
+          ok
+              ? 'Replacement received. This return is closed.'
+              : handedOverInStore
+                  ? 'Replacement handed over in store — this return is complete.'
+                  : error,
+        ),
+        backgroundColor: ok || handedOverInStore
+            ? AppConstants.success
+            : AppConstants.error,
       ),
     );
   }
@@ -1765,8 +1848,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               _order['replacement_tracking_number']?.toString().trim() ?? '';
           final shippedAt =
               DateTime.tryParse(_order['replacement_shipped_at']?.toString() ?? '');
+          // Shipped Carcar City replacements carry the fixed ₱50, paid in
+          // cash to the courier — the app never asks for a GCash reference.
+          final codFee =
+              double.tryParse(_order['replacement_shipping_fee']?.toString() ?? '') ??
+                  0;
           final subtitle = method == 'in_store'
-              ? 'Approved. Bring the item to the physical store and they will hand over the replacement on the spot.'
+              ? 'Handed over in store — this return is complete. No shipping, '
+                  'nothing to confirm.'
               : method == 'shipped'
                   ? (shippedAt != null
                       ? 'Your replacement is on its way — shipped ${_formatTimestamp(shippedAt)}.'
@@ -1793,7 +1882,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '${carrier.isEmpty ? 'Courier' : carrier} · $tracking',
+                            '${carrier.isEmpty ? 'Reference' : carrier} · $tracking',
                             style: AppConstants.bodyStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -1807,6 +1896,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ReturnProofImage(
                     storagePaths: returnProofPathsOf(_order),
                   ),
+                  if (method == 'shipped' && codFee > 0) ...[
+                    const SizedBox(height: 12),
+                    _buildCodFeeNote(codFee),
+                  ],
                   // A shipped replacement is only done when the customer
                   // says it arrived; an in-store swap already is.
                   if (method != 'in_store') ...[

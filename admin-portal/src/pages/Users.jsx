@@ -15,6 +15,7 @@ import { useUsers } from '../hooks/useUsers.js'
 import { useFailedLogins } from '../hooks/useFailedLogins.js'
 import { useAuth } from '../hooks/useAuth.jsx'
 import UserRow from '../components/users/UserRow.jsx'
+import Tooltip from '../components/ui/Tooltip.jsx'
 import UserDetailModal from '../components/users/UserDetailModal.jsx'
 import {
   ROLE_META,
@@ -300,16 +301,18 @@ export default function Users() {
                     size={14}
                     className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
                   />
-                  <input
-                    id="user-search"
-                    ref={searchRef}
-                    type="text"
-                    inputMode="search"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search accounts"
-                    className="h-9 w-full rounded-xl border border-border bg-card pl-9 pr-9 text-[13px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
-                  />
+                  <Tooltip label="Search accounts by name or email.">
+                    <input
+                      id="user-search"
+                      ref={searchRef}
+                      type="text"
+                      inputMode="search"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Search accounts"
+                      className="h-9 w-full rounded-xl border border-border bg-card pl-9 pr-9 text-[13px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                    />
+                  </Tooltip>
                   {search ? (
                     <button
                       type="button"
@@ -337,18 +340,20 @@ export default function Users() {
                     size={13}
                     className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
                   />
-                  <select
-                    id="user-sort"
-                    value={sort}
-                    onChange={(event) => setSort(event.target.value)}
-                    className="h-9 w-full appearance-none rounded-xl border border-border bg-card pl-8 pr-7 text-[12px] font-semibold text-secondary outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
-                  >
-                    {SORT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <Tooltip label="Choose how the directory is ordered.">
+                    <select
+                      id="user-sort"
+                      value={sort}
+                      onChange={(event) => setSort(event.target.value)}
+                      className="h-9 w-full appearance-none rounded-xl border border-border bg-card pl-8 pr-7 text-[12px] font-semibold text-secondary outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+                    >
+                      {SORT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Tooltip>
                   <ChevronDown
                     size={12}
                     className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted"
@@ -367,8 +372,15 @@ export default function Users() {
                   const Icon = tab.Icon
                   const active = activeTab === tab.key
                   return (
-                    <button
+                    <Tooltip
                       key={tab.key}
+                      label={
+                        tab.key === 'all'
+                          ? 'Clear the role filter and show every account.'
+                          : `Show only ${tab.label.toLowerCase()} accounts.`
+                      }
+                    >
+                    <button
                       type="button"
                       onClick={() => setActiveTab(tab.key)}
                       aria-pressed={active}
@@ -392,6 +404,7 @@ export default function Users() {
                         {tab.count}
                       </span>
                     </button>
+                    </Tooltip>
                   )
                 })}
               </div>
@@ -409,8 +422,15 @@ export default function Users() {
                     const active = statusFilter === status.key
                     const urgent = status.key === 'suspended' || status.key === 'locked'
                     return (
-                      <button
+                      <Tooltip
                         key={status.key}
+                        label={
+                          status.key === 'all'
+                            ? 'Clear the status filter.'
+                            : `Show only ${status.label.toLowerCase()} accounts.`
+                        }
+                      >
+                      <button
                         type="button"
                         onClick={() => setStatusFilter(status.key)}
                         aria-pressed={active}
@@ -430,6 +450,7 @@ export default function Users() {
                         />
                         {status.label}
                       </button>
+                      </Tooltip>
                     )
                   })}
                 </div>
@@ -471,27 +492,29 @@ export default function Users() {
               </p>
               {pageCount > 1 && (
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    disabled={safePage === 1}
-                    aria-label="Previous page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
+                                    <Tooltip label="Show the previous page.">
+                    <button
+                      type="button"
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
+                      disabled={safePage === 1}
+                      aria-label="Previous page"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <ChevronLeft size={14} /></button>
+                  </Tooltip>
                   <span className="px-2 font-mono text-[11px] text-muted">
                     {safePage} / {pageCount}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
-                    disabled={safePage === pageCount}
-                    aria-label="Next page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
+                                    <Tooltip label="Show the next page.">
+                    <button
+                      type="button"
+                      onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                      disabled={safePage === pageCount}
+                      aria-label="Next page"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <ChevronRight size={14} /></button>
+                  </Tooltip>
                 </div>
               )}
             </div>
@@ -590,6 +613,7 @@ export default function Users() {
                   const reason = attentionReason(user, failedLogins[user.id])
                   return (
                     <li key={user.id}>
+                      <Tooltip label="Open the account behind this alert.">
                       <button
                         type="button"
                         onClick={() => setSelectedUser(user)}
@@ -606,6 +630,7 @@ export default function Users() {
                         </span>
                         <ChevronRight size={13} className="shrink-0 text-muted/50" />
                       </button>
+                      </Tooltip>
                     </li>
                   )
                 })}
@@ -669,13 +694,15 @@ function EmptyDirectory({ onClear }) {
       <p className="mt-1 max-w-sm text-[12.5px] text-muted">
         Try a different name, role or status — or reset the directory.
       </p>
-      <button
-        type="button"
-        onClick={onClear}
-        className="mt-4 rounded-lg bg-secondary px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-primaryDeep"
-      >
-        Clear filters
-      </button>
+      <Tooltip label="Reset the search, role and status filters.">
+        <button
+          type="button"
+          onClick={onClear}
+          className="mt-4 rounded-lg bg-secondary px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-primaryDeep"
+        >
+          Clear filters
+        </button>
+      </Tooltip>
     </div>
   )
 }

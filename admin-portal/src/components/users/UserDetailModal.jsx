@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Tooltip from '../ui/Tooltip.jsx'
 import { Ban, Eye, KeyRound, Package, RotateCcw, ShieldCheck, Store, XCircle } from 'lucide-react'
 import Badge from '../ui/Badge.jsx'
 import Modal from '../ui/Modal.jsx'
@@ -236,32 +237,38 @@ export default function UserDetailModal({ user, onClose }) {
               Admin Actions
             </p>
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setRoleOpen(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
-              >
-                <KeyRound size={15} />
-                Change role
-              </button>
+              <Tooltip label="Move this account to a customer, seller or admin role.">
+                <button
+                  type="button"
+                  onClick={() => setRoleOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+                >
+                  <KeyRound size={15} />
+                  Change role
+                </button>
+              </Tooltip>
               {isSuspended ? (
-                <button
-                  type="button"
-                  onClick={() => setSuspendOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
-                >
-                  <RotateCcw size={15} />
-                  Reactivate account
-                </button>
+                <Tooltip label="Give this account its access back.">
+                  <button
+                    type="button"
+                    onClick={() => setSuspendOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+                  >
+                    <RotateCcw size={15} />
+                    Reactivate account
+                  </button>
+                </Tooltip>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setSuspendOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-danger px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-red-50"
-                >
-                  <Ban size={15} />
-                  Suspend account
-                </button>
+                <Tooltip label="Block this account from signing in and ordering.">
+                  <button
+                    type="button"
+                    onClick={() => setSuspendOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-danger px-3 py-2 text-sm font-semibold text-danger transition-colors hover:bg-red-50"
+                  >
+                    <Ban size={15} />
+                    Suspend account
+                  </button>
+                </Tooltip>
               )}
             </div>
             <p className="mt-3 text-xs text-muted">
@@ -531,22 +538,26 @@ export default function UserDetailModal({ user, onClose }) {
                         email. Rejecting withdraws the badge.
                       </p>
                       <div className="mt-2.5 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setBizVerdict(false)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-danger px-3 py-1.5 text-xs font-semibold text-danger transition-colors hover:bg-red-50"
-                        >
-                          <XCircle size={14} />
-                          Reject documents
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBizVerdict(true)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-700"
-                        >
-                          <ShieldCheck size={14} />
-                          Verify documents
-                        </button>
+                        <Tooltip label="Refuse these documents and withdraw the badge.">
+                          <button
+                            type="button"
+                            onClick={() => setBizVerdict(false)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-danger px-3 py-1.5 text-xs font-semibold text-danger transition-colors hover:bg-red-50"
+                          >
+                            <XCircle size={14} />
+                            Reject documents
+                          </button>
+                        </Tooltip>
+                        <Tooltip label="Accept these documents and grant the Verified Seller badge.">
+                          <button
+                            type="button"
+                            onClick={() => setBizVerdict(true)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-700"
+                          >
+                            <ShieldCheck size={14} />
+                            Verify documents
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
                   )}
@@ -589,25 +600,29 @@ export default function UserDetailModal({ user, onClose }) {
         title={isSuspended ? 'Reactivate account?' : 'Suspend account?'}
         footer={
           <>
-            <button
-              type="button"
-              onClick={() => setSuspendOpen(false)}
-              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleToggleSuspend}
-              disabled={busy}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
-                isSuspended
-                  ? 'bg-teal-600 hover:bg-teal-700'
-                  : 'bg-danger hover:bg-red-700'
-              }`}
-            >
-              {busy ? 'Working…' : isSuspended ? 'Reactivate' : 'Suspend'}
-            </button>
+            <Tooltip label="Close without changing the account.">
+              <button
+                type="button"
+                onClick={() => setSuspendOpen(false)}
+                className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface"
+              >
+                Cancel
+              </button>
+            </Tooltip>
+            <Tooltip label="Applies the change to this account straight away.">
+              <button
+                type="button"
+                onClick={handleToggleSuspend}
+                disabled={busy}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
+                  isSuspended
+                    ? 'bg-teal-600 hover:bg-teal-700'
+                    : 'bg-danger hover:bg-red-700'
+                }`}
+              >
+                {busy ? 'Working…' : isSuspended ? 'Reactivate' : 'Suspend'}
+              </button>
+            </Tooltip>
           </>
         }
       >
@@ -650,21 +665,25 @@ export default function UserDetailModal({ user, onClose }) {
         title="Change account role"
         footer={
           <>
-            <button
-              type="button"
-              onClick={() => setRoleOpen(false)}
-              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleRoleChange}
-              disabled={busy || roleValue === user.role}
-              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
-            >
-              {busy ? 'Working…' : 'Save role'}
-            </button>
+            <Tooltip label="Close without changing the role.">
+              <button
+                type="button"
+                onClick={() => setRoleOpen(false)}
+                className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface"
+              >
+                Cancel
+              </button>
+            </Tooltip>
+            <Tooltip label="Saves the new role for this account.">
+              <button
+                type="button"
+                onClick={handleRoleChange}
+                disabled={busy || roleValue === user.role}
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
+              >
+                {busy ? 'Working…' : 'Save role'}
+              </button>
+            </Tooltip>
           </>
         }
       >
@@ -713,29 +732,33 @@ export default function UserDetailModal({ user, onClose }) {
         }
         footer={
           <>
-            <button
-              type="button"
-              onClick={() => setBizVerdict(null)}
-              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleBusinessVerdict}
-              disabled={busy}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
-                bizVerdict
-                  ? 'bg-teal-600 hover:bg-teal-700'
-                  : 'bg-danger hover:bg-red-700'
-              }`}
-            >
-              {busy
-                ? 'Working…'
-                : bizVerdict
-                  ? 'Verify documents'
-                  : 'Reject documents'}
-            </button>
+            <Tooltip label="Close without deciding.">
+              <button
+                type="button"
+                onClick={() => setBizVerdict(null)}
+                className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-surface"
+              >
+                Cancel
+              </button>
+            </Tooltip>
+            <Tooltip label="Applies the decision and tells the seller.">
+              <button
+                type="button"
+                onClick={handleBusinessVerdict}
+                disabled={busy}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
+                  bizVerdict
+                    ? 'bg-teal-600 hover:bg-teal-700'
+                    : 'bg-danger hover:bg-red-700'
+                }`}
+              >
+                {busy
+                  ? 'Working…'
+                  : bizVerdict
+                    ? 'Verify documents'
+                    : 'Reject documents'}
+              </button>
+            </Tooltip>
           </>
         }
       >
@@ -845,16 +868,18 @@ function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
             <Eye size={16} className="text-white" />
           </div>
           <p className="text-xs font-semibold text-danger">Sensitive</p>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsRevealed(true)
-            }}
-            className="mt-2 rounded-lg bg-danger px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#B33A3A]"
-          >
-            Reveal
-          </button>
+          <Tooltip label="Show the sensitive document.">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsRevealed(true)
+              }}
+              className="mt-2 rounded-lg bg-danger px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#B33A3A]"
+            >
+              Reveal
+            </button>
+          </Tooltip>
         </div>
       </div>
     )
@@ -880,16 +905,18 @@ function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
           <p className="mt-0.5 text-xs text-muted">{subtitle}</p>
         )}
         {sensitive && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsRevealed(false)
-            }}
-            className="mt-2 text-xs font-semibold text-danger hover:text-[#B33A3A]"
-          >
-            Hide
-          </button>
+          <Tooltip label="Hide the sensitive document again.">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsRevealed(false)
+              }}
+              className="mt-2 text-xs font-semibold text-danger hover:text-[#B33A3A]"
+            >
+              Hide
+            </button>
+          </Tooltip>
         )}
       </button>
 
@@ -908,13 +935,15 @@ function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
             <div className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-sm text-white">
               {label}
             </div>
-            <button
-              type="button"
-              onClick={() => setShowModal(false)}
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
-            >
-              ×
-            </button>
+            <Tooltip label="Close the image.">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+              >
+                ×
+              </button>
+            </Tooltip>
           </div>
         </div>
       )}

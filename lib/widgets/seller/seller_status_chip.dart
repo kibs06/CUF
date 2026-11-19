@@ -17,7 +17,7 @@ class SellerStatusChip extends StatelessWidget {
       'ready': 'Ready',
       'received': 'Delivered',
       'cancelled': 'Cancelled',
-      'return_requested': 'Return requested',
+      'return_requested': 'Replacement requested',
       'replaced': 'Replaced',
       'replacement_received': 'Replacement received',
       'refunded': 'Replaced', // legacy status — replacement-only policy

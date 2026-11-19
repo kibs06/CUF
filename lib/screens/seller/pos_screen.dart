@@ -43,7 +43,6 @@ class _POSScreenState extends State<POSScreen>
   int _panelIndex = 0;
   bool _showSuccessOverlay = false;
   double _lastChange = 0;
-  Timer? _successTimer;
 
   /// The sale that just closed, so the success overlay's Receipt button can
   /// open it. The read starts as soon as the overlay appears; a tap that beats
@@ -104,7 +103,6 @@ class _POSScreenState extends State<POSScreen>
 
   @override
   void dispose() {
-    _successTimer?.cancel();
     _orderPulseController.dispose();
     _panelFadeController.dispose();
     _searchController.dispose();
@@ -642,11 +640,6 @@ class _POSScreenState extends State<POSScreen>
     if (completedSaleId != null) {
       unawaited(_loadCompletedReceipt(completedSaleId));
     }
-
-    _successTimer?.cancel();
-    _successTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showSuccessOverlay = false);
-    });
   }
 
   @override
@@ -1650,8 +1643,8 @@ class _POSScreenState extends State<POSScreen>
   /// Open the receipt for the sale behind the success overlay.
   ///
   /// The overlay is dismissed first: the sale is closed, so coming back from
-  /// the receipt should land on an empty sale screen, not on a success banner
-  /// whose timer already expired underneath the route.
+  /// the receipt should land on an empty sale screen rather than on a success
+  /// banner for a sale the cashier has already looked at.
   Future<void> _openCompletedReceipt() async {
     final saleId = _completedSaleId;
     if (saleId == null) return;
@@ -1664,7 +1657,6 @@ class _POSScreenState extends State<POSScreen>
     }
     if (order == null) return;
 
-    _successTimer?.cancel();
     setState(() => _showSuccessOverlay = false);
 
     await Navigator.of(context).push(

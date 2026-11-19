@@ -2,53 +2,77 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
-  AlertTriangle,
   ArrowUpRight,
   Banknote,
+  CalendarDays,
+  Copy,
   Download,
-  Landmark,
+  Globe,
+  Printer,
   Receipt,
   Search,
   SearchX,
+  Store,
   Wallet,
   X,
 } from 'lucide-react'
 import { Area, AreaChart, ResponsiveContainer } from 'recharts'
-import Badge from '../components/ui/Badge.jsx'
-import Modal from '../components/ui/Modal.jsx'
-import StatCard from '../components/ui/StatCard.jsx'
-import Skeleton, { TableSkeleton } from '../components/ui/Skeleton.jsx'
-import EmptyState from '../components/ui/EmptyState.jsx'
+
+import SaleReceiptModal from '../components/payments/SaleReceiptModal.jsx'
+import ReceiptDelivery from './Receipts.jsx'
+import AnimatedNumber from '../components/ui/AnimatedNumber.jsx'
 import AvatarInitials from '../components/ui/AvatarInitials.jsx'
+import Badge from '../components/ui/Badge.jsx'
+import ContextMenu from '../components/ui/ContextMenu.jsx'
 import DateRangePicker from '../components/ui/DateRangePicker.jsx'
+import EmptyState from '../components/ui/EmptyState.jsx'
+import Skeleton, { TableSkeleton } from '../components/ui/Skeleton.jsx'
+import StatCard from '../components/ui/StatCard.jsx'
+import Tooltip from '../components/ui/Tooltip.jsx'
+import { useToast } from '../components/ui/Toast.jsx'
 import { useTransactions } from '../hooks/useTransactions.js'
 import { formatCurrency, formatDateTime, shortId } from '../lib/constants'
+import { asReceiptOrder, printReceipt } from '../lib/receipt.js'
+import { receiptAddress, receiptRowState } from '../lib/receiptTrail.js'
+import { channelLabel, matchesSaleSearch, methodLabel } from '../lib/saleFields.js'
 
 const PAGE_SIZE = 20
 
-const EVENT_STATUS_VARIANTS = {
-  processed: 'processed',
-  processing: 'processing',
-  received: 'processing',
-  amount_mismatch: 'amount_mismatch',
-  stock_conflict: 'stock_conflict',
-  rejected_signature: 'rejected_signature',
-  failed: 'failed',
-}
+/**
+ * Did the customer get their copy? The row says it in one line — the badge is
+ * the state, the line underneath is the address and time (or the reason it has
+ * not gone out), using the same states as the Receipt delivery tab so the two
+ * views can never disagree.
+ */
+function receiptCell(sale, now) {
+  const { state, meta } = receiptRowState(sale, now)
 
-const STATUS_SEGMENTS = [
-  { value: 'all', label: 'All', dot: 'bg-secondary' },
-  { value: 'succeeded', label: 'Paid', dot: 'bg-accent' },
-  { value: 'pending', label: 'Pending', dot: 'bg-pending' },
-  { value: 'failed', label: 'Failed', dot: 'bg-error' },
-  { value: 'expired', label: 'Expired', dot: 'bg-gray-400' },
-  { value: 'cancelled', label: 'Cancelled', dot: 'bg-gray-300' },
-]
+  if (state === 'no_email') {
+    return { meta, text: 'no address to send a copy to' }
+  }
 
-function humanize(value) {
-  return String(value ?? '')
-    .replace(/[._]/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  if (state === 'sent') {
+    const to = receiptAddress(sale)
+    const at = formatDateTime(sale.receipt_emailed_at)
+    return { meta, text: to ? `to ${to} · ${at}` : `emailed ${at}`, title: `${to || 'Customer'} · ${at}` }
+  }
+  if (state === 'retrying') {
+    return {
+      meta,
+      text: sale.receipt_email_next_attempt_at
+        ? `next try ${formatDateTime(sale.receipt_email_next_attempt_at)}`
+        : 'retry queued',
+    }
+  }
+  if (state === 'failed') {
+    return {
+      meta,
+      text: sale.receipt_email_last_error || 'The last send failed',
+      title: sale.receipt_email_last_error || 'The last send failed',
+    }
+  }
+  if (state === 'sending') return { meta, text: 'a send is in flight now' }
+  return { meta, text: 'no receipt has gone out yet' }
 }
 
 function escCsv(value) {
@@ -58,16 +82,19 @@ function escCsv(value) {
 
 function exportCsv(rows) {
   const header = [
-    'Order ID', 'Store', 'Customer', 'Amount (PHP)', 'Model B Fee (PHP)',
-    'PayMongo Fee (PHP)', 'Net (PHP)', 'Status', 'GCash Ref',
-    'Checkout Session', 'PayMongo Payment ID', 'Created At', 'Updated At',
+    'Order code', 'Store', 'Customer', 'Customer email', 'Amount (PHP)',
+    'Payment method', 'Channel', 'Order status', 'Paid at', 'GCash reference',
+    'GCash transaction', 'PayMongo payment', 'Receipt', 'Receipt emailed at',
+    'Receipt sent to', 'Created at',
   ]
   const lines = rows.map((r) =>
     [
-      r.order_id, r.store_name, r.customer_name, r.amount, r.fee_amount,
-      r.paymongo_fee_amount ?? '', r.net_amount ?? '', r.status,
-      r.gcash_reference_number ?? '', r.checkout_session_id ?? '',
-      r.paymongo_payment_intent_id ?? '', r.created_at, r.updated_at,
+      r.order_code || shortId(r.order_id), r.store_name, r.customer_name,
+      r.customer_email, r.amount, methodLabel(r.method), channelLabel(r.source),
+      r.order_status, r.paid_at ?? '', r.gcash_reference_number ?? '',
+      r.gcash_transaction_id ?? '', r.intent?.paymongo_payment_intent_id ?? '',
+      receiptRowState(r).meta?.label ?? '', r.receipt_emailed_at ?? '',
+      r.receipt_email_to ?? '', r.created_at,
     ]
       .map(escCsv)
       .join(','),
@@ -77,7 +104,7 @@ function exportCsv(rows) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `paid-sales-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -110,36 +137,6 @@ function toISODate(date) {
   return `${y}-${m}-${d}`
 }
 
-// ── Count-up number for stat cards (numeric tween only; <800ms) ──────
-function AnimatedNumber({ value, format = (v) => v }) {
-  const reduce = useReducedMotion()
-  const [display, setDisplay] = useState(value)
-  const prevRef = useRef(value)
-
-  useEffect(() => {
-    const from = prevRef.current
-    if (reduce || from === value) {
-      prevRef.current = value
-      setDisplay(value)
-      return
-    }
-    const start = performance.now()
-    const duration = 700
-    let raf
-    const tick = (now) => {
-      const t = Math.min(1, (now - start) / duration)
-      const eased = 1 - Math.pow(1 - t, 3)
-      setDisplay(from + (value - from) * eased)
-      if (t < 1) raf = requestAnimationFrame(tick)
-      else prevRef.current = value
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [value, reduce])
-
-  return <>{format(display)}</>
-}
-
 const moneyFormat = (v) => formatCurrency(Math.round(v * 100) / 100)
 
 // ── Tiny sparkline for the "Total paid" card ─────────────────────────
@@ -169,244 +166,55 @@ function Sparkline({ data }) {
   )
 }
 
-// ── Status badge that pulses only when the status actually changes ───
-function StatusBadge({ rowId, status }) {
-  const reduce = useReducedMotion()
-  const seen = useRef(new Map())
-  const wasSeen = seen.current.has(rowId)
-  const changed = wasSeen && seen.current.get(rowId) !== status
-  seen.current.set(rowId, status)
-
-  if (reduce || !changed) return <Badge label={status} variant={status} dot />
-
-  return (
-    <motion.span
-      key={status}
-      initial={{ scale: 1.18, opacity: 0.5 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: 'spring', bounce: 0.1, duration: 0.45 }}
-    >
-      <Badge label={status} variant={status} dot />
-    </motion.span>
-  )
-}
-
-function EventTimeline({ events }) {
-  const reduce = useReducedMotion()
-  const [openPayload, setOpenPayload] = useState(null)
-
-  if (!events?.length) {
-    return <p className="text-sm text-muted">No webhook events recorded for this transaction.</p>
-  }
-
-  return (
-    <ol className="relative space-y-4 border-l border-border pl-5">
-      <AnimatePresence initial={false}>
-        {events.map((e, i) => (
-          <motion.li
-            key={e.id}
-            initial={reduce ? false : { opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, delay: i * 0.05 }}
-          >
-            <span className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-secondary" />
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-ink">{humanize(e.event_type)}</p>
-              <Badge label={e.status} variant={EVENT_STATUS_VARIANTS[e.status] ?? e.status} />
-            </div>
-            <p className="mt-0.5 text-xs text-muted">
-              {formatDateTime(e.received_at)}
-              {e.processed_at ? ` · processed ${formatDateTime(e.processed_at)}` : ''}
-              {e.amount != null ? ` · ${formatCurrency(e.amount)}` : ''}
-            </p>
-            {e.redacted_payload && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setOpenPayload(openPayload === e.id ? null : e.id)}
-                  className="mt-1 text-xs font-semibold text-primary hover:underline"
-                >
-                  {openPayload === e.id ? 'Hide raw event' : 'View raw event'}
-                </button>
-                {openPayload === e.id && (
-                  <pre className="mt-2 max-h-48 overflow-auto rounded-xl border border-border bg-canvas p-3 text-[11px] leading-relaxed text-muted">
-                    {JSON.stringify(e.redacted_payload, null, 2)}
-                  </pre>
-                )}
-              </div>
-            )}
-          </motion.li>
-        ))}
-      </AnimatePresence>
-    </ol>
-  )
-}
-
-function TransactionDetail({ transaction, feeColumnsAvailable, onClose }) {
-  const reduce = useReducedMotion()
-  const orderStatus = transaction?.order_status
-  return (
-    <Modal open={!!transaction} onClose={onClose} title={transaction ? `Transaction ${shortId(transaction.id)}` : ''} size="xl">
-      {transaction && (
-        <div className="space-y-4 text-sm">
-          {/* Amount summary */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-[12px] font-medium text-muted">Amount charged</p>
-              <p className="mt-1 font-mono text-lg font-bold text-ink">{formatCurrency(transaction.amount)}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-[12px] font-medium text-muted">Model B fee</p>
-              <p className="mt-1 font-mono text-lg font-bold text-ink">{formatCurrency(transaction.fee_amount)}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-[12px] font-medium text-muted">PayMongo fee</p>
-              <p className="mt-1 font-mono text-lg font-bold text-ink">
-                {transaction.paymongo_fee_amount != null
-                  ? formatCurrency(transaction.paymongo_fee_amount)
-                  : '—'}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-[12px] font-medium text-muted">Net</p>
-              <p className="mt-1 font-mono text-lg font-bold text-ink">
-                {transaction.net_amount != null ? formatCurrency(transaction.net_amount) : '—'}
-              </p>
-            </div>
-          </div>
-
-          {!feeColumnsAvailable && (
-            <p className="rounded-xl border border-pending/40 bg-pending/10 px-4 py-2.5 text-xs text-[#8a6100]">
-              Fee and net columns are not in the database yet — apply the admin-transactions
-              migration (20260810000000_admin_transactions_view.sql) to populate them.
-            </p>
-          )}
-
-          {/* Order context */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="font-semibold text-ink">{transaction.customer_name}</p>
-                <p className="text-xs text-muted">{transaction.customer_email}</p>
-                <p className="mt-1 text-xs text-muted">
-                  {transaction.store_name} · Order {shortId(transaction.order_id)} ·{' '}
-                  {formatDateTime(transaction.created_at)}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge label={`order: ${orderStatus ?? '—'}`} variant={orderStatus} />
-                <Badge
-                  label={`payment: ${transaction.order_payment_status ?? '—'}`}
-                  variant={transaction.order_payment_status}
-                />
-              </div>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-border pt-3 text-xs sm:grid-cols-3">
-              <div><span className="text-muted">Order total </span><span className="font-mono text-ink">{formatCurrency(transaction.order_total_amount)}</span></div>
-              <div><span className="text-muted">Order GCash fee </span><span className="font-mono text-ink">{formatCurrency(transaction.order_gcash_fee_amount)}</span></div>
-              <div><span className="text-muted">Expires </span><span className="font-mono text-ink">{formatDateTime(transaction.expires_at)}</span></div>
-              <div><span className="text-muted">Paid at </span><span className="font-mono text-ink">{transaction.paid_at ? formatDateTime(transaction.paid_at) : '—'}</span></div>
-              <div><span className="text-muted">Verified at </span><span className="font-mono text-ink">{transaction.payment_verified_at ? formatDateTime(transaction.payment_verified_at) : '—'}</span></div>
-              <div><span className="text-muted">Livemode </span><span className="font-mono text-ink">{transaction.livemode ? 'yes' : 'no'}</span></div>
-            </div>
-          </div>
-
-          {/* References */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="mb-2 text-[12px] font-medium text-muted">References</h3>
-            <div className="grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
-              <div className="flex justify-between gap-3"><span className="text-muted">PayMongo payment</span><span className="font-mono text-ink">{transaction.paymongo_payment_intent_id ?? '—'}</span></div>
-              <div className="flex justify-between gap-3"><span className="text-muted">Checkout session</span><span className="font-mono text-ink">{transaction.checkout_session_id ?? '—'}</span></div>
-              <div className="flex justify-between gap-3"><span className="text-muted">GCash reference</span><span className="font-mono text-ink">{transaction.gcash_reference_number ?? '—'}</span></div>
-              <div className="flex justify-between gap-3"><span className="text-muted">GCash transaction id</span><span className="font-mono text-ink">{transaction.gcash_transaction_id ?? '—'}</span></div>
-            </div>
-          </div>
-
-          {/* Event timeline */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="mb-3 text-[12px] font-medium text-muted">
-              Webhook event timeline ({transaction.events_count})
-            </h3>
-            <EventTimeline events={transaction.events} />
-          </div>
-        </div>
-      )}
-    </Modal>
-  )
-}
-
+/**
+ * Transactions — every sale whose money actually arrived.
+ *
+ * One row per paid order, whichever channel took the payment: a counter sale is
+ * here the moment the cashier closes it, and an online order is here once its
+ * payment is confirmed. Unpaid, pending and abandoned checkouts are not sales,
+ * so they are not on this page — the status filters that used to live here only
+ * existed to hide them.
+ */
 export default function Transactions() {
   const reduce = useReducedMotion()
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
   const [storeFilter, setStoreFilter] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(null)
+  const [menu, setMenu] = useState(null)
+  const { showToast } = useToast()
 
-  const { data, isLoading, isError, error } = useTransactions({
-    status: statusFilter,
-    dateFrom,
-    dateTo,
-  })
+  const { data, isLoading, isError, error } = useTransactions({ dateFrom, dateTo })
 
   const rows = data?.rows ?? []
-  const feeColumnsAvailable = data?.feeColumnsAvailable ?? false
   const stores = data?.stores ?? []
 
   const filtered = useMemo(() => {
-    let result = rows
-    const q = search.trim().toLowerCase()
-    if (q) {
-      result = result.filter(
-        (t) =>
-          String(t.order_id).toLowerCase().includes(q) ||
-          t.customer_name?.toLowerCase().includes(q) ||
-          t.store_name?.toLowerCase().includes(q) ||
-          (t.checkout_session_id ?? '').toLowerCase().includes(q) ||
-          (t.gcash_reference_number ?? '').toLowerCase().includes(q),
-      )
-    }
-    if (storeFilter !== 'all') {
-      result = result.filter((t) => t.store_id === storeFilter)
-    }
-    return result
+    const searched = search.trim()
+      ? rows.filter((sale) => matchesSaleSearch(sale, search))
+      : rows
+    if (storeFilter === 'all') return searched
+    return searched.filter((sale) => sale.store_id === storeFilter)
   }, [rows, search, storeFilter])
 
   const stats = useMemo(() => {
-    const succeeded = filtered.filter((t) => t.status === 'succeeded')
-    const totalPaid = succeeded.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
-    let feeData = 0
-    let feeCount = 0
-    for (const t of filtered) {
-      if (t.paymongo_fee_amount != null) {
-        feeData += Number(t.paymongo_fee_amount)
-        feeCount += 1
-      }
-    }
-    const attention = filtered.filter(
-      (t) => t.status === 'failed' || t.status === 'expired',
-    ).length
-    return {
-      total: filtered.length,
-      totalPaid,
-      fees: feeCount > 0 ? feeData : null,
-      feeCount,
-      attention,
-    }
+    const totalPaid = filtered.reduce((sum, sale) => sum + (Number(sale.amount) || 0), 0)
+    const walkIn = filtered.filter((sale) => (sale.source ?? '') === 'pos').length
+    const online = filtered.length - walkIn
+    return { total: filtered.length, totalPaid, walkIn, online }
   }, [filtered])
 
-  // Daily succeeded-amount series over the current filter period, for the
-  // "Total paid" sparkline.
+  // Daily paid-amount series over the current period, for the sparkline.
   const sparkData = useMemo(() => {
     const buckets = new Map()
-    for (const t of filtered) {
-      if (t.status !== 'succeeded' || !Number(t.amount)) continue
-      const d = new Date(t.created_at)
+    for (const sale of filtered) {
+      if (!Number(sale.amount)) continue
+      const d = new Date(sale.created_at)
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-      buckets.set(key, (buckets.get(key) ?? 0) + Number(t.amount))
+      buckets.set(key, (buckets.get(key) ?? 0) + Number(sale.amount))
     }
     return [...buckets.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -417,66 +225,61 @@ export default function Transactions() {
     () => [
       {
         key: 'total',
-        label: 'Transactions',
-        tone: 'primary',
-        Icon: Wallet,
-        value: <AnimatedNumber value={stats.total} format={(v) => Math.round(v).toLocaleString()} />,
-        caption: 'in current filters',
+        label: 'Paid sales',
+        value: (
+          <AnimatedNumber value={stats.total} format={(v) => Math.round(v).toLocaleString()} />
+        ),
+        caption: 'POS and online, in current filters',
       },
       {
         key: 'paid',
         label: 'Total paid amount',
-        tone: 'accent',
-        Icon: Banknote,
         sparkline: <Sparkline data={sparkData} />,
         value: <AnimatedNumber value={stats.totalPaid} format={moneyFormat} />,
-        caption: 'succeeded payments',
+        caption: 'money that actually arrived',
       },
       {
-        key: 'fees',
-        label: 'PayMongo fees',
-        tone: 'neutral',
-        Icon: Landmark,
-        value:
-          stats.fees != null ? (
-            <AnimatedNumber value={stats.fees} format={moneyFormat} />
-          ) : (
-            '—'
-          ),
-        caption: stats.feeCount > 0 ? `across ${stats.feeCount} payments` : 'fee tracking off',
+        key: 'walkin',
+        label: 'Walk-in',
+        value: (
+          <AnimatedNumber value={stats.walkIn} format={(v) => Math.round(v).toLocaleString()} />
+        ),
+        caption: 'rung up at the POS',
       },
       {
-        key: 'attention',
-        label: 'Failed / expired',
-        tone: 'error',
-        Icon: AlertTriangle,
-        value: <AnimatedNumber value={stats.attention} format={(v) => Math.round(v).toLocaleString()} />,
-        caption: stats.attention > 0 ? 'needs review' : 'all clear',
+        key: 'online',
+        label: 'Online',
+        value: (
+          <AnimatedNumber value={stats.online} format={(v) => Math.round(v).toLocaleString()} />
+        ),
+        caption: 'paid through the app',
       },
     ],
     [stats, sparkData],
   )
 
+  // One clock for the whole render, so two rows cannot disagree about whether a
+  // send is still in flight.
+  const now = Date.now()
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  const filtersActive = Boolean(
-    search.trim() || statusFilter !== 'all' || storeFilter !== 'all' || dateFrom || dateTo,
-  )
+  const filtersActive = Boolean(search.trim() || storeFilter !== 'all' || dateFrom || dateTo)
 
   const clearAllFilters = () => {
     setSearch('')
-    setStatusFilter('all')
     setStoreFilter('all')
     setDateFrom('')
     setDateTo('')
   }
 
-  // Deep link from Orders: /transactions?order=<orderId> opens that transaction.
+  // Deep link from Orders: /transactions?order=<orderId> opens that sale.
   useEffect(() => {
     const orderId = searchParams.get('order')
     if (!orderId || isLoading || !rows.length) return
-    const match = rows.find((t) => t.order_id === orderId)
+    if (searchParams.get('tab') === 'delivery') return
+    const match = rows.find((sale) => sale.order_id === orderId || sale.order_code === orderId)
     if (match) {
       setSelected(match)
       setSearchParams({}, { replace: true })
@@ -485,12 +288,95 @@ export default function Transactions() {
 
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, storeFilter, dateFrom, dateTo, search])
+  }, [storeFilter, dateFrom, dateTo, search])
 
   const handleExport = () => {
     if (!filtered.length) return
     exportCsv(filtered)
   }
+
+  // ── Row actions (right-click) ──────────────────────────────────────
+  // The same three ways into a receipt the modal offers, plus the two things
+  // an admin does with a row while reading it: take its identifiers, or narrow
+  // the ledger to this shop or this day.
+  const copyText = async (text, what) => {
+    try {
+      await navigator.clipboard.writeText(String(text))
+      showToast(`${what} copied`)
+    } catch {
+      showToast('Could not copy to the clipboard', 'error')
+    }
+  }
+
+  const printSale = (sale) => {
+    if (!printReceipt(asReceiptOrder(sale))) {
+      showToast('Allow pop-ups for this site to print the receipt', 'error')
+    }
+  }
+
+  const downloadSale = async (sale) => {
+    try {
+      const { downloadReceiptPdf } = await import('../lib/receiptPdf.js')
+      showToast(`Saved ${downloadReceiptPdf(asReceiptOrder(sale))}`)
+    } catch (err) {
+      showToast(err?.message ?? 'Could not build the receipt PDF', 'error')
+    }
+  }
+
+  const openMenu = (event, sale) => {
+    event.preventDefault()
+    setMenu({ x: event.clientX, y: event.clientY, sale })
+  }
+
+  const menuItems = menu
+    ? [
+        { label: 'Open sale details', icon: Receipt, onSelect: () => setSelected(menu.sale) },
+        { label: 'Print receipt', icon: Printer, onSelect: () => printSale(menu.sale) },
+        { label: 'Download PDF', icon: Download, onSelect: () => downloadSale(menu.sale) },
+        { separator: true },
+        {
+          label: 'Copy order code',
+          icon: Copy,
+          onSelect: () =>
+            copyText(menu.sale.order_code || shortId(menu.sale.order_id), 'Order code'),
+        },
+        menu.sale.customer_email
+          ? {
+              label: 'Copy customer email',
+              icon: Copy,
+              onSelect: () => copyText(menu.sale.customer_email, 'Customer email'),
+            }
+          : null,
+        menu.sale.proof?.reference_number || menu.sale.gcash_reference_number
+          ? {
+              label: 'Copy GCash reference',
+              icon: Copy,
+              onSelect: () =>
+                copyText(
+                  menu.sale.proof?.reference_number ?? menu.sale.gcash_reference_number,
+                  'GCash reference',
+                ),
+            }
+          : null,
+        { separator: true },
+        stores.some((store) => store.id === menu.sale.store_id)
+          ? {
+              label: 'Show only this store',
+              icon: Store,
+              onSelect: () => setStoreFilter(menu.sale.store_id),
+            }
+          : null,
+        {
+          label: 'Show only this day',
+          icon: CalendarDays,
+          onSelect: () => {
+            const day = toISODate(new Date(menu.sale.created_at))
+            setDateFrom(day)
+            setDateTo(day)
+          },
+        },
+      ].filter(Boolean)
+    : []
 
   const rowAnim = (i) => ({
     initial: reduce ? false : { opacity: 0, y: 6 },
@@ -499,10 +385,74 @@ export default function Transactions() {
     transition: { duration: 0.18, delay: Math.min(i, 10) * 0.03, ease: 'easeOut' },
   })
 
+  // One page, two questions: what we sold (the ledger) and whether each
+  // customer actually has their receipt (the delivery trail, which used to be
+  // its own page). Both read sales, so they belong behind one nav entry.
+  const tab = searchParams.get('tab') === 'delivery' ? 'delivery' : 'sales'
+  const switchTab = (next) => {
+    const params = new URLSearchParams(searchParams)
+    if (next === 'delivery') params.set('tab', 'delivery')
+    else params.delete('tab')
+    setSearchParams(params, { replace: true })
+    setPage(1)
+  }
+
   return (
     <div className="space-y-4">
-      {/* Summary strip — one card, hairline dividers, like the dashboard */}
-      <section aria-label="Transaction summaries" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border xl:grid-cols-4">
+      <div
+        role="tablist"
+        aria-label="Transactions views"
+        className="flex w-fit flex-wrap items-center gap-1 rounded-xl border border-border bg-card p-1"
+      >
+        {[
+          {
+            key: 'sales',
+            label: 'Paid sales',
+            count: rows.length || null,
+            hint: 'One row per sale whose money actually arrived — POS and online.',
+          },
+          {
+            key: 'delivery',
+            label: 'Receipt delivery',
+            hint: 'Whether each customer got their emailed copy, and any send still retrying.',
+          },
+        ].map((option) => {
+          const active = tab === option.key
+          return (
+            <Tooltip key={option.key} label={option.hint}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => switchTab(option.key)}
+                className={`inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-[12.5px] font-semibold transition-colors ${
+                  active ? 'bg-secondary text-white' : 'text-muted hover:text-ink'
+                }`}
+              >
+                {option.label}
+                {option.count != null && (
+                  <span
+                    className={`tnum rounded-full px-1.5 py-0.5 text-[10.5px] ${
+                      active ? 'bg-white/15 text-white' : 'bg-canvas text-muted'
+                    }`}
+                  >
+                    {option.count}
+                  </span>
+                )}
+              </button>
+            </Tooltip>
+          )
+        })}
+      </div>
+
+      {tab === 'delivery' ? (
+        <ReceiptDelivery />
+      ) : (
+        <>
+      <section
+        aria-label="Paid sale summaries"
+        className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border xl:grid-cols-4"
+      >
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="bg-card p-5">
@@ -525,9 +475,6 @@ export default function Transactions() {
                 label={card.label}
                 value={card.value}
                 caption={card.caption}
-                tone={card.tone}
-                Icon={card.Icon}
-                highlight={card.highlight}
                 sparkline={card.sparkline}
               />
             </motion.div>
@@ -535,70 +482,57 @@ export default function Transactions() {
         )}
       </section>
 
-      {/* Filter panel */}
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Status segmented control */}
-          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-canvas p-1">
-            {STATUS_SEGMENTS.map((s) => {
-              const active = statusFilter === s.value
-              return (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => setStatusFilter(s.value)}
-                  aria-pressed={active}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                    active
-                      ? 'bg-card text-secondary'
-                      : 'text-muted hover:text-secondary'
-                  }`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${s.dot} ${active ? '' : 'opacity-50'}`} />
-                  {s.label}
-                </button>
-              )
-            })}
-          </div>
-
+          <p className="text-[12.5px] font-medium text-muted">
+            Showing paid sales only — pending, unpaid and abandoned checkouts stay out
+            of this list.
+          </p>
           <div className="ml-auto flex flex-wrap items-center gap-3">
-            <select
-              value={storeFilter}
-              onChange={(e) => setStoreFilter(e.target.value)}
-              aria-label="Filter by store"
-              className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-ink outline-none transition-colors focus:border-primary"
-            >
-              <option value="all">All stores</option>
-              {stores.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            <DateRangePicker
-              from={parseISODate(dateFrom)}
-              to={parseISODate(dateTo)}
-              onChange={(from, to) => {
-                setDateFrom(toISODate(from))
-                setDateTo(toISODate(to))
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={!filtered.length}
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-secondary disabled:opacity-40"
-            >
-              <Download size={16} />
-              Export CSV
-            </button>
+            <Tooltip label="Show one store only.">
+              <select
+                value={storeFilter}
+                onChange={(e) => setStoreFilter(e.target.value)}
+                aria-label="Filter by store"
+                className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-ink outline-none transition-colors focus:border-primary"
+              >
+                <option value="all">All stores</option>
+                {stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </Tooltip>
+            <Tooltip label="Limit the ledger to sales placed in this date range.">
+              <DateRangePicker
+                from={parseISODate(dateFrom)}
+                to={parseISODate(dateTo)}
+                onChange={(from, to) => {
+                  setDateFrom(toISODate(from))
+                  setDateTo(toISODate(to))
+                }}
+              />
+            </Tooltip>
+            <Tooltip label="Download every sale currently in view as a CSV file.">
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={!filtered.length}
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-secondary disabled:opacity-40"
+              >
+                <Download size={16} />
+                Export CSV
+              </button>
+            </Tooltip>
           </div>
         </div>
 
-        {/* Search */}
         <div className="relative mt-3">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
           <input
             type="search"
-            placeholder="Search order, customer, store, ref…"
+            placeholder="Search anything — code, customer, store, item, size, amount, GCash ref, date…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-xl border border-border bg-canvas py-2.5 pl-10 pr-10 text-sm text-ink placeholder-muted outline-none transition-all focus:border-primary focus:bg-card focus:ring-2 focus:ring-primary/20"
@@ -620,13 +554,15 @@ export default function Transactions() {
             <span className="tnum">
               {filtered.length} of {rows.length} match
             </span>
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="rounded-full px-2 py-1 font-semibold text-primary transition-colors hover:bg-canvas"
-            >
-              Reset filters
-            </button>
+            <Tooltip label="Clear the search, store and date filters.">
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="rounded-full px-2 py-1 font-semibold text-primary transition-colors hover:bg-canvas"
+              >
+                Reset filters
+              </button>
+            </Tooltip>
           </div>
         )}
       </div>
@@ -650,14 +586,26 @@ export default function Transactions() {
         <>
           <div className="overflow-x-auto rounded-xl border border-border bg-card">
             <table className="min-w-full text-left text-sm">
-              <caption className="sr-only">Payment transactions with date, customer, order, amount and status</caption>
+              <caption className="sr-only">
+                Paid sales with date, customer, order, amount and whether the customer received the receipt email
+              </caption>
               <thead className="bg-canvas">
                 <tr>
-                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">Date</th>
-                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">Customer</th>
-                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">Order</th>
-                  <th scope="col" className="px-6 py-4 text-right text-[12px] font-medium text-muted">Amount</th>
-                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">Status</th>
+                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">
+                    <Tooltip label="When the sale was placed, not when the money arrived.">Date</Tooltip>
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">
+                    <Tooltip label="Who bought it, and the store that sold it.">Customer</Tooltip>
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">
+                    <Tooltip label="Order code, and whether it was rung up at the counter or paid in the app.">Order</Tooltip>
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-right text-[12px] font-medium text-muted">
+                    <Tooltip label="Total paid, and how it was paid.">Amount</Tooltip>
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">
+                    <Tooltip label="Whether the customer's emailed copy actually went out.">Receipt</Tooltip>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-canvas">
@@ -666,15 +614,11 @@ export default function Transactions() {
                     <td colSpan={5} className="p-0">
                       <EmptyState
                         Icon={rows.length === 0 && !filtersActive ? Receipt : SearchX}
-                        title={
-                          rows.length === 0 && !filtersActive
-                            ? 'No transactions yet'
-                            : 'No matches'
-                        }
+                        title={rows.length === 0 && !filtersActive ? 'No paid sales yet' : 'No matches'}
                         description={
                           rows.length === 0 && !filtersActive
-                            ? 'GCash payments will show up here as customers place orders online.'
-                            : 'No transactions match the current search and filters.'
+                            ? 'A sale appears here once its money has arrived — a POS sale as soon as the cashier closes it, an online order once its payment is confirmed. Pending and unpaid orders stay in Orders.'
+                            : 'No paid sales match the current search and filters.'
                         }
                         action={
                           filtersActive ? (
@@ -692,11 +636,14 @@ export default function Transactions() {
                   </tr>
                 ) : (
                   <AnimatePresence initial={false}>
-                    {pageRows.map((row, i) => (
+                    {pageRows.map((row, i) => {
+                      const receipt = receiptCell(row, now)
+                      return (
                       <motion.tr
                         key={row.id}
                         {...rowAnim(i)}
                         onClick={() => setSelected(row)}
+                        onContextMenu={(event) => openMenu(event, row)}
                         className="admin-list-item admin-list-row group cursor-pointer"
                       >
                         <td className="px-6 py-4 align-middle">
@@ -718,27 +665,44 @@ export default function Transactions() {
                             </div>
                           </div>
                         </td>
-                        <td className="tnum px-6 py-4 align-middle font-mono text-xs text-muted">
-                          {shortId(row.order_id)}
+                        <td className="px-6 py-4 align-middle">
+                          <Tooltip label={`Order ${row.order_id}`}>
+                            <p className="tnum font-mono text-xs text-muted">
+                              {row.order_code || shortId(row.order_id)}
+                            </p>
+                          </Tooltip>
+                          <p className="mt-0.5 text-xs text-muted">
+                            {channelLabel(row.source)}
+                          </p>
                         </td>
                         <td className="px-6 py-4 text-right align-middle">
                           <p className="tnum font-mono text-base font-bold text-ink">
                             {formatCurrency(row.amount)}
                           </p>
-                          {row.paymongo_fee_amount != null && (
-                            <p className="tnum text-xs text-muted">
-                              net {formatCurrency(row.net_amount)}
-                            </p>
-                          )}
+                          <p className="text-xs text-muted">{methodLabel(row.method)}</p>
                         </td>
                         <td className="px-6 py-4 align-middle">
-                          <div className="flex items-center gap-1.5">
-                            <StatusBadge rowId={row.id} status={row.status} />
-                            <ArrowUpRight size={14} className="text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+                          <div className="flex items-start gap-1.5">
+                            <div className="min-w-0">
+                              <Tooltip label={receipt.meta.hint}>
+                                <Badge label={receipt.meta.label} variant={receipt.meta.tone} dot />
+                              </Tooltip>
+                              <p
+                                className="mt-1 max-w-[210px] truncate text-[11.5px] text-muted"
+                                title={receipt.title || receipt.text}
+                              >
+                                {receipt.text}
+                              </p>
+                            </div>
+                            <ArrowUpRight
+                              size={14}
+                              className="mt-1 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100"
+                            />
                           </div>
                         </td>
                       </motion.tr>
-                    ))}
+                      )
+                    })}
                   </AnimatePresence>
                 )}
               </tbody>
@@ -747,7 +711,8 @@ export default function Transactions() {
 
           <div className="flex items-center justify-between text-sm">
             <span className="tnum text-muted">
-              {filtered.length} transactions · Page {page} of {totalPages}
+              {filtered.length} paid sale{filtered.length === 1 ? '' : 's'} · Page {page} of{' '}
+              {totalPages}
             </span>
             <div className="flex gap-2">
               <button
@@ -771,11 +736,16 @@ export default function Transactions() {
         </>
       )}
 
-      <TransactionDetail
-        transaction={selected}
-        feeColumnsAvailable={feeColumnsAvailable}
-        onClose={() => setSelected(null)}
+      <ContextMenu
+        position={menu ? { x: menu.x, y: menu.y } : null}
+        items={menuItems}
+        onClose={() => setMenu(null)}
+        label="Sale actions"
       />
+
+      <SaleReceiptModal sale={selected} onClose={() => setSelected(null)} />
+        </>
+      )}
     </div>
   )
 }

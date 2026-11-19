@@ -23,13 +23,14 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
           </div>
         )}
 
-        {/* Status badge */}
+        {/* Status badge — fixed colours, not theme tokens: it sits on the
+            product photo, so it must read the same in light and dark mode. */}
         <div className="absolute left-2 top-2">
           <span
-            className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+            className={`rounded-full px-2 py-0.5 text-xs font-bold shadow-sm ring-1 ring-black/10 ${
               product.isActive
-                ? 'bg-[#4ECDC4] text-white'
-                : 'bg-gray-400 text-white'
+                ? 'bg-[#1E8E82] text-white'
+                : 'bg-[#4A4038] text-white'
             }`}
           >
             {product.isActive ? 'Active' : 'Inactive'}
@@ -39,42 +40,51 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
         {/* Featured badge */}
         {product.is_featured && (
           <div className="absolute right-2 top-2">
-            <span className="rounded-full px-2 py-0.5 text-xs font-bold bg-pending text-white">
+            <span className="rounded-full bg-[#E0A300] px-2 py-0.5 text-xs font-bold text-[#1F1B16] shadow-sm ring-1 ring-black/10">
               ★ Featured
             </span>
           </div>
         )}
 
-        {/* Hover overlay actions — stacked at bottom with gradient */}
-        <div className="absolute inset-0 flex flex-col items-center justify-end gap-2 bg-gradient-to-t from-black/70 via-black/20 to-transparent px-3 pb-4 opacity-0 transition-all duration-200 group-hover:opacity-100">
+                {/* Hover overlay actions.
+
+            These controls sit above a PHOTO, so the scrim and the button
+            colours are fixed rather than theme tokens: `bg-card` turns
+            dark-brown in dark mode and `bg-danger` turns pink, which is why
+            the labels used to disappear into the image. Focus-within keeps
+            them reachable from the keyboard, where there is no hover. */}
+        <div className="absolute inset-0 flex flex-col items-center justify-end gap-2 bg-gradient-to-t from-black/90 via-black/50 to-black/10 px-3 pb-4 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
           <button
             type="button"
+            aria-label={`View details for ${product.name}`}
             onClick={(e) => {
               e.stopPropagation()
               onView?.(product)
             }}
-            className="w-full rounded-xl bg-card py-2 text-xs font-semibold text-ink shadow-md transition-colors hover:bg-surface"
+            className="w-full rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#1F1B16] shadow-lg ring-1 ring-black/10 transition-colors hover:bg-white/90"
           >
             View Details
           </button>
           <div className="flex w-full gap-2">
             <button
               type="button"
+              aria-label={`${product.isActive ? 'Deactivate' : 'Activate'} ${product.name}`}
               onClick={(e) => {
                 e.stopPropagation()
                 onToggleActive?.(product)
               }}
-              className="flex-1 rounded-lg bg-card/90 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-card"
+              className="flex-1 rounded-lg bg-white/95 px-2 py-1.5 text-xs font-semibold text-[#1F1B16] shadow-md ring-1 ring-black/10 transition-colors hover:bg-white"
             >
               {product.isActive ? 'Deactivate' : 'Activate'}
             </button>
             <button
               type="button"
+              aria-label={`Delete ${product.name}`}
               onClick={(e) => {
                 e.stopPropagation()
                 onDelete?.(product)
               }}
-              className="flex-1 rounded-lg bg-danger py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+              className="flex-1 rounded-lg bg-[#D64545] px-2 py-1.5 text-xs font-semibold text-white shadow-md ring-1 ring-black/10 transition-colors hover:bg-[#B93A3A]"
             >
               Delete
             </button>

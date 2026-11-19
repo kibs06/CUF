@@ -18,6 +18,7 @@ import Settings from './pages/Settings.jsx'
 import Banners from './pages/Banners.jsx'
 import PlatformPayments from './pages/PlatformPayments.jsx'
 import PaymentVerification from './pages/PaymentVerification.jsx'
+import { SHOW_GCASH_VERIFICATION } from './lib/features.js'
 import Payouts from './pages/Payouts.jsx'
 import Refunds from './pages/Refunds.jsx'
 
@@ -35,9 +36,23 @@ export default function App() {
           <Route path="products" element={<Products />} />
           <Route path="model-requests" element={<ModelRequests />} />
           <Route path="orders" element={<Orders />} />
+          {/* The receipt trail now lives on Transactions; old links land on it. */}
+          <Route
+            path="receipts"
+            element={<Navigate to="/transactions?tab=delivery" replace />}
+          />
           <Route path="transactions" element={<Transactions />} />
           <Route path="platform-payments" element={<PlatformPayments />} />
-          <Route path="payment-verification" element={<PaymentVerification />} />
+          {/* Hidden for now (lib/features.js). The redirect keeps an old
+              bookmark from landing on a blank page. */}
+          {SHOW_GCASH_VERIFICATION ? (
+            <Route path="payment-verification" element={<PaymentVerification />} />
+          ) : (
+            <Route
+              path="payment-verification"
+              element={<Navigate to="/payouts" replace />}
+            />
+          )}
           <Route path="payouts" element={<Payouts />} />
           <Route path="refunds" element={<Refunds />} />
           <Route path="audit-logs" element={<AuditLogs />} />

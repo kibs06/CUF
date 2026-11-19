@@ -600,6 +600,61 @@ class AppConstants {
   /// Return window in days from delivery.
   static const int returnWindowDays = 7;
 
+  /// The 15 barangays of Carcar City, Cebu (PSA PSGC 0702214000). Used for the
+  /// replacement-delivery rule below: a Carcar address gets the replacement
+  /// delivered, anywhere else the customer collects it at the store.
+  static const List<String> carcarBarangays = [
+    'Bolinawan',
+    'Buenavista',
+    'Calidngan',
+    'Can-asujan',
+    'Guadalupe',
+    'Liburon',
+    'Napo',
+    'Ocaña',
+    'Perrelos',
+    'Poblacion I',
+    'Poblacion II',
+    'Poblacion III',
+    'Tuyom',
+    'Valencia',
+    'Valladolid',
+  ];
+
+  /// Flat shipping fee for a replacement delivered inside Carcar City. The
+  /// replacement itself costs the customer nothing; this one fee is fixed, so
+  /// it never grows with distance within the city.
+  static const double replacementShippingFee = 50;
+
+  /// Reference created for a replacement that the store ships itself.
+  ///
+  /// Stores hand parcels to their own courier, so there is no waybill number
+  /// to copy and nothing to scan: the app issues its own reference off the
+  /// order id, which every store and customer can quote when asking about the
+  /// swap. Stable per order — generating it twice yields the same value.
+  static String replacementTrackingNumber(String orderId) {
+    final clean = orderId.replaceAll('-', '');
+    final short = clean.length >= 8 ? clean.substring(0, 8) : clean;
+    return 'CUF-RPL-${short.toUpperCase()}';
+  }
+
+  /// True when a delivery address falls inside Carcar City — either the
+  /// barangay is one of the 15 above, or the city/municipality says Carcar
+  /// (which covers addresses typed without a barangay). Matching ignores case,
+  /// punctuation and the ñ in Ocaña.
+  static bool isCarcarAddress({String? barangay, String? cityMunicipality}) {
+    String clean(String? value) => (value ?? '')
+        .toLowerCase()
+        .replaceAll('ñ', 'n')
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+    if (clean(cityMunicipality).contains('carcar')) return true;
+
+    final target = clean(barangay);
+    if (target.isEmpty) return false;
+    return carcarBarangays.any((name) => clean(name) == target);
+  }
+
   /// Guidance window for defective/incorrect items (contact within 48h).
   static const int defectiveReportWindowHours = 48;
 

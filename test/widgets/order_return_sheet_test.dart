@@ -7,6 +7,14 @@ import 'package:flutter_test/flutter_test.dart';
 /// submit on a bare reason tap, and the counter must start at 0/4.
 void main() {
   Future<void> pumpSheet(WidgetTester tester) async {
+    // A tall viewport: the sheet stacks a policy paragraph, the reason list
+    // and the photo section, and on the default 800×600 test surface the list
+    // is clipped to a sliver — a tap on an option then lands on the card
+    // behind it instead of the option itself.
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -38,14 +46,7 @@ void main() {
     );
     expect(submitButton(tester).onPressed, isNull);
 
-    // Picking a reason still leaves submit disabled without a photo. The
-    // options live in a lazily-built ListView under the policy header, so
-    // scroll the option into view first — longer copy must not silently
-    // un-build it.
-    await tester.scrollUntilVisible(
-      find.text('Defective or damaged'),
-      200,
-    );
+    // Picking a reason still leaves submit disabled without a photo.
     await tester.tap(find.text('Defective or damaged'));
     await tester.pump();
     expect(submitButton(tester).onPressed, isNull);

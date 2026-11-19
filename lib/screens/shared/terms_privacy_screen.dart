@@ -390,28 +390,27 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
                 'accepted.',
           ),
           _PolicyItem(
-            'In-store replacement (fastest)',
-            'Bring the item to the physical store and get your replacement '
-                'on the spot after inspection — same product, subject to '
-                'availability.',
+            'Inside Carcar City — delivered to you',
+            'If your delivery address is inside Carcar City (Bolinawan, '
+                'Buenavista, Calidngan, Can-asujan, Guadalupe, Liburon, Napo, '
+                'Ocaña, Perrelos, Poblacion I, Poblacion II, Poblacion III, '
+                'Tuyom, Valencia or Valladolid), the replacement is delivered '
+                'to you. The replacement itself is free — you pay one fixed '
+                '₱50 shipping fee, whatever the barangay.',
           ),
           _PolicyItem(
-            'Remote replacement (takes longer)',
-            'If you cannot visit the physical store, ship the item back and '
-                'we will send the replacement after we receive and inspect '
-                'it. Please allow extra days for shipping both ways.',
-          ),
-          _PolicyItem(
-            'Return shipping',
-            'The buyer covers return shipping unless the item arrives '
-                'defective or incorrect — we recommend a trackable shipping '
-                'service.',
+            'Outside Carcar City — pick up at the store',
+            'Bring the item to the physical store and collect the '
+                'replacement there after inspection, same product and subject '
+                'to availability. Shipping is not arranged for addresses '
+                'outside Carcar City.',
           ),
           _PolicyItem(
             'Defective or incorrect items',
-            'Contact us within 48 hours of delivery and we will provide a '
-                'prepaid return label and ship a replacement at no additional '
-                'cost.',
+            'Contact us within 48 hours of delivery and we will replace the '
+                'item at no cost — bring it to the store, or, if you are '
+                'inside Carcar City, we will deliver the replacement and waive '
+                'the shipping fee.',
           ),
         ],
       ),

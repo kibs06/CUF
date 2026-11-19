@@ -15,6 +15,7 @@ import 'gcash_payment_queue_screen.dart';
 import 'custom_orders_screen.dart';
 import 'manage_products_screen.dart';
 import 'order_detail_screen.dart';
+import 'seller_earnings_screen.dart';
 import 'seller_inbox_screen.dart';
 import 'store_reviews_screen.dart';
 
@@ -295,6 +296,14 @@ class _SellerNotificationCenterScreenState
           _navigateToOrderDetail(notif.referenceId!);
         }
         break;
+      case 'payout':
+        // "Payout sent" — written by send-payout-receipt when the admin records
+        // the transfer. The row exists so the news survives the push being
+        // swiped away; it lands on the payout history the notice talks about.
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const SellerEarningsScreen()),
+        );
+        break;
       case 'low_stock':
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -343,6 +352,7 @@ class _SellerNotificationCenterScreenState
         break;
       case 'return_request':
       case 'replacement_received':
+      case 'replacement_fee':
         // Both ends of the return flow point at the same place: the order
         // that carries the request (or the closed-out swap). The detail
         // screen is where the approve/decline decision lives.
@@ -750,6 +760,9 @@ class _NotificationRowContent extends StatelessWidget {
         return Icons.design_services_outlined;
       case 'new_message':
         return Icons.chat_bubble_outline;
+      case 'payout':
+        // Money leaving the platform, so a wallet rather than a receipt.
+        return Icons.account_balance_wallet_outlined;
       case 'new_review':
         return Icons.star_outline;
       case 'review_comment':
@@ -758,6 +771,9 @@ class _NotificationRowContent extends StatelessWidget {
         return Icons.assignment_return_outlined;
       case 'replacement_received':
         return Icons.verified_outlined;
+      case 'replacement_fee':
+        // Money waiting on the store's confirmation before a parcel moves.
+        return Icons.payments_outlined;
       case 'verified_seller':
         return Icons.verified_rounded;
       case 'permit_expiring':
@@ -784,6 +800,9 @@ class _NotificationRowContent extends StatelessWidget {
         return AppConstants.statusReadyColor;
       case 'new_message':
         return AppConstants.statusConfirmedColor;
+      case 'payout':
+        // Green: money that has already arrived, like a completed payout.
+        return AppConstants.success;
       case 'new_review':
         // Same green as the customer feed's review colour, so review news
         // reads the same on either side.
@@ -793,6 +812,9 @@ class _NotificationRowContent extends StatelessWidget {
       case 'return_request':
         // Same amber as the Returns tab's `return_requested` chip, so the
         // notice and the row it points at read as one thing.
+        return SellerTheme.amberDark;
+      case 'replacement_fee':
+        // Amber: an ask, like the fee line on the order itself.
         return SellerTheme.amberDark;
       case 'replacement_received':
       case 'verified_seller':

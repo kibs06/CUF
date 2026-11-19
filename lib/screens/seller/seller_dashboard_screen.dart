@@ -51,6 +51,12 @@ class _DashboardData {
   final List<double> posWeeklyChart;
   final List<double> posMonthlyChart;
   final List<Map<String, dynamic>> recentOrders;
+
+  /// Customer returns waiting on the seller (status `return_requested`) — the
+  /// same queue the Orders → Returns tab lists, surfaced on the briefing so a
+  /// replacement is not something the seller has to go looking for.
+  final List<Map<String, dynamic>> returnRequests;
+
   final Map<String, int> ordersByStatus;
   final Map<String, dynamic>? store;
   final int lowStockCount;
@@ -78,6 +84,7 @@ class _DashboardData {
     required this.posWeeklyChart,
     required this.posMonthlyChart,
     required this.recentOrders,
+    required this.returnRequests,
     required this.ordersByStatus,
     this.store,
     required this.lowStockCount,
@@ -307,6 +314,18 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         .take(2)
         .toList();
 
+    // Returns waiting on the seller's replacement decision (house policy is
+    // replacement-only, no cash refunds). Newest first, same three-card budget
+    // as Recent orders, and never a placeholder block when the queue is empty.
+    final returnRequests = orders
+        .where(
+          (o) =>
+              (o['status'] ?? '').toString().toLowerCase() ==
+              'return_requested',
+        )
+        .take(3)
+        .toList();
+
     // Actionable bulk reservations (reseller holds): pending requests +
     // deposit proofs awaiting verification. Non-fatal: the metric just
     // shows 0 when the query fails.
@@ -368,6 +387,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     return _DashboardData(
       todayRevenue: results[0] as double,
       recentOrders: results[1] as List<Map<String, dynamic>>,
+      returnRequests: returnRequests,
       ordersByStatus: results[2] as Map<String, int>,
       store: results[3] as Map<String, dynamic>?,
       weeklySalesChart: weeklySalesChart,
@@ -395,6 +415,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     onlineMonthlyChart: [0, 0, 0, 0, 0, 0],
     posMonthlyChart: [0, 0, 0, 0, 0, 0],
     recentOrders: [],
+    returnRequests: [],
     ordersByStatus: {},
     lowStockCount: 0,
     pendingReservations: 0,
@@ -704,6 +725,15 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             _buildOrdersHeader(),
             const SizedBox(height: 10),
             _buildRecentOrders(data),
+
+            // Block 5 — Replacements waiting on a decision, after the recent
+            // orders and hidden entirely when the queue is empty.
+            if (data.returnRequests.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _buildReturnsHeader(),
+              const SizedBox(height: 10),
+              _buildReturnRequests(data),
+            ],
 
             const SizedBox(height: 80),
           ],
@@ -1207,6 +1237,77 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             showPrimaryAction: false,
           );
         }),
+      ],
+    );
+  }
+
+  // ─── Block 5: Returns & replacements (real data) ─────────────────
+  /// Waiting returns, drawn with the same card as Recent orders so the
+  /// briefing keeps one list language: who, what, how long ago, and a door
+  /// into the order where the seller approves the replacement.
+  Widget _buildReturnRequests(_DashboardData data) {
+    return Column(
+      children: [
+        ...data.returnRequests.map((order) {
+          final enriched = Map<String, dynamic>.from(order);
+          enriched['time_ago'] = _timeAgo(order['created_at'] as String?);
+
+          return SellerOrderCard(
+            order: enriched,
+            onPrimaryAction: () {},
+            onViewDetails: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => OrderDetailScreen(order: enriched),
+                ),
+              );
+            },
+            showPrimaryAction: false,
+          );
+        }),
+      ],
+    );
+  }
+
+  /// Returns header: same serif title and inline "view all" as Recent orders,
+  /// pointing at the Returns tab instead of the whole list.
+  Widget _buildReturnsHeader() {
+    return Row(
+      children: [
+        _buildBlockTitle('Replacements'),
+        const Spacer(),
+        GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    const ManageOrdersScreen(initialFilter: 'Replacements'),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'View all',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: SellerTheme.rust,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 17,
+                  color: SellerTheme.rust,
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }

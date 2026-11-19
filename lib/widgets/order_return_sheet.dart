@@ -194,9 +194,10 @@ class _ReturnRequestSheetState extends State<_ReturnRequestSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
                   'Unworn items with tags can be returned within ${AppConstants.returnWindowDays} days of delivery for a product replacement (no cash refunds). '
-                  'Bring the item to the physical store for an on-the-spot replacement after inspection, or ship it back — remote replacements take longer. '
-                  'You cover return shipping unless the item arrived defective or incorrect — contact us within '
-                  '${AppConstants.defectiveReportWindowHours}h for those.',
+                  'Inside Carcar City, the replacement is delivered to you and the fixed ₱${AppConstants.replacementShippingFee.toStringAsFixed(0)} shipping fee is paid in cash to the courier — the replacement itself is free. '
+                  'Outside Carcar City, bring the item to the physical store and collect the replacement there after inspection; no shipping is arranged. '
+                  'Defective or incorrect items: contact us within '
+                  '${AppConstants.defectiveReportWindowHours}h.',
                   style: AppConstants.bodyStyle(
                     fontSize: 12,
                     color: AppConstants.secondary.withValues(alpha: 0.6),

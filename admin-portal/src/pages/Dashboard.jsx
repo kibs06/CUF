@@ -1,11 +1,17 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import TrendPanel from '../components/ui/TrendPanel.jsx'
 import Badge from '../components/ui/Badge.jsx'
+import AnimatedNumber from '../components/ui/AnimatedNumber.jsx'
 import AvatarInitials from '../components/ui/AvatarInitials.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
+import Tooltip from '../components/ui/Tooltip.jsx'
 import {
+  PAID_PERIODS,
   useDashboardStats,
+  paidTotals,
+  usePaidSalesLedger,
+  useRequestTable,
   useRecentPendingApplications,
   useRecentOrders,
   useOrdersSparkline,
@@ -13,6 +19,7 @@ import {
   useApproveSeller,
   useRejectSeller,
 } from '../hooks/useDashboard.js'
+import { usePayables } from '../hooks/useManualGcash.js'
 import { formatDate, formatCurrency, getInitials, shortId } from '../lib/constants'
 import { AlertTriangle, ArrowRight, Package, ShieldCheck } from 'lucide-react'
 
@@ -104,11 +111,32 @@ function ApplicationsSkeleton() {
 
 export default function Dashboard() {
   const { showToast } = useToast()
-  const { data: stats, isLoading: statsLoading } = useDashboardStats()
+  const [period, setPeriod] = useState('week')
+  const activePeriod = PAID_PERIODS.find((option) => option.key === period) ?? PAID_PERIODS[0]
+  const periodWord = activePeriod.label.toLowerCase()
+  const windowLabel = activePeriod.days == null ? 'all time' : `last ${activePeriod.days} days`
+  const [channels, setChannels] = useState({ pos: true, online: true })
+  const toggleChannel = (key) =>
+    setChannels((current) => {
+      const next = { ...current, [key]: !current[key] }
+      // A total with neither channel selected would always read zero; keep at
+      // least one on rather than letting the figure become meaningless.
+      return next.pos || next.online ? next : current
+    })
+  // The charts always plot a fixed number of days, so Overall only ever shows
+  // the trailing year — the caption has to say so rather than claim "all time".
+  const chartLabel = `last ${activePeriod.days ?? 365} days`
+
+  const { data: stats, isLoading: statsLoading } = useDashboardStats(period)
   const { data: pendingApps, isLoading: pendingLoading } = useRecentPendingApplications(4)
-  const { data: recentOrders, isLoading: ordersLoading } = useRecentOrders(6)
-  const { data: spark } = useOrdersSparkline(14)
-  const { data: pipeline, isLoading: pipelineLoading } = useOrderPipeline()
+  const { data: recentOrders, isLoading: ordersLoading } = useRecentOrders(6, period)
+  const { data: spark } = useOrdersSparkline(activePeriod.days ?? 365)
+  const { data: pipeline, isLoading: pipelineLoading } = useOrderPipeline(period)
+  const { data: paidRows, isLoading: paidLoading } = usePaidSalesLedger()
+  const paid = useMemo(
+    () => paidTotals(paidRows ?? [], period, channels),
+    [paidRows, period, channels],
+  )
   const approve = useApproveSeller()
   const reject = useRejectSeller()
   const [loadingId, setLoadingId] = useState(null)
@@ -150,10 +178,8 @@ export default function Dashboard() {
   })()
 
   const chartTotal = spark?.total ?? 0
-  const revenueTotal = spark?.totalRevenue ?? 0
-  const orders7d = stats?.orders7d ?? chartTotal
-  const revenue7d = stats?.revenue7d ?? revenueTotal
-  const avgOrder = orders7d > 0 ? revenue7d / orders7d : 0
+  const orderValueTotal = spark?.totalRevenue ?? 0
+  const ordersInWindow = stats?.ordersWindow ?? chartTotal
   const pending = Math.max(stats?.pendingApplications ?? 0, pendingApps?.length ?? 0)
   const needsAction = pipeline?.needsAction ?? 0
 
@@ -192,8 +218,38 @@ export default function Dashboard() {
       hex: '#0E7C7B',
     },
   ]
-  const pipeTotal = pipe.reduce((sum, stage) => sum + stage.value, 0)
   const openCount = pipe.slice(0, 3).reduce((sum, stage) => sum + stage.value, 0)
+
+  const { data: requestRows, isLoading: requestsLoading } = useRequestTable()
+  const { data: payables = [] } = usePayables()
+  const [requestTab, setRequestTab] = useState('refunds')
+
+  const openRequests = requestRows ?? []
+  const refundRequests = openRequests.filter((row) => row.kind === 'refund')
+  const reportRequests = openRequests.filter((row) => row.kind === 'report')
+  const requestTabs = {
+    list: [
+      { key: 'refunds', label: 'Refunds', count: refundRequests.length, to: '/refunds' },
+      { key: 'reports', label: 'Reports', count: reportRequests.length, to: '/reports' },
+      { key: 'payouts', label: 'Payouts', count: payables.length, to: '/payouts' },
+    ],
+    copy: {
+      refunds: 'Refund requests waiting to be paid back.',
+      reports: 'Open customer and seller reports, high priority first.',
+      payouts: 'Stores owed money, net of delivery and commission.',
+    },
+    headers: {
+      refunds: ['Order', 'Customer', 'Amount', 'Status'],
+      reports: ['Report', 'Reporter', 'Priority', 'Status'],
+      payouts: ['Store', 'Orders', 'Net payout', 'Status'],
+    },
+    rows: { refunds: refundRequests, reports: reportRequests, payouts: payables },
+    empty: {
+      refunds: 'No refunds waiting.',
+      reports: 'No open reports.',
+      payouts: 'No store is owed anything right now.',
+    },
+  }
 
   const hasAttention = needsAction > 0 || pending > 0
   const hasSellerQueue = pending > 0 || (pendingApps?.length ?? 0) > 0
@@ -220,18 +276,39 @@ export default function Dashboard() {
       </>
     )
 
-  const revenueFooter =
-    stats?.revenueDelta == null ? (
-      `${orders7d} orders`
-    ) : (
-      <>
-        <Delta value={stats.revenueDelta}>{signedCurrency(stats.revenueDelta)}</Delta> vs prior ·{' '}
-        {formatCurrency(avgOrder)} avg.
-      </>
-    )
-
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[12px] text-muted">
+          Orders, workflow, lists and totals below all follow this timeframe.
+        </p>
+        <div
+          role="group"
+          aria-label="Dashboard timeframe"
+          className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-canvas p-1"
+        >
+          {PAID_PERIODS.map((option) => {
+            const active = period === option.key
+            return (
+              <Tooltip key={option.key} label={option.hint}>
+                <button
+                  type="button"
+                  onClick={() => setPeriod(option.key)}
+                  aria-pressed={active}
+                  className={`h-8 shrink-0 rounded-lg px-3 text-[12px] font-semibold transition-colors ${
+                    active
+                      ? 'bg-secondary text-white'
+                      : 'text-muted hover:bg-card hover:text-ink'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              </Tooltip>
+            )
+          })}
+        </div>
+      </div>
+
       {hasAttention && (
         <section
           aria-label="Needs attention"
@@ -265,20 +342,137 @@ export default function Dashboard() {
         </section>
       )}
 
+      <section aria-label="Total paid">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3.5">
+            <div>
+              <h2 className="text-[15px] font-bold text-ink">Total paid</h2>
+              <p className="mt-0.5 text-[12px] text-muted">
+                Money that actually arrived — POS and online. Unpaid and pending
+                orders are not counted.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-medium text-muted">Channels</span>
+              <div
+                role="group"
+                aria-label="Channels included in the total"
+                className="flex items-center gap-1 rounded-xl border border-border bg-canvas p-1"
+              >
+                <Tooltip label="Include pay-at-the-counter sales.">
+                  <button
+                    type="button"
+                    aria-pressed={channels.pos}
+                    onClick={() => toggleChannel('pos')}
+                    className={`h-7 shrink-0 rounded-lg px-2.5 text-[12px] font-semibold transition-colors ${
+                      channels.pos
+                        ? 'bg-secondary text-white'
+                        : 'text-muted hover:bg-card hover:text-ink'
+                    }`}
+                  >
+                    POS
+                  </button>
+                </Tooltip>
+                <Tooltip label="Include sales paid through the app.">
+                  <button
+                    type="button"
+                    aria-pressed={channels.online}
+                    onClick={() => toggleChannel('online')}
+                    className={`h-7 shrink-0 rounded-lg px-2.5 text-[12px] font-semibold transition-colors ${
+                      channels.online
+                        ? 'bg-secondary text-white'
+                        : 'text-muted hover:bg-card hover:text-ink'
+                    }`}
+                  >
+                    Online
+                  </button>
+                </Tooltip>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-x-10 gap-y-4 px-4 py-4">
+            <div className="min-w-[200px]">
+              <p className="text-[12px] font-medium text-muted">
+                {paid?.period?.hint ?? 'Paid sales'}
+              </p>
+              {paidLoading ? (
+                <div className="mt-2 h-8 w-40 animate-pulse rounded bg-canvas" />
+              ) : (
+                <p className="tnum mt-1.5 font-mono text-[32px] font-semibold leading-none tracking-tight text-ink">
+                  <AnimatedNumber value={paid?.total ?? 0} format={formatCurrency} />
+                </p>
+              )}
+              <p className="mt-2 text-[12px] text-muted">
+                {paidLoading ? (
+                  'Adding up the paid sales…'
+                ) : (
+                  <>
+                    <AnimatedNumber
+                      value={paid.count}
+                      format={(v) => Math.round(v).toLocaleString('en-PH')}
+                    />{' '}
+                    paid sale{paid.count === 1 ? '' : 's'}
+                    {paid.capped ? ' (first 10,000 counted)' : ''}
+                  </>
+                )}
+              </p>
+              <p className="mt-1 text-[12px] text-muted">
+                {paidLoading ? (
+                  '\u00a0'
+                ) : (
+                  <>
+                    {paid.delta != null && (
+                      <>
+                        <Delta value={paid.delta}>
+                          <AnimatedNumber value={paid.delta} format={signedCurrency} />
+                        </Delta>{' '}
+                        vs prior {paid.period.days} days ·{' '}
+                      </>
+                    )}
+                    <span className="tnum">
+                      <AnimatedNumber value={paid.allTime} format={formatCurrency} />
+                    </span>{' '}
+                    all time
+                  </>
+                )}
+              </p>
+            </div>
+
+            <dl className="flex flex-wrap gap-x-10 gap-y-3">
+              <div>
+                <dt className="text-[12px] font-medium text-muted">Average sale</dt>
+                <dd className="tnum mt-1 font-mono text-[18px] font-semibold text-ink">
+                  {paidLoading ? (
+                    '—'
+                  ) : (
+                    <AnimatedNumber value={paid?.average ?? 0} format={formatCurrency} />
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
+
       <section
         aria-label="Marketplace summary"
-        className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4"
+        className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-3"
       >
-        <Metric label="Orders, 7 days" value={orders7d} footer={ordersFooter} loading={statsLoading} />
         <Metric
-          label="Revenue, 7 days"
-          value={formatCurrency(revenue7d)}
-          footer={revenueFooter}
+          label={`Orders, ${periodWord}`}
+          value={
+            <AnimatedNumber
+              value={ordersInWindow}
+              format={(v) => Math.round(v).toLocaleString()}
+            />
+          }
+          footer={ordersFooter}
           loading={statsLoading}
         />
         <Metric
           label="Open orders"
-          value={openCount}
+          value={<AnimatedNumber value={openCount} format={(v) => Math.round(v).toLocaleString()} />}
           loading={pipelineLoading}
           footer={
             needsAction > 0 ? (
@@ -292,91 +486,23 @@ export default function Dashboard() {
         />
         <Metric
           label="Live products"
-          value={stats?.totalProducts ?? 0}
+          value={
+            <AnimatedNumber
+              value={stats?.totalProducts ?? 0}
+              format={(v) => Math.round(v).toLocaleString()}
+            />
+          }
           loading={statsLoading}
-          footer="Across all stores"
+          footer="All time · all stores"
         />
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-3.5">
-          <div>
-            <h2 className="text-[15px] font-bold text-ink">Order workflow</h2>
-            <p className="mt-0.5 text-[12px] text-muted">
-              {pipelineLoading
-                ? 'Loading the pipeline…'
-                : `${pipeTotal} orders · ${openCount} open · ${pipeline?.done ?? 0} delivered`}
-            </p>
-          </div>
-          <Link
-            to="/orders"
-            className="inline-flex h-9 items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
-          >
-            Open orders <ArrowRight size={13} aria-hidden="true" />
-          </Link>
-        </div>
-
-        <div className="px-4">
-          <div className="flex h-1.5 overflow-hidden rounded-full bg-canvas" aria-hidden="true">
-            {!pipelineLoading &&
-              pipe.map((stage) => {
-                const share = pipeTotal > 0 ? (stage.value / pipeTotal) * 100 : 0
-                return share > 0 ? (
-                  <span
-                    key={stage.key}
-                    className="h-full first:rounded-l-full last:rounded-r-full"
-                    style={{ width: `${share}%`, backgroundColor: stage.hex }}
-                  />
-                ) : null
-              })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-x-3 px-2 pb-2 pt-1 sm:grid-cols-4">
-          {pipe.map((stage) => (
-            <Link
-              key={stage.key}
-              to={stage.to}
-              aria-label={`${stage.label}: ${stage.value} orders`}
-              className="group flex min-h-11 items-start justify-between gap-2 rounded-lg px-2 py-2.5 transition-colors hover:bg-canvas"
-            >
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-secondary">
-                  <span
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: stage.hex }}
-                    aria-hidden="true"
-                  />
-                  {stage.label}
-                </span>
-                <span className="mt-0.5 block text-[12px] text-muted">{stage.caption}</span>
-              </span>
-              <span
-                className={`shrink-0 font-mono text-[17px] font-semibold leading-none tnum ${
-                  stage.alert && stage.value > 0 ? 'text-pending' : 'text-ink'
-                }`}
-              >
-                {pipelineLoading ? (
-                  <span className="inline-block h-4 w-6 animate-pulse rounded bg-canvas" />
-                ) : (
-                  stage.value
-                )}
-              </span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <div
-        className={`grid gap-4 ${
-          hasSellerQueue ? 'xl:grid-cols-[minmax(0,1.65fr)_minmax(310px,1fr)]' : ''
-        }`}
-      >
+      <div className="grid gap-4 xl:grid-cols-2">
         <section className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="flex items-center justify-between gap-3 px-4 py-3.5">
             <div>
               <h2 className="text-[15px] font-bold text-ink">Latest orders</h2>
-              <p className="mt-0.5 text-[12px] text-muted">Newest first</p>
+              <p className="mt-0.5 text-[12px] text-muted">Newest first · {windowLabel}</p>
             </div>
             <Link
               to="/orders"
@@ -496,8 +622,172 @@ export default function Dashboard() {
           )}
         </section>
 
+        <section
+          aria-label="Reports and requests"
+          className="flex flex-col overflow-hidden rounded-xl border border-border bg-card"
+        >
+          <div className="flex items-start justify-between gap-3 px-4 py-3.5">
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-bold text-ink">Reports and requests</h2>
+              <p className="mt-0.5 text-[12px] text-muted">{requestTabs.copy[requestTab]}</p>
+            </div>
+            <div
+              role="tablist"
+              aria-label="Request type"
+              className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-canvas p-1"
+            >
+              {requestTabs.list.map((tab) => {
+                const active = requestTab === tab.key
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setRequestTab(tab.key)}
+                    className={`flex h-7 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[12px] font-semibold transition-colors ${
+                      active ? 'bg-secondary text-white' : 'text-muted hover:text-ink'
+                    }`}
+                  >
+                    {tab.label}
+                    <span
+                      className={`tnum text-[11px] ${active ? 'text-white/70' : 'text-muted'}`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1">
+            <table className="w-full text-left">
+              <thead className="border-y border-border bg-canvas/60">
+              <tr>
+                {requestTabs.headers[requestTab].map((label) => (
+                  <th
+                    key={label}
+                    className={`px-4 py-2 text-[12px] font-semibold text-muted ${
+                      label === 'Amount' || label === 'Net payout' ? 'text-right' : ''
+                    }`}
+                  >
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {requestsLoading ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-4">
+                    <div className="h-4 w-full animate-pulse rounded bg-canvas" />
+                  </td>
+                </tr>
+              ) : (requestTabs.rows[requestTab] ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-[12px] text-muted">
+                    {requestTabs.empty[requestTab]}
+                  </td>
+                </tr>
+              ) : requestTab === 'refunds' ? (
+                requestTabs.rows.refunds.map((row) => (
+                  <tr key={row.id} className="admin-list-item admin-list-row">
+                    <td className="px-4 py-3">
+                      <span className="tnum block font-mono text-[12px] font-semibold text-ink">
+                        {row.title}
+                      </span>
+                      <span className="tnum mt-0.5 block text-[12px] text-muted">
+                        {row.at ? formatDate(row.at) : 'No date'}
+                      </span>
+                    </td>
+                    <td className="max-w-[180px] px-4 py-3">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <CustomerAvatar name={row.who} email={row.email} />
+                        <p className="truncate text-[12.5px] font-semibold text-ink">{row.who}</p>
+                      </div>
+                    </td>
+                    <td className="tnum px-4 py-3 text-right font-mono text-[12.5px] text-ink">
+                      {formatCurrency(row.amount ?? 0)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge label="awaiting refund" variant="pending" />
+                    </td>
+                  </tr>
+                ))
+              ) : requestTab === 'reports' ? (
+                requestTabs.rows.reports.map((row) => (
+                  <tr key={row.id} className="admin-list-item admin-list-row">
+                    <td className="px-4 py-3">
+                      <p className="truncate text-[12.5px] font-semibold capitalize text-ink">
+                        {row.title}
+                      </p>
+                      <p className="tnum mt-0.5 text-[12px] text-muted">
+                        {row.at ? formatDate(row.at) : 'No date'}
+                      </p>
+                    </td>
+                    <td className="max-w-[180px] px-4 py-3">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <CustomerAvatar name={row.who} email={row.email} />
+                        <div className="min-w-0">
+                          <p className="truncate text-[12.5px] font-semibold text-ink">{row.who}</p>
+                          <p className="truncate text-[12px] text-muted">
+                            {row.email ?? 'No email on file'}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-[12px] font-semibold">
+                      {row.critical ? (
+                        <span className="inline-flex items-center gap-1 text-error">
+                          <AlertTriangle size={12} aria-hidden="true" /> High
+                        </span>
+                      ) : (
+                        <span className="text-muted">Normal</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge label={row.status} variant="pending" />
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                requestTabs.rows.payouts.map((row) => (
+                  <tr key={row.store_id} className="admin-list-item admin-list-row">
+                    <td className="px-4 py-3">
+                      <p className="truncate text-[12.5px] font-semibold text-ink">
+                        {row.store_name}
+                      </p>
+                      <p className="mt-0.5 text-[12px] text-muted">
+                        commission {formatCurrency(row.platform_fee)}
+                      </p>
+                    </td>
+                    <td className="tnum px-4 py-3 text-[12.5px] text-ink">{row.order_count}</td>
+                    <td className="tnum px-4 py-3 text-right font-mono text-[12.5px] text-ink">
+                      {formatCurrency(row.net_amount)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge label="owed" variant="pending" />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-end border-t border-border px-4 py-2.5">
+            <Link
+              to={requestTabs.list.find((tab) => tab.key === requestTab)?.to ?? '/reports'}
+              className="inline-flex h-9 items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
+            >
+              All {requestTabs.list.find((tab) => tab.key === requestTab)?.label.toLowerCase()}{' '}
+              <ArrowRight size={13} aria-hidden="true" />
+            </Link>
+          </div>
+        </section>
         {hasSellerQueue && (
-          <aside className="overflow-hidden rounded-xl border border-border bg-card">
+          <aside className="overflow-hidden rounded-xl border border-border bg-card xl:col-span-2">
             <div className="flex items-center justify-between gap-3 px-4 py-3.5">
             <div>
               <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-ink">
@@ -543,22 +833,26 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="mt-2.5 flex gap-2">
-                    <button
-                      type="button"
-                      disabled={loadingId === app.id}
-                      onClick={() => handleApprove(app.id)}
-                      className="h-8 flex-1 rounded-lg bg-accent px-3 text-[12px] font-semibold text-white transition-colors hover:brightness-110 disabled:opacity-50"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      disabled={loadingId === app.id}
-                      onClick={() => handleReject(app.id)}
-                      className="h-8 flex-1 rounded-lg border border-error/35 px-3 text-[12px] font-semibold text-error transition-colors hover:bg-errorSoft disabled:opacity-50"
-                    >
-                      Decline
-                    </button>
+                    <Tooltip label="Approve this seller application and open their store.">
+                      <button
+                        type="button"
+                        disabled={loadingId === app.id}
+                        onClick={() => handleApprove(app.id)}
+                        className="h-8 flex-1 rounded-lg bg-accent px-3 text-[12px] font-semibold text-white transition-colors hover:brightness-110 disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                    </Tooltip>
+                    <Tooltip label="Decline the application — the applicant is notified.">
+                      <button
+                        type="button"
+                        disabled={loadingId === app.id}
+                        onClick={() => handleReject(app.id)}
+                        className="h-8 flex-1 rounded-lg border border-error/35 px-3 text-[12px] font-semibold text-error transition-colors hover:bg-errorSoft disabled:opacity-50"
+                      >
+                        Decline
+                      </button>
+                    </Tooltip>
                   </div>
                 </li>
               ))}
@@ -579,7 +873,7 @@ export default function Dashboard() {
       <div className="grid gap-4 xl:grid-cols-2">
         <TrendPanel
           title="Orders"
-          lead="Daily order volume · last 7 days"
+          lead={`Daily order volume · ${chartLabel}`}
           total={`${chartTotal} orders`}
           data={trend.orders}
           stroke="#8B5A2B"
@@ -589,19 +883,23 @@ export default function Dashboard() {
           emptyBody="This chart fills in once storefront orders arrive."
           integerAxis
         />
+        {/* Every order placed, paid or not — hence "order value" rather than
+            "revenue": the money that actually arrived is the Total paid figure
+            at the top of the page, and this chart must not look like a rival
+            answer to that question. */}
         <TrendPanel
-          title="Revenue"
-          lead="Captured order value · last 7 days"
-          total={formatCurrency(revenueTotal)}
+          title="Order value"
+          lead={`Every order placed · ${chartLabel}, paid or not`}
+          total={formatCurrency(orderValueTotal)}
           data={trend.revenue}
           stroke="#0E7C7B"
           gradientId="revenueFill"
-          isEmpty={revenueTotal === 0}
-          emptyTitle="No revenue yet"
-          emptyBody="Paid orders will appear here."
+          isEmpty={orderValueTotal === 0}
+          emptyTitle="No orders to plot yet"
+          emptyBody="This chart fills in once orders are placed."
           yAxisWidth={52}
           yTickFormatter={pesoTick}
-          tooltipFormatter={(value) => [formatCurrency(value), 'Revenue']}
+          tooltipFormatter={(value) => [formatCurrency(value), 'Order value']}
         />
       </div>
     </div>

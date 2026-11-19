@@ -9,6 +9,7 @@ import {
   Eye,
   Mail,
   Package,
+  Printer,
   Search,
   SearchX,
   ShoppingBag,
@@ -16,10 +17,12 @@ import {
 } from 'lucide-react'
 import AvatarInitials from '../components/ui/AvatarInitials.jsx'
 import Badge from '../components/ui/Badge.jsx'
+import Tooltip from '../components/ui/Tooltip.jsx'
 import Modal from '../components/ui/Modal.jsx'
 import { TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { useOrders, useUpdateOrderStatus } from '../hooks/useOrders.js'
+import { printReceipt } from '../lib/receipt.js'
 import { formatDate, formatCurrency, formatDateTime, shortId, ORDER_STATUSES } from '../lib/constants'
 
 const PAGE_SIZE = 20
@@ -151,6 +154,16 @@ export default function Orders() {
   const [contextMenu, setContextMenu] = useState(null)
   const contextMenuRef = useRef(null)
 
+  // The admin's own copy of an order's receipt. It prints from its own window,
+  // so support keeps a copy that depends on neither the customer's inbox nor
+  // the seller's phone.
+  const handlePrintReceipt = (order) => {
+    if (!order) return
+    if (!printReceipt(order)) {
+      showToast('Allow pop-ups for this site to print the receipt', 'error')
+    }
+  }
+
   // Stay in sync when arriving via a dashboard pipeline link (or back/forward)
   // while already on this page — the URL is the source of truth for status.
   useEffect(() => {
@@ -159,6 +172,17 @@ export default function Orders() {
     setStatusFilter((previous) => (previous === next ? previous : next))
     setPage(1)
   }, [searchParams])
+
+  // Deep link from other queues: /orders?order=<id> opens that order's detail,
+  // so a refund or return row can hand the admin straight to the order.
+  useEffect(() => {
+    const openId = searchParams.get('order')
+    if (!openId || !data) return
+    const match = data.find((order) => order.id === openId)
+    if (!match) return
+    setSelectedOrder((current) => (current?.id === match.id ? current : match))
+    setNewStatus((current) => current || match.status)
+  }, [searchParams, data])
 
   useEffect(() => {
     if (!contextMenu) return undefined
@@ -269,6 +293,13 @@ export default function Orders() {
   const closeOrder = () => {
     setSelectedOrder(null)
     setNewStatus('')
+    // Drop the deep-link param, otherwise a refetch would pop the modal open
+    // again after the admin closed it.
+    if (searchParams.get('order')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('order')
+      setSearchParams(next, { replace: true })
+    }
   }
 
   const openContextMenu = (event, order) => {
@@ -343,8 +374,15 @@ export default function Orders() {
                 const count = stage.key === 'all' ? summary.total : summary[stage.key]
 
                 return (
-                  <button
+                  <Tooltip
                     key={stage.key}
+                    label={
+                      stage.key === 'all'
+                        ? 'Clear the status filter and show every order.'
+                        : `Show only the orders in ${stage.label}.`
+                    }
+                  >
+                  <button
                     type="button"
                     onClick={() => applyStatus(stage.key)}
                     aria-pressed={active}
@@ -372,6 +410,7 @@ export default function Orders() {
                       {count.toLocaleString('en-PH')}
                     </span>
                   </button>
+                  </Tooltip>
                 )
               })}
         </section>
@@ -388,17 +427,20 @@ export default function Orders() {
                 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
                 aria-hidden="true"
               />
-              <input
-                type="search"
-                placeholder="Search order, customer, store, product…"
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value)
-                  setPage(1)
-                }}
-                className="h-9 w-full rounded-lg border border-border bg-card pl-8 pr-9 text-[12.5px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
-              />
+              <Tooltip label="Searches order code, customer, store and product.">
+                <input
+                  type="search"
+                  placeholder="Search order, customer, store, product…"
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value)
+                    setPage(1)
+                  }}
+                  className="h-9 w-full rounded-lg border border-border bg-card pl-8 pr-9 text-[12.5px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                />
+              </Tooltip>
               {search && (
+                <Tooltip label="Clear the search.">
                 <button
                   type="button"
                   onClick={() => {
@@ -410,12 +452,14 @@ export default function Orders() {
                 >
                   <X size={13} />
                 </button>
+                </Tooltip>
               )}
             </span>
           </label>
 
           <label className="block">
             <span className="mb-1 block text-[12px] font-medium text-muted">Status</span>
+            <Tooltip label="Filter by a queue or one exact order status.">
             <select
               value={statusFilter}
               onChange={(event) => applyStatus(event.target.value)}
@@ -437,32 +481,37 @@ export default function Orders() {
                 ))}
               </optgroup>
             </select>
+            </Tooltip>
           </label>
 
           <label className="block">
             <span className="mb-1 block text-[12px] font-medium text-muted">From</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(event) => {
-                setDateFrom(event.target.value)
-                setPage(1)
-              }}
-              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
-            />
+            <Tooltip label="Only orders placed on or after this date.">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(event) => {
+                  setDateFrom(event.target.value)
+                  setPage(1)
+                }}
+                className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              />
+            </Tooltip>
           </label>
 
           <label className="block">
             <span className="mb-1 block text-[12px] font-medium text-muted">To</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(event) => {
-                setDateTo(event.target.value)
-                setPage(1)
-              }}
-              className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
-            />
+            <Tooltip label="Only orders placed on or before this date.">
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(event) => {
+                  setDateTo(event.target.value)
+                  setPage(1)
+                }}
+                className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+              />
+            </Tooltip>
           </label>
         </div>
 
@@ -472,14 +521,16 @@ export default function Orders() {
             matching of {(data?.length ?? 0).toLocaleString('en-PH')} orders
           </p>
           {filtersActive && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[12px] font-semibold text-muted transition-colors hover:bg-canvas hover:text-ink"
-            >
-              <X size={13} aria-hidden="true" />
-              Clear filters
-            </button>
+            <Tooltip label="Clear the search, status and dates.">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[12px] font-semibold text-muted transition-colors hover:bg-canvas hover:text-ink"
+              >
+                <X size={13} aria-hidden="true" />
+                Clear filters
+              </button>
+            </Tooltip>
           )}
         </div>
       </section>
@@ -631,6 +682,7 @@ export default function Orders() {
                           </p>
                         </td>
                         <td className="px-2 py-3 text-right">
+                          <Tooltip label="Open this order.">
                           <button
                             type="button"
                             onClick={(event) => {
@@ -642,6 +694,7 @@ export default function Orders() {
                           >
                             <ChevronRight size={15} aria-hidden="true" />
                           </button>
+                          </Tooltip>
                         </td>
                       </tr>
                     ))}
@@ -703,27 +756,31 @@ export default function Orders() {
                   of {filtered.length.toLocaleString('en-PH')} orders
                 </p>
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={page <= 1}
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    aria-label="Previous page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
+                  <Tooltip label="Show the previous page.">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
+                      aria-label="Previous page"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                  </Tooltip>
                   <span className="px-2 font-mono text-[11px] text-muted">
                     {page} / {totalPages}
                   </span>
-                  <button
-                    type="button"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                    aria-label="Next page"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
+                  <Tooltip label="Show the next page.">
+                    <button
+                      type="button"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                      aria-label="Next page"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             </>
@@ -770,6 +827,13 @@ export default function Orders() {
           <div className="my-1 h-px bg-border" />
 
           <ContextMenuItem
+            icon={Printer}
+            onClick={() => handlePrintReceipt(contextMenu.order)}
+          >
+            Print receipt
+          </ContextMenuItem>
+
+          <ContextMenuItem
             icon={Copy}
             onClick={() => copyValue(contextMenu.order.id, 'Order ID')}
           >
@@ -804,9 +868,20 @@ export default function Orders() {
         size="xl"
         footer={
           <>
-            <span className="mr-auto hidden self-center text-[11.5px] text-muted sm:block">
+            <Tooltip label="Print this order's receipt.">
+              <button
+                type="button"
+                onClick={() => handlePrintReceipt(selectedOrder)}
+                className="mr-auto inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-[12px] font-semibold text-ink transition-colors hover:border-primary hover:text-primary"
+              >
+                <Printer size={13} aria-hidden="true" />
+                Receipt
+              </button>
+            </Tooltip>
+            <span className="hidden self-center text-[11.5px] text-muted sm:block">
               Change status
             </span>
+            <Tooltip label="Pick the status to move this order to.">
             <select
               value={newStatus}
               onChange={(event) => setNewStatus(event.target.value)}
@@ -819,6 +894,7 @@ export default function Orders() {
                 </option>
               ))}
             </select>
+            </Tooltip>
             <button
               type="button"
               onClick={handleStatusUpdate}

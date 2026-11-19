@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChevronRight, Trash2 } from 'lucide-react'
 import Modal from '../ui/Modal.jsx'
+import Tooltip from '../ui/Tooltip.jsx'
 import { useToast } from '../ui/Toast.jsx'
 import { useDeleteUser } from '../../hooks/useUsers.js'
 import { formatDate } from '../../lib/constants'
@@ -38,6 +39,7 @@ export default function UserRow({ user, lockout, onView, isSelf = false }) {
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_170px_112px_auto] md:gap-4 md:px-5">
           {/* Identity — the primary action, so the whole name block is the button. */}
+          <Tooltip label="Open this account's details.">
           <button
             type="button"
             onClick={() => onView?.(user)}
@@ -63,6 +65,7 @@ export default function UserRow({ user, lockout, onView, isSelf = false }) {
               </span>
             </span>
           </button>
+          </Tooltip>
 
           <div className="hidden md:block">
             <RoleBadge role={user.role} />
@@ -77,25 +80,29 @@ export default function UserRow({ user, lockout, onView, isSelf = false }) {
           </div>
 
           <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => onView?.(user)}
-              aria-label={`View ${name}`}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted/60 transition-colors hover:bg-canvas hover:text-ink group-hover:text-muted"
-            >
-              <ChevronRight size={16} />
-            </button>
-            {suspended && (
+            <Tooltip label="Open this account's details.">
               <button
                 type="button"
-                onClick={() => setDeleteOpen(true)}
-                disabled={deleteUser.isPending}
-                aria-label={`Delete ${name} permanently`}
-                title="Delete permanently"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-error/70 transition-colors hover:bg-errorSoft hover:text-error disabled:opacity-50"
+                onClick={() => onView?.(user)}
+                aria-label={`View ${name}`}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted/60 transition-colors hover:bg-canvas hover:text-ink group-hover:text-muted"
               >
-                <Trash2 size={15} />
+                <ChevronRight size={16} />
               </button>
+            </Tooltip>
+            {suspended && (
+              <Tooltip label="Delete this suspended account for good.">
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(true)}
+                  disabled={deleteUser.isPending}
+                  aria-label={`Delete ${name} permanently`}
+                  title="Delete permanently"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-error/70 transition-colors hover:bg-errorSoft hover:text-error disabled:opacity-50"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </Tooltip>
             )}
           </div>
         </div>

@@ -27,6 +27,7 @@ import {
 import { formatCurrency, formatDateTime, shortId } from '../lib/constants'
 import { useToast } from '../components/ui/Toast.jsx'
 import Badge from '../components/ui/Badge.jsx'
+import Tooltip from '../components/ui/Tooltip.jsx'
 import DateRangePicker, {
   parseISODate,
   toISODate,
@@ -408,18 +409,21 @@ export default function PaymentVerification() {
                 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
                 aria-hidden="true"
               />
-              <input
-                ref={searchRef}
-                type="search"
-                placeholder="Reference, order code, customer, store, amount…"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') setSearch('')
-                }}
-                className="h-9 w-full rounded-lg border border-border bg-card pl-8 pr-9 text-[12.5px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
-              />
+              <Tooltip label="Searches reference, order code, customer, store and amount.">
+                <input
+                  ref={searchRef}
+                  type="search"
+                  placeholder="Reference, order code, customer, store, amount…"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setSearch('')
+                  }}
+                  className="h-9 w-full rounded-lg border border-border bg-card pl-8 pr-9 text-[12.5px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                />
+              </Tooltip>
               {search ? (
+                <Tooltip label="Clear the search.">
                 <button
                   type="button"
                   onClick={() => setSearch('')}
@@ -428,12 +432,14 @@ export default function PaymentVerification() {
                 >
                   <X size={13} />
                 </button>
+                </Tooltip>
               ) : null}
             </span>
           </label>
 
           <label className="block">
             <span className="mb-1 block text-[12px] font-medium text-muted">Show</span>
+            <Tooltip label="Choose which proofs to list here.">
             <select
               value={queue}
               onChange={(event) => {
@@ -448,10 +454,12 @@ export default function PaymentVerification() {
                 </option>
               ))}
             </select>
+            </Tooltip>
           </label>
 
           <label className="block">
             <span className="mb-1 block text-[12px] font-medium text-muted">Sort</span>
+            <Tooltip label="Choose the order of the list.">
             <select
               value={sort}
               onChange={(event) => setSort(event.target.value)}
@@ -463,6 +471,7 @@ export default function PaymentVerification() {
                 </option>
               ))}
             </select>
+            </Tooltip>
           </label>
         </div>
 
@@ -482,29 +491,33 @@ export default function PaymentVerification() {
           </div>
           <label className="block">
             <span className="mb-1 block text-[12px] font-medium text-muted">Min ₱</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              inputMode="decimal"
-              placeholder="0"
-              value={amountMin}
-              onChange={(event) => setAmountMin(event.target.value)}
-              className={`${INPUT} font-mono tabular-nums`}
-            />
+            <Tooltip label="Only payments at or above this amount.">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="0"
+                value={amountMin}
+                onChange={(event) => setAmountMin(event.target.value)}
+                className={`${INPUT} font-mono tabular-nums`}
+              />
+            </Tooltip>
           </label>
           <label className="block">
             <span className="mb-1 block text-[12px] font-medium text-muted">Max ₱</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              inputMode="decimal"
-              placeholder="Any"
-              value={amountMax}
-              onChange={(event) => setAmountMax(event.target.value)}
-              className={`${INPUT} font-mono tabular-nums`}
-            />
+            <Tooltip label="Only payments at or below this amount.">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="Any"
+                value={amountMax}
+                onChange={(event) => setAmountMax(event.target.value)}
+                className={`${INPUT} font-mono tabular-nums`}
+              />
+            </Tooltip>
           </label>
         </div>
 
@@ -515,14 +528,16 @@ export default function PaymentVerification() {
             {rows.length === 1 ? '' : 's'}
           </p>
           {filtersActive ? (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[12px] font-semibold text-muted transition-colors hover:bg-canvas hover:text-ink"
-            >
-              <X size={13} aria-hidden="true" />
-              Clear filters
-            </button>
+            <Tooltip label="Clear the search, queue, dates and amounts.">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[12px] font-semibold text-muted transition-colors hover:bg-canvas hover:text-ink"
+              >
+                <X size={13} aria-hidden="true" />
+                Clear filters
+              </button>
+            </Tooltip>
           ) : null}
         </div>
       </section>
@@ -726,60 +741,70 @@ export default function PaymentVerification() {
                         can be flagged at any point in its life. */}
                     <div className="flex flex-wrap items-start gap-2 lg:max-w-[260px] lg:justify-end">
                       {proof ? (
-                        <button type="button" className={BTN} onClick={() => openProof(row)}>
-                          <ImageIcon size={13} strokeWidth={1.7} aria-hidden="true" />
-                          Screenshot
-                        </button>
+                        <Tooltip label="See the receipt the customer uploaded.">
+                          <button type="button" className={BTN} onClick={() => openProof(row)}>
+                            <ImageIcon size={13} strokeWidth={1.7} aria-hidden="true" />
+                            Screenshot
+                          </button>
+                        </Tooltip>
                       ) : null}
                       {row.status === 'payment_under_review' ? (
-                        <button
-                          type="button"
-                          className={BTN_PRIMARY}
-                          disabled={busyId === row.id || !proof}
-                          title={!proof ? 'A proof is required before verifying' : undefined}
-                          onClick={() =>
-                            run(row.id, () => verify.mutateAsync({ p_order_id: row.id }))
-                          }
-                        >
-                          <BadgeCheck size={13} strokeWidth={1.7} aria-hidden="true" />
-                          Verify for store
-                        </button>
+                        <Tooltip label="Accept the proof and mark the order paid for the store.">
+                          <button
+                            type="button"
+                            className={BTN_PRIMARY}
+                            disabled={busyId === row.id || !proof}
+                            title={!proof ? 'A proof is required before verifying' : undefined}
+                            onClick={() =>
+                              run(row.id, () => verify.mutateAsync({ p_order_id: row.id }))
+                            }
+                          >
+                            <BadgeCheck size={13} strokeWidth={1.7} aria-hidden="true" />
+                            Verify for store
+                          </button>
+                        </Tooltip>
                       ) : null}
                       {row.payment_status === 'paid' && !row.funds_reconciled_at ? (
-                        <button
-                          type="button"
-                          className={BTN_SUCCESS}
-                          disabled={busyId === row.id || row.payment_flagged}
-                          onClick={() =>
-                            run(row.id, () => reconcile.mutateAsync({ p_order_id: row.id }))
-                          }
-                        >
-                          <ShieldCheck size={13} strokeWidth={1.7} aria-hidden="true" />
-                          Funds seen
-                        </button>
+                        <Tooltip label="Record that the money already shows in the platform account.">
+                          <button
+                            type="button"
+                            className={BTN_SUCCESS}
+                            disabled={busyId === row.id || row.payment_flagged}
+                            onClick={() =>
+                              run(row.id, () => reconcile.mutateAsync({ p_order_id: row.id }))
+                            }
+                          >
+                            <ShieldCheck size={13} strokeWidth={1.7} aria-hidden="true" />
+                            Funds seen
+                          </button>
+                        </Tooltip>
                       ) : null}
                       {row.payment_flagged ? (
-                        <button
-                          type="button"
-                          className={BTN}
-                          disabled={busyId === row.id}
-                          onClick={() =>
-                            run(row.id, () => clearFlag.mutateAsync({ p_order_id: row.id }))
-                          }
-                        >
-                          <CheckCircle2 size={13} strokeWidth={1.7} aria-hidden="true" />
-                          Clear flag
-                        </button>
+                        <Tooltip label="Remove the flag once the concern is resolved.">
+                          <button
+                            type="button"
+                            className={BTN}
+                            disabled={busyId === row.id}
+                            onClick={() =>
+                              run(row.id, () => clearFlag.mutateAsync({ p_order_id: row.id }))
+                            }
+                          >
+                            <CheckCircle2 size={13} strokeWidth={1.7} aria-hidden="true" />
+                            Clear flag
+                          </button>
+                        </Tooltip>
                       ) : (
-                        <button
-                          type="button"
-                          className={BTN_DANGER}
-                          disabled={busyId === row.id}
-                          onClick={() => onFlag(row)}
-                        >
-                          <XCircle size={13} strokeWidth={1.7} aria-hidden="true" />
-                          Flag
-                        </button>
+                        <Tooltip label="Mark this payment for investigation.">
+                          <button
+                            type="button"
+                            className={BTN_DANGER}
+                            disabled={busyId === row.id}
+                            onClick={() => onFlag(row)}
+                          >
+                            <XCircle size={13} strokeWidth={1.7} aria-hidden="true" />
+                            Flag
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   </div>
@@ -798,27 +823,31 @@ export default function PaymentVerification() {
               of {filtered.length.toLocaleString('en-PH')} orders
             </p>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                disabled={safePage <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                aria-label="Previous page"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <ChevronLeft size={14} />
-              </button>
+              <Tooltip label="Show the previous page.">
+                <button
+                  type="button"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  aria-label="Previous page"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+              </Tooltip>
               <span className="px-2 font-mono text-[11px] text-muted">
                 {safePage} / {totalPages}
               </span>
-              <button
-                type="button"
-                disabled={safePage >= totalPages}
-                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                aria-label="Next page"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <ChevronRight size={14} />
-              </button>
+              <Tooltip label="Show the next page.">
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  aria-label="Next page"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </Tooltip>
             </div>
           </div>
         ) : null}
@@ -846,6 +875,7 @@ export default function PaymentVerification() {
                 {proofView.orderCode ? ` · ${proofView.orderCode}` : ''}
               </p>
             </div>
+            <Tooltip label="Close the screenshot.">
             <button
               type="button"
               onClick={() => setProofView(null)}
@@ -854,6 +884,7 @@ export default function PaymentVerification() {
             >
               <X size={16} />
             </button>
+            </Tooltip>
           </div>
           {proofView.status === 'ready' ? (
             <img
@@ -873,10 +904,12 @@ export default function PaymentVerification() {
                 <>
                   <AlertTriangle size={22} strokeWidth={1.8} className="text-[#8A5D14]" />
                   <p className="text-[12.5px] leading-relaxed text-ink">{proofView.error}</p>
-                  <button type="button" className={BTN} onClick={retryProof}>
-                    <RefreshCw size={13} strokeWidth={1.7} aria-hidden="true" />
-                    Try again
-                  </button>
+                  <Tooltip label="Sign a fresh link and load the screenshot again.">
+                    <button type="button" className={BTN} onClick={retryProof}>
+                      <RefreshCw size={13} strokeWidth={1.7} aria-hidden="true" />
+                      Try again
+                    </button>
+                  </Tooltip>
                 </>
               ) : (
                 <>

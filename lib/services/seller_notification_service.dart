@@ -513,7 +513,7 @@ class SellerNotificationService {
         type: 'replacement_received',
         title: 'Replacement received',
         body: 'Order #$shortId — the customer confirmed they received the '
-            'replacement. This return is closed.',
+            'replacement. This request is closed.',
         referenceId: orderId,
         screen: 'seller_order_detail',
       );

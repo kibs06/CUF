@@ -21,7 +21,7 @@ const TITLES = {
   // falls back to 'Admin / CUFMAI admin workspace.' above their own heading.
   '/platform-payments': 'Platform GCash',
   '/payment-verification': 'Payment Verification',
-  '/refunds': 'Refunds Owed',
+  '/refunds': 'Replacements owed',
   '/payouts': 'Payouts',
 }
 
@@ -33,14 +33,15 @@ const DESCRIPTIONS = {
   '/banners': 'Home-screen hero banners and their schedule.',
   '/model-requests': 'Seller modelling requests and the live 3D shelf.',
   '/orders': 'Orders from placement through delivery.',
-  '/transactions': 'GCash payments, fees, and webhook events.',
+  '/transactions':
+    'Paid sales from the POS and the app — plus whether each customer actually has their receipt, and how the payment was confirmed.',
   '/reports': 'Customer reports and the moderation queue.',
   '/audit-logs': 'Read-only trails of admin and seller activity.',
   '/analytics': 'Sales, order, and product trends over time.',
   '/settings': 'Your admin profile, password, and two-factor authentication.',
   '/platform-payments': 'The GCash account customers pay into, plus fees and payout rates.',
   '/payment-verification': 'Proofs from customers, and the money confirmed in the platform account.',
-  '/refunds': 'Money to send back after a proof was rejected, and the transfers that settle it.',
+  '/refunds': 'Replacements owed to customers, and the refunds still to send from rejected payment proofs.',
   '/payouts': 'What each store is owed, and the transfers that settle it.',
 }
 

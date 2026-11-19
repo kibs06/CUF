@@ -53,7 +53,9 @@ function wrap76(value: string): string {
 
 export class SmtpClient {
   private conn!: Deno.Conn;
-  private reader!: Deno.Reader;
+  // `Deno.Reader` was removed from the Deno 2 typings; a `Deno.Conn` provides
+  // the same `read(Uint8Array)` signature this client uses.
+  private reader!: Deno.Conn;
   private buffer = new Uint8Array(0);
 
   async connectTLS(

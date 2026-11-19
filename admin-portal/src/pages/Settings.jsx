@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import MfaCard from '../components/MfaCard.jsx'
+import Tooltip from '../components/ui/Tooltip.jsx'
 import { User, Lock, AlertTriangle } from 'lucide-react'
 
 export default function Settings() {
@@ -101,13 +102,15 @@ export default function Settings() {
               className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-muted"
             />
           </div>
-          <button
-            type="submit"
-            disabled={savingProfile}
-            className="rounded-xl bg-secondary px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
-          >
-            Save Profile
-          </button>
+          <Tooltip label="Saves the name shown to sellers and customers.">
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="rounded-xl bg-secondary px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
+            >
+              Save Profile
+            </button>
+          </Tooltip>
         </form>
       </div>
 
@@ -145,13 +148,15 @@ export default function Settings() {
               className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
-          <button
-            type="submit"
-            disabled={savingPassword}
-            className="rounded-xl bg-secondary px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
-          >
-            Update Password
-          </button>
+          <Tooltip label="Changes the password you sign in with.">
+            <button
+              type="submit"
+              disabled={savingPassword}
+              className="rounded-xl bg-secondary px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
+            >
+              Update Password
+            </button>
+          </Tooltip>
         </form>
       </div>
 
@@ -164,13 +169,15 @@ export default function Settings() {
         <p className="mb-4 text-sm text-red-600">
           Sign out of all devices and sessions linked to this admin account.
         </p>
-        <button
-          type="button"
-          onClick={handleSignOutAll}
-          className="rounded-xl border border-red-400 px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100"
-        >
-          Sign out of all sessions
-        </button>
+        <Tooltip label="Ends every admin session, including this one.">
+          <button
+            type="button"
+            onClick={handleSignOutAll}
+            className="rounded-xl border border-red-400 px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100"
+          >
+            Sign out of all sessions
+          </button>
+        </Tooltip>
       </div>
     </div>
   )

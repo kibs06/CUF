@@ -64,4 +64,31 @@ void main() {
     );
     expect(String.fromCharCodes(empty.take(5)), '%PDF-');
   });
+
+  // The Orders screen opens the same slip for an online order, months later.
+  // That row has no cashier and no cash lines, and the builder has to render it
+  // without inventing a till behind the sale.
+  test('an online order copy renders without a cashier', () async {
+    final bytes = await buildPosReceiptPdf(
+      order: {
+        'id': 'be34a94e-0000-0000-0000-000000000000',
+        'created_at': '2026-11-17T00:14:00Z',
+        'total_amount': 500.0,
+        'payment_method': 'cod',
+        'order_items': [
+          {
+            'product_name': 'Woven Wedge FlipFlops',
+            'size': '35',
+            'quantity': 1,
+            'unit_price': 500.0,
+          },
+        ],
+      },
+      storeName: 'LIDEBETH SHOE TRADING',
+      storeLocation: 'Carcar, Cebu',
+    );
+
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    expect(bytes.length, greaterThan(2000));
+  });
 }

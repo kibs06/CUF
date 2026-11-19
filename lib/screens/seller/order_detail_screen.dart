@@ -13,6 +13,7 @@ import '../../utils/order_receipt_gate.dart';
 import '../../widgets/return_proof_image.dart';
 import '../../widgets/seller/seller_status_chip.dart';
 import '../../widgets/chat/chat_view.dart';
+import 'pos_receipt_detail_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -26,6 +27,7 @@ class OrderDetailScreen extends StatefulWidget {
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _isUpdating = false;
   bool _sendingReceipt = false;
+  bool _openingReceipt = false;
 
   Map<String, dynamic> get order => widget.order;
 
@@ -118,15 +120,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     // approval so the order no longer says "Replaced" for a shipped
     // replacement that hasn't even left the store yet.
     String replacementMethod = 'in_store';
-    String replacementCarrier = '';
-    String replacementTracking = '';
+    // No waybill, no typing: the app issues the replacement's own reference.
+    final generatedTracking = AppConstants.replacementTrackingNumber(
+      orderId.toString(),
+    );
+
+    // Delivery rule: a Carcar City address can be shipped and pays the fixed
+    // ₱50 fee; every other address is collected at the counter, so the shipped
+    // path is not offered for it at all.
+    final address = order['shipping_address'];
+    final addressMap = address is Map ? address : const <String, dynamic>{};
+    final isCarcar =
+        AppConstants.isCarcarAddress(
+          barangay: addressMap['barangay']?.toString(),
+          cityMunicipality:
+              (addressMap['city_municipality'] ??
+                      addressMap['cityMunicipality'] ??
+                      addressMap['city'])
+                  ?.toString(),
+        ) ||
+        AppConstants.isCarcarAddress(
+          cityMunicipality: order['delivery_address']?.toString(),
+        );
+    final replacementFee =
+        isCarcar ? AppConstants.replacementShippingFee : 0.0;
+    // What the seller sees above the two choices — the address the rule was
+    // applied to, so "in store" versus "ship" is never a guess.
+    final addressParts = [
+      addressMap['barangay']?.toString().trim() ?? '',
+      (addressMap['city_municipality'] ??
+                  addressMap['cityMunicipality'] ??
+                  addressMap['city'])
+              ?.toString()
+              .trim() ??
+          '',
+    ].where((part) => part.isNotEmpty).join(', ');
+    final addressLabel = addressParts.isNotEmpty
+        ? addressParts
+        : (order['delivery_address']?.toString().trim() ?? '');
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           backgroundColor: AppConstants.sellerCardBg,
-          title: Text(approve ? 'Approve Replacement?' : 'Decline Return?'),
+          title: Text(approve ? 'Approve Replacement?' : 'Decline Replacement?'),
           content: approve
               ? SingleChildScrollView(
                   child: Column(
@@ -134,7 +172,60 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Inspect the returned item first. Approving marks the order replaced — a product replacement, never a cash refund.',
+                      'Inspect the item first. Approving marks the order replaced — a product replacement, never a cash refund.',
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppConstants.surfaceLight,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppConstants.borderGray),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'DELIVER TO',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            addressLabel.isEmpty
+                                ? 'No delivery address on this order'
+                                : addressLabel,
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              color: AppConstants.secondary,
+                              height: 1.3,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            addressLabel.isEmpty
+                                ? 'Cannot confirm a Carcar City address — hand the replacement over in store.'
+                                : isCarcar
+                                    ? 'Inside Carcar City — delivery allowed, fixed ₱${AppConstants.replacementShippingFee.toStringAsFixed(0)} fee.'
+                                    : 'Outside Carcar City — collect at the store.',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isCarcar
+                                  ? AppConstants.success
+                                  : AppConstants.statusPendingColor,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 14),
                     Text(
@@ -143,6 +234,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: AppConstants.secondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isCarcar
+                          ? 'This address is inside Carcar City — you may ship it, and the customer pays the fixed ₱${AppConstants.replacementShippingFee.toStringAsFixed(0)} shipping fee in cash to the courier on delivery (cash on delivery). An in-store handover costs nothing.'
+                          : 'This address is outside Carcar City — hand the replacement over in store. Shipping is only offered for Carcar City addresses.',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                        height: 1.4,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -156,19 +258,39 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           replacementMethod,
                           (v) => setDialogState(() => replacementMethod = v),
                         ),
-                        _methodChip(
-                          'Ship to customer',
-                          'shipped',
-                          replacementMethod,
-                          (v) => setDialogState(() => replacementMethod = v),
-                        ),
+                        if (isCarcar)
+                          _methodChip(
+                            'Ship to customer',
+                            'shipped',
+                            replacementMethod,
+                            (v) => setDialogState(() => replacementMethod = v),
+                          ),
                       ],
                     ),
+                    if (isCarcar && replacementMethod == 'shipped') ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppConstants.statusPendingColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '₱${replacementFee.toStringAsFixed(0)} shipping fee: the courier collects it in cash when the replacement is delivered. Nothing to confirm before you dispatch — the customer only confirms the replacement arrived.',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11,
+                            color: AppConstants.secondary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     Text(
                       replacementMethod == 'in_store'
-                          ? 'The customer is at the counter — hand the replacement over on the spot.'
-                          : 'They mailed the pair back, so it travels again. The customer sees it is still on the way.',
+                          ? 'The customer brings the pair to the counter — hand the replacement over on the spot. This is the rule for addresses outside Carcar City.'
+                          : 'Delivered to the customer. This is the rule for a Carcar City address — the fixed ₱${AppConstants.replacementShippingFee.toStringAsFixed(0)} shipping fee is paid in cash to the courier.',
                       style: AppConstants.bodyStyle(
                         fontSize: 11,
                         color: Colors.grey.shade500,
@@ -177,14 +299,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ),
                     if (replacementMethod == 'shipped') ...[
                       const SizedBox(height: 10),
-                      _dialogField(
-                        hint: 'Courier (optional)',
-                        onChanged: (v) => replacementCarrier = v,
-                      ),
-                      const SizedBox(height: 8),
-                      _dialogField(
-                        hint: 'Tracking number (optional — add it later if you do not have it yet)',
-                        onChanged: (v) => replacementTracking = v,
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppConstants.surfaceLight,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppConstants.borderGray),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.confirmation_number_outlined,
+                              size: 16,
+                              color: AppConstants.secondary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Tracking number $generatedTracking — created for this replacement and shown to the customer. No waybill or typing needed.',
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 11.5,
+                                  color: AppConstants.secondary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ],
@@ -252,12 +394,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         approve: approve,
         declineReason: approve ? null : declineReason,
         replacementMethod: replacementMethod,
-        replacementCarrier: replacementCarrier,
-        replacementTrackingNumber: replacementTracking,
+        replacementCarrier: null,
+        replacementTrackingNumber:
+            replacementMethod == 'shipped' ? generatedTracking : null,
       );
       if (mounted) {
         setState(() => _isUpdating = false);
         if (success) {
+          if (!mounted) return;
+          // The bell row and push come from the status change; this is the
+          // inbox channel, so the customer hears it outside the app too. Its
+          // result goes into the snackbar — a silent mail failure is worse than
+          // a visible one.
+          String? emailNotice;
+          if (approve) {
+            emailNotice =
+                await OrderService().emailReplacementNotice(orderId.toString());
+            if (!mounted) return;
+          }
           final customerId = order['customer_id']?.toString() ?? '';
           if (!approve) {
             // Decline: instant chat message first (it carries its own
@@ -282,9 +436,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(approve
-                  ? 'Order marked replaced. Please give a product replacement (on the spot in-store, or ship it for remote returns).'
-                  : 'Return declined. Order back to received.'),
+              content: Text(
+                approve
+                    ? 'Order marked replaced. ${emailNotice ?? 'Email notice sent.'}'
+                    : 'Request declined. Order back to received.',
+              ),
               backgroundColor: AppConstants.success,
             ),
           );
@@ -292,7 +448,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Failed to update return. Please try again.'),
+              content: Text('Failed to update the request. Please try again.'),
               backgroundColor: AppConstants.error,
             ),
           );
@@ -303,7 +459,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         setState(() => _isUpdating = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating return: $e'),
+            content: Text('Error updating the request: $e'),
             backgroundColor: AppConstants.error,
           ),
         );
@@ -344,7 +500,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         conversationId: thread.id,
         senderId: sellerId,
         senderType: 'seller',
-        body: 'Update on your return request for order #$shortId: '
+        body: 'Update on your replacement request for order #$shortId: '
             'we had to decline it. Reason: $reason. '
             'Reply here if you have questions.',
         orderReferenceId: orderId,
@@ -987,6 +1143,78 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  /// The shop's own copy of this order's receipt.
+  ///
+  /// The customer keeps the copy that was emailed to them; this is the one the
+  /// store can produce months later, when a customer comes back with a
+  /// question and neither side wants to depend on the other's inbox. It is the
+  /// same A5 slip the POS prints, rebuilt from the order and its line items, so
+  /// it can be printed or saved from the same screen. A till sale already has
+  /// its receipt in POS → History, so this button is for online orders only.
+  Future<void> _openReceipt() async {
+    final id = order['id']?.toString() ?? '';
+    if (id.isEmpty || _openingReceipt) return;
+    setState(() => _openingReceipt = true);
+    try {
+      final full = await OrderService().fetchPosReceipt(id);
+      if (!mounted) return;
+      if (full == null) {
+        _say('Could not load this order. Check the connection and try again.');
+        return;
+      }
+
+      // The slip is headed with the shop, never a cashier: nothing was rung up
+      // at a counter for an online order.
+      var storeName = 'Store';
+      var storeLocation = '';
+      final storeId = order['store_id']?.toString();
+      if (storeId != null && storeId.isNotEmpty) {
+        try {
+          final store = await Supabase.instance.client
+              .from('stores')
+              .select('name, location')
+              .eq('id', storeId)
+              .maybeSingle();
+          if (store != null) {
+            storeName = store['name']?.toString() ?? storeName;
+            storeLocation = store['location']?.toString() ?? '';
+          }
+        } catch (e) {
+          // A failed store read must not keep the shop from its own receipt.
+          debugPrint('[OrderDetail] store details for the receipt failed: $e');
+        }
+      }
+      if (!mounted) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PosReceiptDetailScreen(
+            order: full,
+            storeName: storeName,
+            storeLocation: storeLocation,
+            badgeLabel: 'Online order',
+            showCompletionMark: false,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[OrderDetail] opening the receipt failed: $e');
+      _say('Could not open the receipt. Try again.');
+    } finally {
+      if (mounted) setState(() => _openingReceipt = false);
+    }
+  }
+
+  void _say(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppConstants.secondary,
+      ),
+    );
+  }
+
   Future<void> _messageCustomer() async {
     final customerId = order['customer_id']?.toString();
     if (customerId == null) {
@@ -1145,6 +1373,43 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ),
                     ),
                   ),
+                  if ((order['source']?.toString() ?? '') != 'pos') ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _openingReceipt ? null : _openReceipt,
+                        icon: _openingReceipt
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(
+                                Icons.picture_as_pdf_outlined,
+                                size: 18,
+                              ),
+                        label: Text(
+                          _openingReceipt ? 'Opening…' : 'View receipt',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppConstants.primary,
+                          side: BorderSide(
+                            color: AppConstants.primary.withValues(alpha: 0.4),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
                   if (_canEmailReceipt) ...[
                     const SizedBox(height: 8),
                     SizedBox(
@@ -1285,16 +1550,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 child: _isReturnRequested
                     ? Row(
                         children: [
-                          Expanded(
+                          // Decline is the narrow, secondary choice; Approve takes
+                          // the rest of the row so its label keeps one line.
+                          SizedBox(
+                            width: 104,
                             child: SizedBox(
                               height: 48,
                               child: OutlinedButton(
                                 onPressed: _isUpdating ? null : () => _performReturnDecision(false),
                                 style: OutlinedButton.styleFrom(
+                                  padding: EdgeInsets.zero,
                                   side: const BorderSide(color: AppConstants.error),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
-                                child: Text('Decline', style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppConstants.error)),
+                                child: Text('Decline', maxLines: 1, softWrap: false, style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppConstants.error)),
                               ),
                             ),
                           ),
@@ -1305,7 +1574,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               child: FilledButton(
                                 onPressed: _isUpdating ? null : () => _performReturnDecision(true),
                                 style: FilledButton.styleFrom(backgroundColor: AppConstants.success, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                child: Text('Approve replacement', style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                                // Scale down rather than wrap: with a large
+                                // system font the label must not split in two.
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text('Approve replacement', maxLines: 1, softWrap: false, style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                                ),
                               ),
                             ),
                           ),
@@ -1470,22 +1744,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _dialogField({
-    required String hint,
-    required ValueChanged<String> onChanged,
-  }) {
-    return TextField(
-      onChanged: (v) => onChanged(v.trim()),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: AppConstants.bodyStyle(fontSize: 12, color: Colors.grey.shade400),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        isDense: true,
-      ),
-    );
-  }
-
   /// Attach the courier + tracking number to an approved shipped
   /// replacement (approval happens before dispatch, so the number is
   /// usually only known later).
@@ -1493,75 +1751,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final orderId = order['id'];
     if (orderId == null || _isUpdating) return;
 
-    String carrier = order['replacement_carrier']?.toString() ?? '';
-    String tracking = '';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: AppConstants.sellerCardBg,
-          title: const Text('Replacement tracking'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'The customer sees this on the order tracking screen. Save it once the courier has the parcel.',
-              ),
-              const SizedBox(height: 12),
-              _dialogField(
-                hint: 'Courier (e.g. J&T, LBC)',
-                onChanged: (v) => carrier = v,
-              ),
-              const SizedBox(height: 8),
-              _dialogField(
-                hint: 'Tracking number',
-                onChanged: (v) => setDialogState(() => tracking = v),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                'Cancel',
-                style: AppConstants.bodyStyle(color: AppConstants.secondary),
-              ),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppConstants.success,
-              ),
-              onPressed: tracking.isEmpty
-                  ? null
-                  : () => Navigator.of(context).pop(true),
-              child: const Text('Save tracking'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+    // No waybill and nothing to type: the app issues the reference off the
+    // order id, so older shipped replacements can be given one in one tap.
+    final generated = AppConstants.replacementTrackingNumber(orderId.toString());
 
     setState(() => _isUpdating = true);
     final ok = await Provider.of<OrderProvider>(context, listen: false)
         .setReplacementTracking(
       orderId: orderId,
-      carrier: carrier,
-      trackingNumber: tracking,
+      carrier: order['replacement_carrier']?.toString() ?? '',
+      trackingNumber: generated,
     );
     if (!mounted) return;
     setState(() => _isUpdating = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok
-            ? 'Tracking saved. The customer can now follow the replacement.'
-            : 'Could not save the tracking number. Please try again.'),
+        content: Text(
+          ok
+              ? 'Tracking number $generated created. The customer can follow the replacement.'
+              : 'Could not create the tracking number. Please try again.',
+        ),
         backgroundColor: ok ? AppConstants.success : AppConstants.error,
       ),
     );
-    if (ok) Navigator.of(context).pop(true);
   }
 
   Widget _infoRow(String label, String value) {
@@ -1641,7 +1853,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isReplaced ? 'Replaced' : 'Return requested',
+                  isReplaced ? 'Replaced' : 'Replacement requested',
                   style: AppConstants.bodyStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppConstants.secondary),
                 ),
                 if (reason != null && reason.isNotEmpty) ...[
@@ -1695,7 +1907,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     Text(
                       tracking.isEmpty
                           ? 'No tracking number yet.'
-                          : '${carrier.isEmpty ? 'Courier' : carrier} · $tracking',
+                          : '${carrier.isEmpty ? 'Reference' : carrier} · $tracking',
                       style: AppConstants.bodyStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -1708,7 +1920,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           onPressed:
                               _isUpdating ? null : _addReplacementTracking,
                           icon: const Icon(Icons.add_box_outlined, size: 16),
-                          label: const Text('Add tracking number'),
+                          label: const Text('Create tracking number'),
                           style: TextButton.styleFrom(
                             padding: EdgeInsets.zero,
                             minimumSize: const Size(0, 32),
@@ -1743,7 +1955,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'In-store: inspect the item, then hand over the same product on the spot. Shipped: wait until the item arrives and passes inspection, then ship the replacement — tell the customer it takes longer.',
+                            'Carcar City address (any of its 15 barangays): the replacement is delivered, and the fixed ₱${AppConstants.replacementShippingFee.toStringAsFixed(0)} shipping fee is paid in cash to the courier (cash on delivery) — the pair itself is free. Anywhere outside Carcar City: the customer brings the item to the store and collects the replacement there after inspection, with no shipping.',
                             style: AppConstants.bodyStyle(
                               fontSize: 12,
                               color: AppConstants.secondary,

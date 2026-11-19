@@ -466,142 +466,34 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
     final uid = client.auth.currentUser?.id;
     if (uid == null) return;
 
-    final numberCtrl = TextEditingController(text: _payoutAccount?.number ?? '');
-    final nameCtrl = TextEditingController(text: _payoutAccount?.name ?? '');
-    final formKey = GlobalKey<FormState>();
-
-    await showModalBottomSheet<void>(
+    final saved = await showModalBottomSheet<PayoutAccount>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        var saving = false;
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            Future<void> save() async {
-              if (!formKey.currentState!.validate()) return;
-              setSheetState(() => saving = true);
-              final number = normalizeGcashNumber(numberCtrl.text);
-              final holder = nameCtrl.text.trim();
-              try {
-                await client.from('profiles').update({
-                  'payout_method': 'gcash',
-                  'payout_details':
-                      encodePayoutDetails(number: number, name: holder),
-                }).eq('id', uid);
-                if (!mounted) return;
-                setState(() {
-                  _payoutAccount = PayoutAccount(number: number, name: holder);
-                  _payoutMethod = 'gcash';
-                });
-                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Payout account saved — the next batch is sent here.',
-                    ),
-                  ),
-                );
-              } catch (e) {
-                // Says which side failed: a Postgrest error is the server
-                // refusing, anything else is the connection. Either way the
-                // seller must know the account was NOT saved.
-                debugPrint('[EARNINGS] payout account save failed: $e');
-                if (!context.mounted) return;
-                setSheetState(() => saving = false);
-                final detail = e is PostgrestException ? e.message : 'check your connection';
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Could not save the payout account — $detail'),
-                  ),
-                );
-              }
-            }
-
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppConstants.surfaceLight,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  16,
-                  20,
-                  MediaQuery.of(context).viewPadding.bottom + 20,
-                ),
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Payout account',
-                          style: AppConstants.bodyStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'CUFMAI transfers your earnings to this GCash '
-                          'account. Both the number and the name must match '
-                          'your wallet — a wrong number sends the money to a '
-                          'stranger and it cannot be recalled.',
-                          style: AppConstants.bodyStyle(
-                            fontSize: 11.5,
-                            height: 1.4,
-                            color: AppConstants.secondary.withValues(alpha: 0.65),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        SoleTextField(
-                          labelText: 'GCash number',
-                          hintText: '09XXXXXXXXX',
-                          controller: numberCtrl,
-                          keyboardType: TextInputType.phone,
-                          prefixIcon: Icons.phone_iphone,
-                          validator: gcashNumberError,
-                        ),
-                        const SizedBox(height: 14),
-                        SoleTextField(
-                          labelText: 'Account name',
-                          hintText: 'Name shown in your GCash app',
-                          controller: nameCtrl,
-                          validator: payoutAccountNameError,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                        ),
-                        const SizedBox(height: 18),
-                        GcashPrimaryButton(
-                          label: 'Save payout account',
-                          showIcon: false,
-                          loading: saving,
-                          onPressed: saving ? null : save,
-                        ),
-                        TextButton(
-                          onPressed:
-                              saving ? null : () => Navigator.of(context).pop(),
-                          child: const Text('Cancel'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (_) => _PayoutAccountSheet(
+        initial: _payoutAccount,
+        onSave: (number, holder) async {
+          await client.from('profiles').update({
+            'payout_method': 'gcash',
+            'payout_details': encodePayoutDetails(number: number, name: holder),
+          }).eq('id', uid);
+        },
+      ),
     );
 
-    numberCtrl.dispose();
-    nameCtrl.dispose();
+    // Everything here runs only after the sheet has closed and handed back a
+    // saved account, so this State is never updated while its route is being
+    // torn down.
+    if (!mounted || saved == null) return;
+    setState(() {
+      _payoutAccount = saved;
+      _payoutMethod = 'gcash';
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Payout account saved — the next batch is sent here.'),
+      ),
+    );
   }
 
   Widget _payoutCard(Map<String, dynamic> p) {
@@ -691,5 +583,169 @@ class _SellerEarningsScreenState extends State<SellerEarningsScreen> {
         local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour);
     final ampm = local.hour >= 12 ? 'PM' : 'AM';
     return '${local.month}/${local.day} $h:${local.minute.toString().padLeft(2, '0')} $ampm';
+  }
+}
+
+/// The payout-account form.
+///
+/// This is a StatefulWidget rather than a `StatefulBuilder` on purpose: it owns
+/// the text controllers and its own saving flag, so both live exactly as long
+/// as the sheet does. The previous version disposed the controllers the moment
+/// `pop()` returned, while the sheet route was still animating out with its
+/// mounted `Form` and text fields — that teardown is what threw
+/// `Failed assertion: '_dependents.isEmpty'` and left the seller on a red error
+/// screen after saving. It pops with the saved [PayoutAccount], or null when
+/// the seller cancels.
+class _PayoutAccountSheet extends StatefulWidget {
+  const _PayoutAccountSheet({required this.initial, required this.onSave});
+
+  final PayoutAccount? initial;
+  final Future<void> Function(String number, String holder) onSave;
+
+  @override
+  State<_PayoutAccountSheet> createState() => _PayoutAccountSheetState();
+}
+
+class _PayoutAccountSheetState extends State<_PayoutAccountSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _numberCtrl;
+  late final TextEditingController _nameCtrl;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _numberCtrl = TextEditingController(text: widget.initial?.number ?? '');
+    _nameCtrl = TextEditingController(text: widget.initial?.name ?? '');
+  }
+
+  @override
+  void dispose() {
+    _numberCtrl.dispose();
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final number = normalizeGcashNumber(_numberCtrl.text);
+    final holder = _nameCtrl.text.trim();
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.onSave(number, holder);
+      if (!mounted) return;
+      Navigator.of(context).pop(PayoutAccount(number: number, name: holder));
+    } catch (e) {
+      // Says which side failed: a Postgrest error is the server refusing,
+      // anything else is the connection. Either way the seller must know the
+      // account was NOT saved, so the message stays on the sheet next to the
+      // fields that need fixing instead of vanishing with a snackbar.
+      debugPrint('[EARNINGS] payout account save failed: $e');
+      if (!mounted) return;
+      final detail =
+          e is PostgrestException ? e.message : 'check your connection';
+      setState(() {
+        _saving = false;
+        _error = 'Could not save the payout account — $detail';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppConstants.surfaceLight,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          16,
+          20,
+          MediaQuery.of(context).viewPadding.bottom + 20,
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Payout account',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'CUFMAI transfers your earnings to this GCash '
+                  'account. Both the number and the name must match '
+                  'your wallet — a wrong number sends the money to a '
+                  'stranger and it cannot be recalled.',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11.5,
+                    height: 1.4,
+                    color: AppConstants.secondary.withValues(alpha: 0.65),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SoleTextField(
+                  labelText: 'GCash number',
+                  hintText: '09XXXXXXXXX',
+                  controller: _numberCtrl,
+                  keyboardType: TextInputType.phone,
+                  prefixIcon: Icons.phone_iphone,
+                  validator: gcashNumberError,
+                ),
+                const SizedBox(height: 14),
+                SoleTextField(
+                  labelText: 'Account name',
+                  hintText: 'Name shown in your GCash app',
+                  controller: _nameCtrl,
+                  validator: payoutAccountNameError,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 11.5,
+                      height: 1.4,
+                      color: AppConstants.error,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                GcashPrimaryButton(
+                  label: 'Save payout account',
+                  showIcon: false,
+                  loading: _saving,
+                  onPressed: _saving ? null : _save,
+                ),
+                TextButton(
+                  onPressed:
+                      _saving ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
