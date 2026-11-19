@@ -1,10 +1,8 @@
 {
-  "latest_version": "1.0.86",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.86/app-release-1.0.86.apk",
-  "released_at": "2026-11-18",
+  "latest_version": "1.0.87",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.87/app-release-1.0.87.apk",
+  "released_at": "2026-11-19",
   "notes": [
-    "Payout account: sellers set their GCash number and account name on the Earnings screen, so payout batches stop showing No payout details on file",
-    "Admin portal: dark mode, toggled from the profile menu",
-    "Cash checkout no longer creates duplicate orders on a double tap, and both GCash proof forms are rate limited"
+    "Release v1.0.87"
   ]
 }
