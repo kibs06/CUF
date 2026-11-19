@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.jsx'
+import { useTheme } from '../../hooks/useTheme.js'
 import {
   useAdminNotificationFeed,
   useAdminNotifications,
@@ -16,9 +17,11 @@ import {
   Cuboid,
   LogOut,
   Menu,
+  Moon,
   Settings,
   ShoppingCart,
   Store,
+  Sun,
 } from 'lucide-react'
 
 function formatWhen(value) {
@@ -35,6 +38,9 @@ function formatWhen(value) {
 
 export default function TopBar({ title, subtitle, onMenuClick }) {
   const { profile, signOut } = useAuth()
+  // The sidebar footer used to hold this switch; it lives here now so the
+  // portal keeps a way to flip the theme without that chip.
+  const { isDark, toggle: toggleTheme } = useTheme()
   const [menuOpen, setMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const menuRef = useRef(null)
@@ -362,6 +368,33 @@ export default function TopBar({ title, subtitle, onMenuClick }) {
                 </div>
               </div>
               <div className="py-1">
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={isDark}
+                  aria-label="Dark mode"
+                  onClick={toggleTheme}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-muted transition-colors hover:bg-canvas hover:text-ink"
+                >
+                  {isDark ? (
+                    <Moon size={16} strokeWidth={2} />
+                  ) : (
+                    <Sun size={16} strokeWidth={2} />
+                  )}
+                  <span className="flex-1">Dark mode</span>
+                  <span
+                    aria-hidden="true"
+                    className={`relative h-4 w-7 shrink-0 rounded-full border transition-colors ${
+                      isDark ? 'border-primary bg-primary' : 'border-border bg-faint'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-[2px] h-[10px] w-[10px] rounded-full bg-card shadow transition-all ${
+                        isDark ? 'left-[15px]' : 'left-[2px]'
+                      }`}
+                    />
+                  </span>
+                </button>
                 <Link
                   to="/settings"
                   role="menuitem"

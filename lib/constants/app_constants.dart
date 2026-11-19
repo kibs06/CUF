@@ -704,6 +704,16 @@ class AppConstants {
   /// half-finished. Same one-const kill-switch shape as that rail.
   static const bool sizeAwareShoppingEnabled = true;
 
+  // --- PASSKEY SIGN-IN ---
+  /// Gates the "Sign in with Passkey" button on the login screen.
+  ///
+  /// **Now OFF, for now.** The WebAuthn flow and its service are live in code,
+  /// but the CTA is hidden until the platform pickers behave on the devices
+  /// this ships to. Password, social and biometric sign-in are untouched, and
+  /// a passkey already registered can still be managed from Account security.
+  /// Flip to true to show the button again.
+  static const bool passkeySignInEnabled = false;
+
   // --- PRODUCT AUDIENCE (Men's / Women's / Kids') ---
   /// Gates the product-audience feature — the audience rails and chips on the
   /// home feed, the audience listing pages, and audience-aware size-chart

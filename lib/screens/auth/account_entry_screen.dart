@@ -758,8 +758,10 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
             ),
             // Real WebAuthn passkey sign-in. Discoverable credentials mean
             // this works without an email typed above. The platform picker
-            // handles the account choice.
-            if (_passkeysSupported) ...[
+            // handles the account choice. Hidden for now behind
+            // AppConstants.passkeySignInEnabled while that picker settles;
+            // the flow below is unchanged and comes back with the flag.
+            if (AppConstants.passkeySignInEnabled && _passkeysSupported) ...[
               const SizedBox(height: AuthSpacing.s12),
               _buildPasskeyButton(),
             ],
