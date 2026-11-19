@@ -10,6 +10,7 @@ import '../../widgets/active_tab.dart';
 import '../../widgets/countdown_delete_button.dart';
 import '../../providers/order_provider.dart';
 import '../../services/connectivity_service.dart';
+import '../../utils/order_receipt_gate.dart';
 import '../../widgets/seller/seller_order_card.dart';
 import '../../widgets/seller/seller_status_chip.dart';
 import 'order_detail_screen.dart';
@@ -325,6 +326,23 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     final totalAmount = (o['total_amount'] is double)
         ? o['total_amount'] as double
         : (o['total_amount'] ?? 0).toDouble();
+
+    // The handover waits for the receipt. Mark Delivered is refused until the
+    // customer's receipt has actually been emailed (`receipt_emailed_at` is
+    // written by the mail function after SMTP accepts it), so this quick action
+    // cannot skip the step the order screen enforces.
+    if (nextStatus == 'delivered' &&
+        orderNeedsReceiptBeforeDelivery(o, currentStatus)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Email the receipt first — open the order, send it, then mark it delivered.',
+          ),
+          backgroundColor: AppConstants.secondary,
+        ),
+      );
+      return;
+    }
 
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
@@ -648,6 +666,23 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     }
   }
 
+  /// Open one order. The receipt — and the Delivered gate that depends on it
+  /// — lives there, so the card's primary action and its details button land
+  /// on the same screen and refresh this list on the way back.
+  void _openOrder(Map<String, dynamic> order) {
+    Navigator.of(context)
+        .push<bool>(
+          MaterialPageRoute(
+            builder: (_) => OrderDetailScreen(order: order),
+          ),
+        )
+        .then((result) {
+      if (result == true && mounted) {
+        Provider.of<OrderProvider>(context, listen: false).loadOrders();
+      }
+    });
+  }
+
   // ── Build order card, wrapped in Slidable for cancelled orders ──
 
   Widget _buildSlidableOrderCard(
@@ -662,23 +697,16 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
       // the Slidable below, so the swipe pane (red delete area) is exactly
       // the height of the card box.
       margin: EdgeInsets.zero,
-      onPrimaryAction: () => _updateStatus(id, status, orderData: order),
+      // A handover waits for the receipt, and the receipt lives on the order
+      // screen. Sending the seller there is the point of the gate: the card
+      // must not offer a one-tap handover that can only be refused.
+      onPrimaryAction: () => orderNeedsReceiptBeforeDelivery(order, status)
+          ? _openOrder(order)
+          : _updateStatus(id, status, orderData: order),
       onReject: status.toLowerCase() == 'pending'
           ? () => _showRejectDialog(id, order)
           : null,
-      onViewDetails: () {
-        Navigator.of(context)
-            .push<bool>(
-              MaterialPageRoute(
-                builder: (_) => OrderDetailScreen(order: order),
-              ),
-            )
-            .then((result) {
-          if (result == true && mounted) {
-            Provider.of<OrderProvider>(context, listen: false).loadOrders();
-          }
-        });
-      },
+      onViewDetails: () => _openOrder(order),
     );
 
     // Wrap all cards with fade animation for smooth deletion

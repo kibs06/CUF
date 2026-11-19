@@ -1,15 +1,12 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_email_sender/flutter_email_sender.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../constants/app_constants.dart';
 import '../../services/order_service.dart';
-import '../../utils/pos_receipt_email.dart';
 import '../../utils/pos_receipt_pdf.dart';
 
 /// What the cashier can do with one finished POS sale: print it, email it, or
@@ -19,11 +16,11 @@ import '../../utils/pos_receipt_pdf.dart';
 /// phone never disagree:
 /// * **Print** → the system print dialog ([Printing.layoutPdf]).
 /// * **Share PDF** → the system share sheet with the file attached.
-/// * **Email** → the customer's address is typed once, then the phone's mail
-///   composer (Gmail, when it is the one installed) opens with the same PDF
-///   attached and the sale spelled out in the body. The customer's copy is the
-///   real receipt, not a retyped summary. The address is remembered on the
-///   order, so the next send starts from it.
+/// * **Email** → the customer's address is typed once, then the
+///   `send-order-receipt` function mails the customer the same receipt card an
+///   online order gets, with the A5 PDF attached. Nothing is left for the
+///   cashier to finish in a composer, and the address is remembered on the
+///   order so the next send starts from it.
 class PosReceiptActions extends StatefulWidget {
   final Map<String, dynamic> order;
   final String storeName;
@@ -123,9 +120,10 @@ class _PosReceiptActionsState extends State<PosReceiptActions> {
     );
   }
 
-  /// Ask for the customer's address, then open the mail composer with the
-  /// receipt attached — the same PDF Share sends, so the customer's copy is
-  /// the real receipt rather than a retyped summary.
+  /// Ask for the customer's address, then have the receipt emailed by the
+  /// `send-order-receipt` function: the same HTML card and A5 PDF an online
+  /// order gets, straight from the store's mail identity, with nothing left for
+  /// the cashier to finish in a composer.
   Future<void> _email() async {
     if (_busy) return;
     final address = await showDialog<String>(
@@ -134,50 +132,66 @@ class _PosReceiptActionsState extends State<PosReceiptActions> {
     );
     if (address == null || address.isEmpty || !mounted) return;
 
-    // Remember it on the order for the next send (and for a future
-    // server-side delivery). Fire-and-forget: the composer is the cashier's
-    // task, and a slow or un-migrated server must not hold it up.
+    final id = widget.order['id']?.toString() ?? '';
+    if (id.isEmpty) {
+      _say('This sale is still saving — try again in a moment.');
+      return;
+    }
+
+    // The function reads orders.customer_email, so the address has to be on the
+    // order before it is asked to send; otherwise it would fall back to a
+    // profile email that is not this customer's.
     _customerEmail = address;
     widget.order['customer_email'] = address;
-    unawaited(_rememberEmail(address));
-
-    final mail = buildPosReceiptEmail(
-      order: widget.order,
-      storeName: widget.storeName,
-      storeLocation: widget.storeLocation,
-      sellerName: widget.sellerName,
-    );
     setState(() => _emailing = true);
     try {
-      final bytes = await _renderPdf();
-      final dir = await Directory.systemTemp.createTemp('pos-receipt-mail');
-      final file = File('${dir.path}/receipt-$_fileCode.pdf');
-      await file.writeAsBytes(bytes, flush: true);
-
-      await FlutterEmailSender.send(
-        Email(
-          recipients: [address],
-          subject: mail.subject,
-          body: mail.body,
-          attachmentPaths: [file.path],
-        ),
-      );
-    } on FlutterEmailSenderNotAvailableException {
-      // No mail app at all: the share sheet is the only way out, and it
-      // carries the same file.
-      _say('No email app on this phone — opening Share instead.');
-      await _shareFile();
+      final stored =
+          await OrderService().savePosCustomerEmail(orderId: id, email: address);
+      if (!stored) {
+        _say('Could not save the address. Check the connection, then retry.');
+        return;
+      }
+      final result = await OrderService().sendReceiptEmail(id);
+      if (!mounted) return;
+      if (result['sent'] == true) {
+        // The same stamp the function wrote on the server, so this sale now
+        // shows as emailed here too.
+        setState(() {
+          widget.order['receipt_emailed_at'] ??=
+              DateTime.now().toUtc().toIso8601String();
+          widget.order['receipt_email_to'] = address;
+        });
+      }
+      _say(_receiptResultMessage(result, address));
     } catch (e) {
-      debugPrint('[POS] opening the receipt email failed: $e');
-      _say('Could not open an email app. Try Share PDF instead.');
+      debugPrint('[POS] emailing the receipt failed: $e');
+      _say('Could not email the receipt. Try again, or Share PDF.');
     } finally {
       if (mounted) setState(() => _emailing = false);
     }
   }
-  Future<void> _rememberEmail(String address) async {
-    final id = widget.order['id']?.toString() ?? '';
-    if (id.isEmpty) return;
-    await OrderService().savePosCustomerEmail(orderId: id, email: address);
+
+  /// What the cashier reads after the function answers. Every refusal it can
+  /// return has a line here, so "it did nothing" never happens on screen.
+  String _receiptResultMessage(Map<String, dynamic> result, String address) {
+    if (result['sent'] == true) return 'Receipt emailed to $address.';
+    switch ((result['reason'] ?? '').toString()) {
+      case 'already_sent':
+        return "This sale's receipt was already emailed.";
+      case 'no_email':
+        return 'No email address on this sale — add one and try again.';
+      case 'in_flight':
+        return 'This receipt is already being sent. Give it a moment.';
+      case 'email_not_configured':
+        return 'Email is not set up on the server. Use Share PDF instead.';
+      case 'smtp_failed':
+        final detail = (result['detail'] ?? '').toString().trim();
+        return detail.isEmpty
+            ? 'The mail server refused the receipt. Try again shortly.'
+            : 'The mail server refused the receipt: $detail';
+      default:
+        return 'The receipt was not sent. Try again, or Share PDF.';
+    }
   }
 
   void _say(String message) {
@@ -341,8 +355,8 @@ class _EmailReceiptDialogState extends State<EmailReceiptDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'The receipt PDF is attached, with the sale spelled out in the '
-            'message. Check the address, then send.',
+            'The customer gets the same receipt card and PDF an online order '
+            'does. Check the address, then send.',
             style: AppConstants.bodyStyle(
               fontSize: 12.5,
               color: AppConstants.secondary.withValues(alpha: 0.6),
@@ -389,7 +403,7 @@ class _EmailReceiptDialogState extends State<EmailReceiptDialog> {
           onPressed: _submit,
           style: FilledButton.styleFrom(backgroundColor: AppConstants.primary),
           child: Text(
-            'Open Gmail',
+            'Send receipt',
             style: AppConstants.bodyStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,

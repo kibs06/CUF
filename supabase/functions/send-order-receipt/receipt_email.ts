@@ -4,7 +4,7 @@
 // alternative. Kept apart from the handler so the wording can be read (and
 // tested) without booting SMTP or a database.
 
-import type { ReceiptData } from "./receipt_pdf.ts";
+import type { ReceiptData, ReceiptOrder } from "./receipt_pdf.ts";
 
 const BRAND = "#6B4226";
 const INK = "#2A1B10";
@@ -44,6 +44,17 @@ function sizeLabel(size: string): string {
   const value = (size ?? "").trim();
   if (!value) return "";
   return value.toLowerCase().startsWith("size") ? value : `Size ${value}`;
+}
+
+/**
+ * Where the order is being sent/collected. A till sale was handed over the
+ * counter, so it has no delivery or pickup choice to report.
+ */
+function fulfillmentLabel(order: ReceiptOrder): string {
+  if ((order.source ?? "").toLowerCase() === "pos") return "In store";
+  return (order.fulfillment ?? "").toLowerCase() === "delivery"
+    ? "Delivery"
+    : "Store pickup";
 }
 
 function paymentLabel(method: string): string {
@@ -106,6 +117,22 @@ export function receiptHtml(data: ReceiptData): string {
        </tr>`
     : "";
 
+  // A till sale paid in cash shows the same two lines the printed slip does:
+  // what the customer handed over, and what came back.
+  const tenderedRow = data.order.amountTendered != null
+    ? `<tr>
+         <td style="padding:4px 0;color:${MUTED};font-size:13px;">Cash tendered</td>
+         <td align="right" style="padding:4px 0;color:${INK};font-size:13px;">${peso(data.order.amountTendered)}</td>
+       </tr>`
+    : "";
+
+  const changeRow = data.order.changeAmount != null
+    ? `<tr>
+         <td style="padding:4px 0;color:${MUTED};font-size:13px;">Change</td>
+         <td align="right" style="padding:4px 0;color:${INK};font-size:13px;">${peso(data.order.changeAmount)}</td>
+       </tr>`
+    : "";
+
   return `<!doctype html>
 <html>
   <body style="margin:0;padding:24px;background:${CANVAS};font-family:Helvetica,Arial,sans-serif;">
@@ -119,6 +146,7 @@ export function receiptHtml(data: ReceiptData): string {
             Order #${escapeHtml(data.order.orderCode)} &middot; ${escapeHtml(dateLabel(data.order.createdAt))}
           </p>
           ${data.customerName ? `<p style="margin:6px 0 0;color:${MUTED};font-size:13px;">For ${escapeHtml(data.customerName)}</p>` : ""}
+          ${data.order.cashier ? `<p style="margin:6px 0 0;color:${MUTED};font-size:13px;">Cashier: ${escapeHtml(data.order.cashier)}</p>` : ""}
         </td>
       </tr>
       <tr><td style="padding:0 24px;"><div style="height:1px;background:${RULE};"></div></td></tr>
@@ -143,13 +171,11 @@ export function receiptHtml(data: ReceiptData): string {
               <td align="right" style="padding:4px 0;color:${INK};font-size:13px;">${escapeHtml(paymentLabel(data.order.paymentMethod))}</td>
             </tr>
             ${referenceRow}
+            ${tenderedRow}
+            ${changeRow}
             <tr>
               <td style="padding:4px 0;color:${MUTED};font-size:13px;">Fulfilment</td>
-              <td align="right" style="padding:4px 0;color:${INK};font-size:13px;">${
-    (data.order.fulfillment ?? "").toLowerCase() === "delivery"
-      ? "Delivery"
-      : "Store pickup"
-  }</td>
+              <td align="right" style="padding:4px 0;color:${INK};font-size:13px;">${escapeHtml(fulfillmentLabel(data.order))}</td>
             </tr>
           </table>
         </td>
@@ -185,6 +211,7 @@ export function receiptText(data: ReceiptData): string {
     `SALES RECEIPT - #${data.order.orderCode}`,
     dateLabel(data.order.createdAt),
     data.customerName ? `For ${data.customerName}` : "",
+    data.order.cashier ? `Cashier: ${data.order.cashier}` : "",
     "",
     ...lines,
     "",
@@ -195,6 +222,12 @@ export function receiptText(data: ReceiptData): string {
     `TOTAL: ${peso(data.order.total)}`,
     `Paid via: ${paymentLabel(data.order.paymentMethod)}`,
     data.order.gcashReference ? `GCash ref: ${data.order.gcashReference}` : "",
+    data.order.amountTendered != null
+      ? `Cash tendered: ${peso(data.order.amountTendered)}`
+      : "",
+    data.order.changeAmount != null
+      ? `Change: ${peso(data.order.changeAmount)}`
+      : "",
     "",
     `Keep this email as your proof of purchase - quote #${data.order.orderCode} if you need help.`,
   ].filter((line) => line !== "").join("\n");

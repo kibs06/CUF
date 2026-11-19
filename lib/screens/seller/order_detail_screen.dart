@@ -8,6 +8,8 @@ import '../../constants/seller_theme_constants.dart';
 import '../../providers/order_provider.dart';
 import '../../services/message_service.dart';
 import '../../services/order_service.dart';
+import '../../services/supabase_service.dart';
+import '../../utils/order_receipt_gate.dart';
 import '../../widgets/return_proof_image.dart';
 import '../../widgets/seller/seller_status_chip.dart';
 import '../../widgets/chat/chat_view.dart';
@@ -84,21 +86,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   /// The address a receipt would go to: what the till recorded for this sale,
   /// else the customer's registered profile email (already in the order row
   /// the seller list fetches).
-  String? get _receiptEmail {
-    final typed = order['customer_email']?.toString().trim() ?? '';
-    if (typed.isNotEmpty) return typed;
-    final profile = order['profiles'];
-    if (profile is Map) {
-      final email = profile['email']?.toString().trim() ?? '';
-      if (email.isNotEmpty) return email;
-    }
-    return null;
-  }
+  String? get _receiptEmail => orderReceiptEmail(order);
 
   /// The POS till has its own receipt actions, so this button belongs to the
-  /// online order queue only.
+  /// online order queue only — and to the Ready stage, which is when the item
+  /// is finished and the handover is next.
   bool get _canEmailReceipt =>
-      _receiptEmail != null && (order['source']?.toString() ?? '') != 'pos';
+      _receiptEmail != null &&
+      (order['source']?.toString() ?? '') != 'pos' &&
+      _currentStatus.toLowerCase() == 'ready';
+
+  /// Mark Delivered is the handover, and it stays locked until the customer's
+  /// receipt has actually gone out: `receipt_emailed_at` is written by the mail
+  /// function only after SMTP accepts the message, so a customer never receives
+  /// the product without the receipt that proves it. A server that does not
+  /// carry the column yet keeps the old behaviour.
+  bool get _deliveryNeedsReceipt =>
+      _nextStatus == 'delivered' &&
+      orderNeedsReceiptBeforeDelivery(order, _currentStatus);
 
   /// Seller decision on a return request: approve issues a product
   /// replacement (status → replaced; in-store on the spot, shipped when
@@ -524,6 +529,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final nextStatus = _nextStatus;
     if (orderId == null || nextStatus == null || _isUpdating) return;
 
+    // The handover waits for the receipt (see _deliveryNeedsReceipt).
+    if (nextStatus == 'delivered' && _deliveryNeedsReceipt) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Email the receipt first — Mark Delivered unlocks once the customer has it.',
+          ),
+          backgroundColor: AppConstants.secondary,
+        ),
+      );
+      return;
+    }
+
     // NOTE: A true race-condition guard would re-fetch status from the server
     // before updating. The provider's error handling will catch stale-status
     // failures gracefully, so we skip the extra round-trip here.
@@ -607,9 +625,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             Text(
               nextStatus == 'delivered'
                   ? 'This records the ₱${totalAmount.toStringAsFixed(0)} sale in '
-                      'your sales figures. '
-                      '${_receiptEmail == null ? 'No customer email is on file, so no receipt is emailed.' : 'Their receipt is emailed to ${_receiptEmail!}.'} '
-                      'The customer will be notified to confirm receipt.'
+                      "your sales figures. The customer's receipt is already "
+                      'emailed. They will be notified to confirm receipt.'
                   : 'The customer will be notified.',
               style: AppConstants.bodyStyle(
                 fontSize: 12,
@@ -693,6 +710,152 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  /// Whether the customer's receipt actually went out — and why not when it
+  /// did not. Reads the stamps the send-order-receipt function writes
+  /// (20261119110000 / 120000 / 130000): `receipt_emailed_at` is the only proof
+  /// a receipt was sent, `receipt_email_to` is where it went, and
+  /// `receipt_email_last_error` is the reason the last attempt failed.
+  ///
+  /// On a server that does not carry those columns yet the line is simply
+  /// absent — never "not emailed", which would be a claim the row cannot
+  /// support.
+  Widget _buildReceiptStatus() {
+    if (!order.containsKey('receipt_email_attempts') ||
+        _currentStatus.toLowerCase() != 'ready') {
+      return const SizedBox.shrink();
+    }
+
+    final sentRaw = order['receipt_emailed_at']?.toString() ?? '';
+    final to = order['receipt_email_to']?.toString().trim() ?? '';
+    final error = order['receipt_email_last_error']?.toString().trim() ?? '';
+    final attempts = (order['receipt_email_attempts'] as num?)?.toInt() ?? 0;
+    final nextAt =
+        DateTime.tryParse(order['receipt_email_next_attempt_at']?.toString() ?? '');
+    final retry = _retryLabel(nextAt);
+
+    final IconData icon;
+    final Color color;
+    final String title;
+    final List<Widget> details = [];
+
+    if (sentRaw.isNotEmpty) {
+      icon = Icons.mark_email_read_outlined;
+      color = AppConstants.success;
+      title = to.isEmpty ? 'Receipt emailed' : 'Receipt emailed to $to';
+      final when = _formatTimestamp(sentRaw);
+      if (when.isNotEmpty) details.add(_receiptDetail('Sent $when'));
+      if (retry != null) details.add(_receiptDetail(retry));
+    } else if (error.isNotEmpty) {
+      icon = Icons.error_outline;
+      color = AppConstants.error;
+      title = 'Receipt not emailed — the last attempt failed';
+      details.add(
+        _receiptDetail(error, color: AppConstants.error),
+      );
+      final attemptsText = attempts == 1 ? '1 failed attempt' : '$attempts failed attempts';
+      details.add(_receiptDetail(
+        attempts > 0
+            ? '$attemptsText${retry == null ? ' · tap Email receipt to try again' : ' · $retry'}'
+            : (retry ?? 'tap Email receipt to try again'),
+      ));
+    } else {
+      icon = Icons.mail_outline;
+      color = Colors.grey.shade500;
+      title = 'Receipt not emailed yet';
+      if (retry != null) details.add(_receiptDetail(retry));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppConstants.secondary,
+                    ),
+                  ),
+                  ...details,
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _receiptDetail(String text, {Color? color}) => Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text(
+          text,
+          style: AppConstants.bodyStyle(
+            fontSize: 11.5,
+            color: color ?? Colors.grey.shade600,
+            height: 1.35,
+          ),
+        ),
+      );
+
+  /// "retrying in 4h" — or null when nothing is scheduled.
+  String? _retryLabel(DateTime? nextAt) {
+    if (nextAt == null) return null;
+    final left = nextAt.difference(DateTime.now());
+    if (left.isNegative) return 'retry due now';
+    if (left.inMinutes < 60) return 'retrying in ${left.inMinutes}m';
+    if (left.inHours < 24) return 'retrying in ${left.inHours}h';
+    return 'retrying in ${left.inDays}d';
+  }
+
+  /// Re-read the receipt stamps after a manual send, so the line above flips
+  /// from "not emailed yet" to the real outcome without leaving the screen.
+  /// The function sends over SMTP first, so the stamp lands a few seconds
+  /// after the RPC answers — hence the delay rather than an immediate read.
+  Future<void> _refreshReceiptStatusAfterSend() async {
+    // The function sends over SMTP and stamps before it answers, so the row is
+    // already truthful by the time the invoke returns; the short wait only
+    // covers the round trip through PostgREST.
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+    final id = order['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    try {
+      final fresh = await SupabaseService.instance.fetchSellerOrderById(id);
+      if (fresh == null || !mounted) return;
+      const keys = [
+        'receipt_emailed_at',
+        'receipt_email_to',
+        'receipt_email_attempts',
+        'receipt_email_last_error',
+        'receipt_email_next_attempt_at',
+      ];
+      setState(() {
+        for (final key in keys) {
+          if (fresh.containsKey(key)) order[key] = fresh[key];
+        }
+      });
+    } catch (e) {
+      debugPrint('[ORDER] refreshing the receipt status failed: $e');
+    }
+  }
+
   /// Email the receipt with one tap: the address is the one already on file,
   /// so the seller types nothing. The server sends the same A5 receipt the
   /// automatic path sends — opening a mail app would leave a draft to finish
@@ -748,10 +911,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     setState(() => _sendingReceipt = true);
     try {
-      final result = await OrderService().sendReceiptToCustomer(orderId);
+      final result = await OrderService().sendReceiptEmail(orderId);
       if (!mounted) return;
       setState(() => _sendingReceipt = false);
-      final queued = result['queued'] == true;
+      final queued = result['sent'] == true || result['queued'] == true;
+      if (result['sent'] == true) {
+        // The function reported the SMTP accept, so the customer really has it:
+        // reflect that locally so Mark Delivered unlocks in this same visit
+        // instead of waiting for the refresh below.
+        final to = (result['to'] ?? '').toString();
+        setState(() {
+          order['receipt_emailed_at'] ??= DateTime.now().toUtc().toIso8601String();
+          if (to.isNotEmpty) order['receipt_email_to'] = to;
+          order['receipt_email_last_error'] = null;
+        });
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_receiptResultMessage(result)),
@@ -759,6 +933,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               queued ? AppConstants.success : AppConstants.secondary,
         ),
       );
+      if (queued) unawaited(_refreshReceiptStatusAfterSend());
     } catch (e) {
       debugPrint('[ORDER] sending the receipt failed: $e');
       if (!mounted) return;
@@ -776,6 +951,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String _receiptResultMessage(Map<String, dynamic> result) {
     final reason = (result['reason'] ?? '').toString();
     final to = (result['to'] ?? '').toString();
+    if (result['sent'] == true) {
+      return to.isEmpty
+          ? 'Receipt emailed to the customer.'
+          : 'Receipt emailed to $to.';
+    }
     switch (reason) {
       case 'queued':
         return to.isEmpty
@@ -792,7 +972,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'retry_wait':
         return 'This receipt is scheduled to retry shortly.';
       case 'not_configured':
-        return 'Receipt email is not set up yet — ask the admin to finish the mail setup.';
+      case 'email_not_configured':
+        return 'Receipt email is not set up yet — the Gmail sender secrets are missing.';
+      case 'smtp_failed':
+        return 'Gmail rejected the receipt: ${result['detail'] ?? 'unknown error'}';
+      case 'failed':
+        return 'Could not email the receipt: ${result['detail'] ?? 'unknown error'}';
       case 'not_paid':
         return 'This order is neither paid nor delivered yet.';
       case 'exhausted':
@@ -995,16 +1180,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Goes to $_receiptEmail',
-                      textAlign: TextAlign.center,
-                      style: AppConstants.bodyStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
+                    // The status block below names the address once a receipt
+                    // has gone out, so the caption is only needed before that.
+                    if ((order['receipt_emailed_at']?.toString() ?? '').isEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Goes to $_receiptEmail',
+                        textAlign: TextAlign.center,
+                        style: AppConstants.bodyStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
+                  _buildReceiptStatus(),
                   const Divider(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1190,35 +1380,62 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ),
                         ],
                       )
-                    : SizedBox(
-                        height: 48,
-                        child: FilledButton(
-                          onPressed: _isUpdating ? null : _performStatusUpdate,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _actionColor,
-                            disabledBackgroundColor: _actionColor.withValues(alpha: 0.6),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_deliveryNeedsReceipt) ...[
+                            Text(
+                              'Email the receipt first — Mark Delivered unlocks once the customer has it.',
+                              textAlign: TextAlign.center,
+                              style: AppConstants.bodyStyle(
+                                fontSize: 11.5,
+                                color: AppConstants.secondary
+                                    .withValues(alpha: 0.7),
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          SizedBox(
+                            height: 48,
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: (_isUpdating || _deliveryNeedsReceipt)
+                                  ? null
+                                  : _performStatusUpdate,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: _actionColor,
+                                disabledBackgroundColor: _deliveryNeedsReceipt
+                                    ? AppConstants.borderGray
+                                    : _actionColor.withValues(alpha: 0.6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: _isUpdating
+                                  ? SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Text(
+                                      _deliveryNeedsReceipt
+                                          ? 'Email receipt first'
+                                          : _actionLabel,
+                                      style: AppConstants.bodyStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: _deliveryNeedsReceipt
+                                            ? AppConstants.secondary
+                                            : Colors.white,
+                                      ),
+                                    ),
                             ),
                           ),
-                          child: _isUpdating
-                              ? SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  _actionLabel,
-                                  style: AppConstants.bodyStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                        ),
+                        ],
                       ),
               ),
             )

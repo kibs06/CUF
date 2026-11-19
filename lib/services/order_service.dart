@@ -439,23 +439,38 @@ class OrderService {
     }
   }
 
-  /// Email this order's receipt to the address the database already knows —
-  /// `orders.customer_email` when the till recorded one, otherwise the
-  /// customer's registered profile email (migration 20261119130000).
+  /// Email this order's receipt through the `send-order-receipt` function —
+  /// the same way the lockout and approval mails are sent: the app invokes the
+  /// function with the seller's own session, and the function resolves the
+  /// address (`orders.customer_email`, else the registered profile email),
+  /// builds the A5 PDF and attaches it.
   ///
-  /// The server does the sending (same A5 receipt the automatic path uses), so
-  /// the seller needs no mail app and no typing. Returns the dispatcher's
-  /// `{queued, reason, to}` map; `reason` is `already_sent`, `no_email`,
-  /// `in_flight`, `not_configured` or `not_online` when nothing went out.
-  /// Throws only when the call itself fails (offline, not the order's store,
-  /// or a server that predates the migration).
-  Future<Map<String, dynamic>> sendReceiptToCustomer(String orderId) async {
-    final result = await _client.rpc(
-      'send_order_receipt_to_customer',
-      params: {'p_order_id': orderId},
-    );
-    if (result is Map) return Map<String, dynamic>.from(result);
-    return {'queued': false, 'reason': 'unexpected_response'};
+  /// No Vault entry, no trigger and no mail app is involved, so a fresh project
+  /// works as soon as the function is deployed.
+  ///
+  /// Returns the function's body: `{sent: true, to}` on success, or
+  /// `{sent: false, reason: ...}` for `already_sent`, `no_email`, `in_flight`,
+  /// `email_not_configured` or `smtp_failed` (with `detail`).
+  Future<Map<String, dynamic>> sendReceiptEmail(String orderId) async {
+    try {
+      final res = await _client.functions.invoke(
+        'send-order-receipt',
+        body: {'order_id': orderId},
+      );
+      final data = res.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return {'sent': false, 'reason': 'unexpected_response'};
+    } on FunctionException catch (e) {
+      // A refusal is an answer, not a transport failure: keep its body so the
+      // caller can say why (wrong store, send already in flight, SMTP down).
+      final details = e.details;
+      if (details is Map) return Map<String, dynamic>.from(details);
+      return {
+        'sent': false,
+        'reason': 'failed',
+        'detail': e.reasonPhrase ?? 'HTTP ${e.status}',
+      };
+    }
   }
 
   /// Attach each order's line items, product names/images and unit count.

@@ -21,9 +21,13 @@
 //   - GMAIL_SENDER        the app's Gmail address
 //   - GMAIL_APP_PASSWORD  a 16-char App Password for it
 //
-// Authorization: the caller must present the service-role key. The anon key is
-// also a JWT, so `verify_jwt` alone would let any signed-in app user ask for
-// any order's receipt; the role claim is checked below instead.
+// Authorization: two callers, one rule. The seller's app invokes it with the
+// seller's own session — the same way the forgot-password and lockout mails are
+// sent — and the function verifies that session, then requires the caller to
+// own the order's store (or be an admin). The pg_net trigger presents the
+// service-role key instead, which is trusted outright. The anon key is also a
+// JWT, so `verify_jwt` alone proves nothing and the checks below are the real
+// gate.
 //
 // Idempotent: an order that already carries `receipt_emailed_at` is skipped
 // unless the caller passes `force: true`. That is what stops a retried trigger
@@ -80,6 +84,13 @@ function json(body: unknown, status = 200) {
  * The role claim of the bearer token. Only the service-role key may ask for a
  * receipt: the trigger sends it, and no app client does.
  */
+/** The bearer token as sent, without the scheme. */
+function bearerToken(req: Request): string | null {
+  const header = req.headers.get("Authorization") ?? "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  return token || null;
+}
+
 function bearerRole(req: Request): string | null {
   const header = req.headers.get("Authorization") ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
@@ -100,8 +111,12 @@ serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  if (bearerRole(req) !== "service_role") {
-    return json({ error: "Only the service role may request a receipt" }, 403);
+  // The trigger identifies itself with the service-role key; a seller arrives
+  // with their own session token.
+  const token = bearerToken(req);
+  const isServiceCall = bearerRole(req) === "service_role";
+  if (!isServiceCall && !token) {
+    return json({ error: "Missing bearer token" }, 401);
   }
 
   let payload: ReceiptRequest;
@@ -121,18 +136,35 @@ serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
 
+  // Who is asking. A service-role call is the trigger (already authorized by the
+  // dispatcher's own claim); anyone else must prove a real session here rather
+  // than being trusted from an unverified token.
+  let callerId: string | null = null;
+  if (!isServiceCall) {
+    const { data: caller, error: callerError } = await supabase.auth.getUser(
+      token!,
+    );
+    if (callerError || !caller?.user) {
+      return json({ error: "Invalid or expired session" }, 401);
+    }
+    callerId = caller.user.id;
+  }
+
   /**
    * Books a failed attempt so the retry sweep can find the order again. The
    * error is kept verbatim (truncated) — it is the only thing that tells the
    * owner whether Gmail was down, the password rotated or the address bounced.
    * Never allowed to throw: a failure to record must not hide the failure.
    */
-  const recordFailure = async (reason: string): Promise<void> => {
+  const recordFailure = async (
+    reason: string,
+    retryable: boolean = true,
+  ): Promise<void> => {
     try {
       const { error } = await supabase.rpc("record_order_receipt_failure", {
         p_order_id: orderId,
         p_error: reason.slice(0, 500),
-        p_retryable: true,
+        p_retryable: retryable,
       });
       if (error) {
         console.warn(
@@ -201,7 +233,7 @@ serve(async (req: Request) => {
       "id, order_code, customer_id, store_id, status, payment_status, " +
         "payment_method, total_amount, subtotal_amount, discount_amount, " +
         "voucher_code, gcash_reference_number, created_at, fulfillment, " +
-        "receipt_emailed_at",
+        "source, amount_tendered, change_amount, receipt_emailed_at",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -213,6 +245,32 @@ serve(async (req: Request) => {
   if (!order) {
     return json({ error: `Order ${orderId} does not exist` }, 404);
   }
+
+  // A seller may only email the customer of their own store. Admins keep the
+  // same access they have everywhere else in the portal.
+  if (callerId) {
+    const { data: storeOwner } = await supabase
+      .from("stores")
+      .select("owner_id")
+      .eq("id", order.store_id)
+      .maybeSingle();
+    let allowed = (storeOwner?.owner_id as string | undefined) === callerId;
+    if (!allowed) {
+      const { data: callerProfile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", callerId)
+        .maybeSingle();
+      allowed = callerProfile?.role === "admin";
+    }
+    if (!allowed) {
+      return json(
+        { error: "Only the store that made this sale can email its receipt" },
+        403,
+      );
+    }
+  }
+
   if (order.receipt_emailed_at && !payload.force) {
     return json({
       sent: false,
@@ -239,7 +297,7 @@ serve(async (req: Request) => {
   const [{ data: store }, { data: customer }] = await Promise.all([
     supabase
       .from("stores")
-      .select("name, location")
+      .select("name, location, owner_id")
       .eq("id", order.store_id)
       .maybeSingle(),
     order.customer_id
@@ -288,6 +346,32 @@ serve(async (req: Request) => {
     unitPrice: Number(row.unit_price ?? 0),
   }));
 
+  // A till sale's receipt names the cashier, exactly as the printed slip does.
+  // The order row carries no cashier column, so the store owner stands in —
+  // the same name the POS receipt on screen shows.
+  const isPosSale = (order.source ?? "").toString().toLowerCase() === "pos";
+  let cashier = "";
+  if (isPosSale && store?.owner_id) {
+    const { data: ownerProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", store.owner_id as string)
+      .maybeSingle();
+    cashier = (ownerProfile?.full_name as string) ?? "";
+  }
+
+  // Only a till sale shows the cash lines, and only when money was actually
+  // handed over: the column defaults to 0 on rows that never had a till.
+  const tenderedRaw = isPosSale && order.amount_tendered != null
+    ? Number(order.amount_tendered)
+    : null;
+  const amountTendered = tenderedRaw != null && tenderedRaw > 0
+    ? tenderedRaw
+    : null;
+  const changeAmount = amountTendered != null && order.change_amount != null
+    ? Number(order.change_amount)
+    : null;
+
   const total = Number(order.total_amount ?? 0);
   const subtotal = order.subtotal_amount == null
     ? null
@@ -313,6 +397,10 @@ serve(async (req: Request) => {
       voucherCode: (order.voucher_code as string) ?? null,
       gcashReference: (order.gcash_reference_number as string) ?? null,
       fulfillment: (order.fulfillment as string) ?? "",
+      source: isPosSale ? "pos" : "online",
+      cashier,
+      amountTendered,
+      changeAmount,
     },
     lines,
     customerName: (customer?.full_name as string) ?? "",
@@ -327,6 +415,7 @@ serve(async (req: Request) => {
     console.error("[OrderReceipt] PDF build failed:", e);
     await recordFailure(
       `PDF build failed: ${e instanceof Error ? e.message : String(e)}`,
+      isServiceCall,
     );
     return json({ error: "Could not build the receipt PDF" }, 500);
   }
@@ -354,12 +443,41 @@ serve(async (req: Request) => {
     console.error("[OrderReceipt] Missing GMAIL_SENDER / GMAIL_APP_PASSWORD");
     await recordFailure(
       "GMAIL_SENDER / GMAIL_APP_PASSWORD are not configured for send-order-receipt",
+      isServiceCall,
     );
     return json({
       sent: false,
       reason: "email_not_configured",
       order_code: data.order.orderCode,
     }, 500);
+  }
+
+  // One send at a time per order, whichever caller asked. The lease is the same
+  // `receipt_email_sending_since` the SQL dispatcher takes, so a seller's tap
+  // and a trigger dispatch cannot both mail the customer. A service-role call
+  // already holds that lease (the dispatcher took it), so it is skipped here.
+  if (!isServiceCall) {
+    try {
+      const staleBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: claimedRows, error: claimError } = await supabase
+        .from("orders")
+        .update({ receipt_email_sending_since: new Date().toISOString() })
+        .eq("id", orderId)
+        .is("receipt_emailed_at", null)
+        .or(
+          `receipt_email_sending_since.is.null,receipt_email_sending_since.lt.${staleBefore}`,
+        )
+        .select("id");
+      if (!claimError && (!claimedRows || claimedRows.length === 0)) {
+        return json({
+          sent: false,
+          reason: "in_flight",
+          order_code: order.order_code,
+        }, 409);
+      }
+    } catch (_) {
+      // A server without the lease column (pre-20261119120000) sends anyway.
+    }
   }
 
   const smtp = new SmtpClient();
@@ -384,9 +502,11 @@ serve(async (req: Request) => {
   } catch (e) {
     console.error("[OrderReceipt] SMTP send failed:", e);
     const detail = e instanceof Error ? e.message : String(e);
-    // Recorded before answering: the sweep retries it after the backoff, and
-    // the attempt budget stops a mailbox that will never accept mail.
-    await recordFailure(`SMTP send failed: ${detail}`);
+    // Recorded before answering. A trigger dispatch leaves the backoff armed
+    // for the sweep; a seller's tap does not, because nothing would run that
+    // sweep in a project without the Vault entries — the order shows the error
+    // and the button sends again.
+    await recordFailure(`SMTP send failed: ${detail}`, isServiceCall);
     return json({
       sent: false,
       reason: "smtp_failed",

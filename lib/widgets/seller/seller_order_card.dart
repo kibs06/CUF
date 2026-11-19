@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
+import '../../utils/order_receipt_gate.dart';
 import 'seller_status_chip.dart';
 
 /// Map an order's `source` column to its human-readable fulfillment label.
@@ -68,8 +69,15 @@ class SellerOrderCard extends StatelessWidget {
         primaryColor = AppConstants.statusReadyColor;
         break;
       case 'ready':
-        primaryLabel = 'Mark Delivered';
-        primaryColor = AppConstants.statusDeliveredColor;
+        // A handover waits for the receipt. When one is still owed the card
+        // does not pretend it can deliver: the button says what is missing and
+        // opens the order, where the receipt is sent.
+        final needsReceipt = orderNeedsReceiptBeforeDelivery(order, 'ready');
+        primaryLabel =
+            needsReceipt ? 'Send Receipt First' : 'Mark Delivered';
+        primaryColor = needsReceipt
+            ? AppConstants.primary
+            : AppConstants.statusDeliveredColor;
         break;
       case 'received':
         primaryLabel = '';

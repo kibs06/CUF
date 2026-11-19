@@ -41,6 +41,13 @@ export interface ReceiptOrder {
   voucherCode: string | null;
   gcashReference: string | null;
   fulfillment: string;
+  /** "pos" for a sale rung up at the till, "online" for an app order. */
+  source?: string;
+  /** Who rang the sale up; only a till sale records one. */
+  cashier?: string;
+  /** Cash handed over and change given; only till cash sales carry them. */
+  amountTendered?: number | null;
+  changeAmount?: number | null;
 }
 
 export interface ReceiptData {
@@ -107,9 +114,15 @@ function paymentLabel(method: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-/** Where the order is being sent/collected, in one word for the slip. */
-function fulfillmentLabel(value: string): string {
-  return (value ?? "").toLowerCase() === "delivery" ? "Delivery" : "Store pickup";
+/**
+ * Where the order is being sent/collected, in one word for the slip. A till
+ * sale has no fulfilment to speak of: the customer walked out with it.
+ */
+function fulfillmentLabel(order: ReceiptOrder): string {
+  if ((order.source ?? "").toLowerCase() === "pos") return "In store";
+  return (order.fulfillment ?? "").toLowerCase() === "delivery"
+    ? "Delivery"
+    : "Store pickup";
 }
 
 /** Build the A5 receipt PDF. Returns the finished bytes. */
@@ -182,8 +195,13 @@ export async function buildOrderReceiptPdf(data: ReceiptData): Promise<Uint8Arra
     text(data.customerName, { size: 8.5, align: "right" });
     y -= 12;
   }
+  if (data.order.cashier) {
+    text("Cashier", { size: 8.5, color: muted });
+    text(data.order.cashier, { size: 8.5, align: "right" });
+    y -= 12;
+  }
   text("Fulfilment", { size: 8.5, color: muted });
-  text(fulfillmentLabel(data.order.fulfillment), { size: 8.5, align: "right" });
+  text(fulfillmentLabel(data.order), { size: 8.5, align: "right" });
   y -= 16;
 
   line();
@@ -241,6 +259,16 @@ export async function buildOrderReceiptPdf(data: ReceiptData): Promise<Uint8Arra
   text("Paid via", { size: 8.5, color: muted });
   text(paymentLabel(data.order.paymentMethod), { size: 8.5, align: "right" });
   y -= 12;
+  if (data.order.amountTendered != null) {
+    text("Cash tendered", { size: 8.5, color: muted });
+    text(money(data.order.amountTendered), { size: 8.5, align: "right" });
+    y -= 12;
+  }
+  if (data.order.changeAmount != null) {
+    text("Change", { size: 8.5, color: muted });
+    text(money(data.order.changeAmount), { size: 8.5, align: "right" });
+    y -= 12;
+  }
   if (data.order.gcashReference) {
     text("GCash ref", { size: 8.5, color: muted });
     text(data.order.gcashReference, { size: 8.5, align: "right" });

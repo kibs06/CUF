@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../exceptions/stock_unavailable_exception.dart';
@@ -196,10 +198,28 @@ class OrderProvider extends ChangeNotifier {
   Future<bool> updateOrderStatus(dynamic orderId, String newStatus) async {
     try {
       await _db.updateOrderStatus(orderId, newStatus);
+      // The handover is the receipt's moment, exactly as it is at the POS till:
+      // marking an order delivered emails the customer their receipt without
+      // another tap. Fire-and-forget — the status change must not wait on
+      // Gmail, and the order screen reports whether the mail actually went
+      // out — so a failed send is visible there and can be re-sent by hand.
+      if (newStatus.toLowerCase() == 'delivered') {
+        unawaited(_sendReceiptQuietly(orderId.toString()));
+      }
       await loadOrders();
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Automatic receipt on delivery. Best-effort by design: the order status is
+  /// already saved, and the function records its own failure on the order.
+  Future<void> _sendReceiptQuietly(String orderId) async {
+    try {
+      await _orderService.sendReceiptEmail(orderId);
+    } catch (e) {
+      debugPrint('[ORDER] automatic receipt email failed: $e');
     }
   }
 
