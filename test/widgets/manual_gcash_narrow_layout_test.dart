@@ -3,6 +3,7 @@ import 'package:app/screens/customer/gcash_pay_screen.dart';
 import 'package:app/screens/seller/gcash_payment_queue_screen.dart';
 import 'package:app/services/direct_gcash_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -249,7 +250,9 @@ void main() {
           <String>[
             'Copy order code',
             'Copy account name',
-            'Copy GCash number',
+            // The number's control also brings GCash to the front, so its
+            // label names that follow-up action.
+            'Copy GCash number and open GCash to send the payment',
           ],
         ),
       );
@@ -263,9 +266,34 @@ void main() {
         expect(rect.right, lessThanOrEqualTo(320));
       }
 
+      // Clipboard.setData is a platform call. No handler means its future
+      // never completes under the test binding, so answer it the way Android
+      // does and keep whatever the control asked to copy.
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            final args = call.arguments as Map?;
+            copied.add(args?['text'] as String? ?? '');
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+
       await tester.tap(copyControls.last);
       await tester.pump();
-      expect(find.text('Copied to clipboard'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(copied, <String>['09171234567']);
+      // Tapping the number also hands the customer to GCash, so the
+      // confirmation names the copy instead of leaving the next step
+      // implicit.
+      expect(find.textContaining('copied'), findsWidgets);
 
       semantics.dispose();
       await tester.pumpWidget(const SizedBox());
