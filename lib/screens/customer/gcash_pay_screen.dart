@@ -597,11 +597,29 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
         const SizedBox(height: 16),
         GcashRiseIn(order: 1, child: _amountPanel()),
         const SizedBox(height: 14),
-        GcashRiseIn(order: 2, child: _accountPanel(storeLabel)),
+        // Exact-amount policy: the platform account reads the figure that
+        // arrives, so a transfer for any other amount cannot be matched to
+        // the order — and money already sent is settled offline.
+        GcashRiseIn(
+          order: 2,
+          child: GcashBanner(
+            icon: Icons.gpp_maybe_outlined,
+            color: AppConstants.error,
+            text: 'Pay exactly ₱${widget.totalAmount.toStringAsFixed(2)} — '
+                'not less, not more. The system reads the amount you send, '
+                'so a transfer for any other figure cannot be matched to '
+                'this order. If you have already paid a different amount, '
+                'CUFMAI is not obliged to issue an online refund: bring '
+                'your receipt to the physical store and settle it with the '
+                'seller.',
+          ),
+        ),
         const SizedBox(height: 14),
-        GcashRiseIn(order: 3, child: _stepsPanel()),
+        GcashRiseIn(order: 3, child: _accountPanel(storeLabel)),
         const SizedBox(height: 14),
-        GcashRiseIn(order: 4, child: _proofPanel()),
+        GcashRiseIn(order: 4, child: _stepsPanel()),
+        const SizedBox(height: 14),
+        GcashRiseIn(order: 5, child: _proofPanel()),
         const SizedBox(height: 18),
         Text(
           'CUFMAI receives your GCash payment and remits it to $storeLabel '

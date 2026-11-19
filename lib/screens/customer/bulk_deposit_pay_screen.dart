@@ -588,16 +588,34 @@ class _BulkDepositPayScreenState extends State<BulkDepositPayScreen> {
         const SizedBox(height: 16),
         GcashRiseIn(order: 1, child: _amountPanel()),
         const SizedBox(height: 14),
+        // Exact-amount policy — the same notice the order checkout shows:
+        // the payment is matched on the figure that arrives, and money
+        // already sent is settled offline, not refunded online.
         GcashRiseIn(
           order: 2,
+          child: GcashBanner(
+            icon: Icons.gpp_maybe_outlined,
+            color: AppConstants.error,
+            text: 'Pay exactly ₱${_deposit.toStringAsFixed(2)} — not less, '
+                'not more. The system reads the amount you send, so a '
+                'transfer for any other figure cannot be matched to this '
+                'deposit. If you have already paid a different amount, '
+                'CUFMAI is not obliged to issue an online refund: bring '
+                'your receipt to the physical store and settle it with the '
+                'seller.',
+          ),
+        ),
+        const SizedBox(height: 14),
+        GcashRiseIn(
+          order: 3,
           child: _accountPanel(accountName, number, contact),
         ),
         const SizedBox(height: 14),
-        GcashRiseIn(order: 3, child: _stepsPanel()),
+        GcashRiseIn(order: 4, child: _stepsPanel()),
         if (AppConstants.demoModeEnabled && !_expired) ...[
           const SizedBox(height: 14),
           GcashRiseIn(
-            order: 3,
+            order: 4,
             child: const GcashBanner(
               icon: Icons.build_circle_outlined,
               color: AppConstants.error,
@@ -610,7 +628,7 @@ class _BulkDepositPayScreenState extends State<BulkDepositPayScreen> {
           ),
           const SizedBox(height: 8),
           GcashRiseIn(
-            order: 3,
+            order: 4,
             child: GcashGhostPill(
               label: 'Demo: submit test deposit proof',
               icon: Icons.build_circle_outlined,
@@ -620,7 +638,7 @@ class _BulkDepositPayScreenState extends State<BulkDepositPayScreen> {
           ),
         ],
         const SizedBox(height: 14),
-        GcashRiseIn(order: 4, child: _proofPanel()),
+        GcashRiseIn(order: 5, child: _proofPanel()),
         const SizedBox(height: 18),
         Text(
           'GCash payments go directly to $_storeLabel — this app does not '
