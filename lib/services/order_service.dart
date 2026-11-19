@@ -331,23 +331,141 @@ class OrderService {
   ///
   /// Queries orders directly by store_id + source (no 3-step chain needed)
   /// since orders.store_id is reliably set during order creation.
-  Future<List<Map<String, dynamic>>> fetchPosHistory(String storeId) async {
-    // Fetch POS-only orders directly (store_id + source filter)
+  /// Columns a POS row needs, including the receipt address from
+  /// 20261119100000. The legacy set is retried when the server predates it,
+  /// so history still loads (the email dialog then simply starts empty).
+  static const _posRowColumns =
+      'id, customer_id, status, total_amount, payment_method, '
+      'payment_status, notes, created_at, source, '
+      'amount_tendered, change_amount, customer_email';
+
+  static const _posRowColumnsLegacy =
+      'id, customer_id, status, total_amount, payment_method, '
+      'payment_status, notes, created_at, source, '
+      'amount_tendered, change_amount';
+
+  /// True when PostgREST is complaining about orders.customer_email.
+  static bool _isUnknownCustomerEmailColumn(PostgrestException e) {
+    if (!e.message.toLowerCase().contains('customer_email')) return false;
+    return e.code == 'PGRST204' ||
+        e.code == '42703' ||
+        e.message.toLowerCase().contains('schema cache') ||
+        e.message.toLowerCase().contains('does not exist');
+  }
+
+  Future<List<dynamic>> _posOrderRows(String storeId, String columns) async {
     final data = await _client
         .from('orders')
-        .select(
-          'id, customer_id, status, total_amount, payment_method, '
-          'payment_status, notes, created_at, source, '
-          'amount_tendered, change_amount',
-        )
+        .select(columns)
         .eq('store_id', storeId)
         .eq('source', 'pos')
         .order('created_at', ascending: false);
+    return data as List;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchPosHistory(String storeId) async {
+    // Fetch POS-only orders directly (store_id + source filter)
+    List<dynamic> data;
+    try {
+      data = await _posOrderRows(storeId, _posRowColumns);
+    } on PostgrestException catch (e) {
+      if (!_isUnknownCustomerEmailColumn(e)) rethrow;
+      data = await _posOrderRows(storeId, _posRowColumnsLegacy);
+    }
 
     final orders =
         data.map((row) => Map<String, dynamic>.from(row)).toList();
 
     if (orders.isEmpty) return [];
+
+    return _withItems(orders);
+  }
+
+  /// One POS sale, shaped like a history row, for the receipt shown the
+  /// moment a sale closes. Two queries instead of the whole history, because
+  /// this runs after every completed transaction.
+  Future<Map<String, dynamic>?> fetchPosReceipt(String orderId) async {
+    const columns =
+        'id, customer_id, status, total_amount, payment_method, '
+        'payment_status, notes, created_at, source, '
+        'amount_tendered, change_amount, gcash_reference_number, '
+        'customer_email';
+    const legacyColumns =
+        'id, customer_id, status, total_amount, payment_method, '
+        'payment_status, notes, created_at, source, '
+        'amount_tendered, change_amount, gcash_reference_number';
+
+    Map<String, dynamic>? row;
+    try {
+      row = await _client
+          .from('orders')
+          .select(columns)
+          .eq('id', orderId)
+          .maybeSingle();
+    } on PostgrestException catch (e) {
+      if (!_isUnknownCustomerEmailColumn(e)) rethrow;
+      row = await _client
+          .from('orders')
+          .select(legacyColumns)
+          .eq('id', orderId)
+          .maybeSingle();
+    }
+    if (row == null) return null;
+
+    final orders = await _withItems([Map<String, dynamic>.from(row as Map)]);
+    return orders.isEmpty ? null : orders.first;
+  }
+
+  /// Remember where a POS receipt was emailed, so the next send prefills the
+  /// field and a server-side delivery can find the address later.
+  ///
+  /// Best-effort by design: the mail composer is the cashier's task and a
+  /// server that predates 20261119100000 (missing function) or a dropped
+  /// connection must not stop the receipt from going out. Returns true when
+  /// the address was stored.
+  Future<bool> savePosCustomerEmail({
+    required String orderId,
+    required String email,
+  }) async {
+    try {
+      await _client.rpc('set_order_customer_email', params: {
+        'p_order_id': orderId,
+        'p_email': email,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('[OrderService] Receipt email not stored (non-fatal): $e');
+      return false;
+    }
+  }
+
+  /// Email this order's receipt to the address the database already knows —
+  /// `orders.customer_email` when the till recorded one, otherwise the
+  /// customer's registered profile email (migration 20261119130000).
+  ///
+  /// The server does the sending (same A5 receipt the automatic path uses), so
+  /// the seller needs no mail app and no typing. Returns the dispatcher's
+  /// `{queued, reason, to}` map; `reason` is `already_sent`, `no_email`,
+  /// `in_flight`, `not_configured` or `not_online` when nothing went out.
+  /// Throws only when the call itself fails (offline, not the order's store,
+  /// or a server that predates the migration).
+  Future<Map<String, dynamic>> sendReceiptToCustomer(String orderId) async {
+    final result = await _client.rpc(
+      'send_order_receipt_to_customer',
+      params: {'p_order_id': orderId},
+    );
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {'queued': false, 'reason': 'unexpected_response'};
+  }
+
+  /// Attach each order's line items, product names/images and unit count.
+  ///
+  /// Shared by the history list and the single-sale receipt so both render
+  /// the same item rows.
+  Future<List<Map<String, dynamic>>> _withItems(
+    List<Map<String, dynamic>> orders,
+  ) async {
+    if (orders.isEmpty) return orders;
 
     // 2. Fetch order items with product names and images
     final allOrderIds = orders.map((o) => o['id']).toList();

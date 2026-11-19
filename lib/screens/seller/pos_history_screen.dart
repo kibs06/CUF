@@ -9,6 +9,7 @@ import '../../widgets/shimmer_box.dart';
 import '../../services/order_service.dart';
 import '../../services/product_service.dart';
 import '../../services/connectivity_service.dart';
+import '../../utils/pos_history_search.dart';
 import 'pos_receipt_detail_screen.dart';
 
 const _kMonths = [
@@ -41,6 +42,8 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
   bool _isLoading = true;
   String? _error;
   _DateRange _selectedRange = _DateRange.all;
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
   StreamSubscription<bool>? _connectivitySub;
   bool _wasOffline = false;
   String _storeName = 'Store';
@@ -64,6 +67,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
   @override
   void dispose() {
     _connectivitySub?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -162,9 +166,10 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
     return '$displayHour:$minute $period';
   }
 
-  /// Compute the filtered list based on the selected date range.
+  /// Compute the filtered list: the date preset and the search box together.
   List<Map<String, dynamic>> get _filteredTransactions {
-    if (_selectedRange == _DateRange.all) return _allTransactions;
+    final isAllTime = _selectedRange == _DateRange.all;
+    if (isAllTime && _query.trim().isEmpty) return _allTransactions;
 
     final now = DateTime.now();
     final from = switch (_selectedRange) {
@@ -179,9 +184,17 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
     };
 
     return _allTransactions.where((order) {
-      final createdAt = DateTime.tryParse(order['created_at']?.toString() ?? '');
-      if (createdAt == null) return false;
-      return !createdAt.isBefore(from);
+      if (!isAllTime) {
+        final createdAt =
+            DateTime.tryParse(order['created_at']?.toString() ?? '');
+        if (createdAt == null) return false;
+        if (createdAt.isBefore(from)) return false;
+      }
+      return matchesPosHistoryQuery(
+        order: order,
+        query: _query,
+        cashierName: _sellerName,
+      );
     }).toList();
   }
 
@@ -226,6 +239,55 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
       color: AppConstants.surfaceLight,
       child: Column(
         children: [
+          // Search — the seller usually comes back with a receipt code, an
+          // amount or the cashier's name, not a date.
+          TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _query = value),
+            textInputAction: TextInputAction.search,
+            style: AppConstants.bodyStyle(fontSize: 13),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Search receipt code, amount or cashier',
+              hintStyle: AppConstants.bodyStyle(
+                fontSize: 12.5,
+                color: AppConstants.secondary.withValues(alpha: 0.45),
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                size: 19,
+                color: AppConstants.secondary.withValues(alpha: 0.45),
+              ),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 38, minHeight: 38),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close, size: 17),
+                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _query = '');
+                      },
+                    ),
+              filled: true,
+              fillColor: AppConstants.sellerSurface,
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: AppConstants.primary.withValues(alpha: 0.5),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           // Filter chips row
           Row(
             children: _DateRange.values.map((range) {
@@ -254,8 +316,9 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
               );
             }).toList(),
           ),
-          // Revenue summary for filtered range
-          if (_selectedRange != _DateRange.all) ...[
+          // Revenue summary for the filtered range, or for the matches when
+          // a search is what narrowed the list.
+          if (_selectedRange != _DateRange.all || _query.trim().isNotEmpty) ...[
             const SizedBox(height: 6),
             Builder(
               builder: (context) {
@@ -755,6 +818,17 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
 
   Widget _buildEmpty() {
     final hasFilter = _selectedRange != _DateRange.all;
+    final searching = _query.trim().isNotEmpty;
+    final title = searching
+        ? (hasFilter ? 'No matches in this period' : 'No sales match your search')
+        : (hasFilter
+              ? 'No transactions in this period'
+              : 'No POS transactions yet');
+    final hint = searching
+        ? "Try a receipt code, an amount, the cashier's name — or clear the search."
+        : (hasFilter
+              ? 'Try a different time range or check All.'
+              : 'Completed in-store sales will appear here.');
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -776,7 +850,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              hasFilter ? 'No transactions in this period' : 'No POS transactions yet',
+              title,
               style: AppConstants.bodyStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -784,9 +858,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              hasFilter
-                  ? 'Try a different time range or check All.'
-                  : 'Completed in-store sales will appear here.',
+              hint,
               textAlign: TextAlign.center,
               style: AppConstants.bodyStyle(
                 fontSize: 13,

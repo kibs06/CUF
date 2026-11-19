@@ -559,6 +559,14 @@ verify_jwt = false
 [functions.apply-store-schedules]
 verify_jwt = false
 
+# send-order-receipt is called by the pg_net trigger in
+# 20261119110000_order_receipt_email.sql, presenting the service_role key.
+# JWT verification stays ON (the default): the function additionally checks
+# the token's role claim, because the anon key is a valid JWT too and the
+# request triggers a real email to a customer.
+[functions.send-order-receipt]
+verify_jwt = true
+
 # create-gcash-payment-intent and get-payment-status use the default
 # (verify_jwt = true) — they require the customer's JWT.
 

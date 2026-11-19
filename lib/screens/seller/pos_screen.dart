@@ -13,6 +13,7 @@ import '../../utils/sale_price.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
+import '../../services/order_service.dart';
 import '../../services/product_service.dart';
 import '../../services/store_service.dart';
 import '../../widgets/empty_state_widget.dart';
@@ -21,6 +22,7 @@ import '../../widgets/seller/fly_to_order_animation.dart';
 import 'gcash_ref_scanner_screen.dart';
 import 'pos_barcode_scanner.dart';
 import 'pos_history_screen.dart';
+import 'pos_receipt_detail_screen.dart';
 
 class POSScreen extends StatefulWidget {
   final bool isStandalonePage;
@@ -42,6 +44,15 @@ class _POSScreenState extends State<POSScreen>
   bool _showSuccessOverlay = false;
   double _lastChange = 0;
   Timer? _successTimer;
+
+  /// The sale that just closed, so the success overlay's Receipt button can
+  /// open it. The read starts as soon as the overlay appears; a tap that beats
+  /// it waits on the same fetch instead of doing nothing.
+  String? _completedSaleId;
+  Map<String, dynamic>? _completedOrder;
+  String _receiptStoreName = 'Store';
+  String _receiptStoreLocation = '';
+  String _receiptSellerName = '';
 
   /// Recent barcode scans — most recent first. Max 10 entries.
   final List<_ScanHistoryEntry> _scanHistory = [];
@@ -576,6 +587,9 @@ class _POSScreenState extends State<POSScreen>
     double cashTendered, {
     String? orderId,
   }) async {
+    // GCash already created its order before the QR screen; cash creates it
+    // below. Either way this is the sale the receipt button opens.
+    String? completedSaleId = orderId;
     // For GCash, the order was already created by _CheckoutSheet
     // with payment_status='pending'. Only create for Cash flow.
     if (paymentMethod == 'Cash') {
@@ -591,7 +605,7 @@ class _POSScreenState extends State<POSScreen>
         'unit_price': _productPrice(item.product),
       }).toList();
 
-      await orderProvider.placeOrder(
+      final order = await orderProvider.placeOrder(
         customerId: auth.profile?['id'] ?? 'seller-pos',
         items: orderItems,
         totalAmount: _subtotal,
@@ -600,6 +614,7 @@ class _POSScreenState extends State<POSScreen>
         source: 'pos',
         amountTendered: cashTendered,
       );
+      completedSaleId = order?['id']?.toString();
     }
 
     // Auto-sync active status for each product after POS sale
@@ -620,8 +635,13 @@ class _POSScreenState extends State<POSScreen>
       _orderItems.clear();
       _panelIndex = 0;
       _showSuccessOverlay = true;
+      _completedSaleId = completedSaleId;
+      _completedOrder = null;
     });
     HapticFeedback.mediumImpact();
+    if (completedSaleId != null) {
+      unawaited(_loadCompletedReceipt(completedSaleId));
+    }
 
     _successTimer?.cancel();
     _successTimer = Timer(const Duration(seconds: 3), () {
@@ -1595,6 +1615,70 @@ class _POSScreenState extends State<POSScreen>
     );
   }
 
+  /// Read the sale that just closed, shaped like a POS history row, plus the
+  /// store and cashier names the receipt header prints.
+  ///
+  /// Failure is silent: the Receipt button stays disabled rather than opening
+  /// an empty receipt, and History remains the fallback.
+  Future<void> _loadCompletedReceipt(String orderId) async {
+    try {
+      final order = await OrderService().fetchPosReceipt(orderId);
+      if (!mounted || order == null) return;
+
+      if (_receiptStoreName == 'Store') {
+        try {
+          final store = await StoreService.instance.getMyStore();
+          if (store != null) {
+            _receiptStoreName = store['name']?.toString() ?? 'Store';
+            _receiptStoreLocation = store['location']?.toString() ?? '';
+          }
+          if (!mounted) return;
+          final profile =
+              Provider.of<AuthProvider>(context, listen: false).profile;
+          _receiptSellerName = profile?['full_name']?.toString() ?? '';
+        } catch (e) {
+          debugPrint('[POS] store details for the receipt failed: $e');
+        }
+      }
+      if (!mounted) return;
+      setState(() => _completedOrder = order);
+    } catch (e) {
+      debugPrint('[POS] could not load the receipt for $orderId: $e');
+    }
+  }
+
+  /// Open the receipt for the sale behind the success overlay.
+  ///
+  /// The overlay is dismissed first: the sale is closed, so coming back from
+  /// the receipt should land on an empty sale screen, not on a success banner
+  /// whose timer already expired underneath the route.
+  Future<void> _openCompletedReceipt() async {
+    final saleId = _completedSaleId;
+    if (saleId == null) return;
+
+    var order = _completedOrder;
+    if (order == null) {
+      await _loadCompletedReceipt(saleId);
+      if (!mounted) return;
+      order = _completedOrder;
+    }
+    if (order == null) return;
+
+    _successTimer?.cancel();
+    setState(() => _showSuccessOverlay = false);
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PosReceiptDetailScreen(
+          order: order!,
+          storeName: _receiptStoreName,
+          storeLocation: _receiptStoreLocation,
+          sellerName: _receiptSellerName,
+        ),
+      ),
+    );
+  }
+
   Widget _buildSuccessOverlay() {
     return Container(
       color: Colors.black.withValues(alpha: 0.78),
@@ -1681,7 +1765,9 @@ class _POSScreenState extends State<POSScreen>
                       vertical: 10,
                     ),
                   ),
-                  onPressed: () {},
+                  onPressed: _completedSaleId == null
+                      ? null
+                      : _openCompletedReceipt,
                   child: Text(
                     'Receipt',
                     style: AppConstants.bodyStyle(color: Colors.white),

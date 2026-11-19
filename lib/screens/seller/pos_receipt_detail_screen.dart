@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../constants/app_constants.dart';
+import '../../widgets/seller/pos_receipt_actions.dart';
 
 const _kMonths = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -12,7 +13,9 @@ const _kMonths = [
 ///
 /// Shows store name, order ID, timestamp, itemized line items,
 /// dashed tear-off divider, and total/payment summary.
-/// Designed to be ready for future share/export as image or PDF.
+/// The same sale can leave the phone as a PDF: print it through the system
+/// dialog or hand it to the share sheet, so the customer goes home with a
+/// copy instead of only having looked at the screen.
 class PosReceiptDetailScreen extends StatelessWidget {
   final Map<String, dynamic> order;
   final String storeName;
@@ -77,6 +80,12 @@ class PosReceiptDetailScreen extends StatelessWidget {
             },
           ),
         ],
+      ),
+      bottomNavigationBar: PosReceiptActions(
+        order: order,
+        storeName: storeName,
+        storeLocation: storeLocation,
+        sellerName: sellerName,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),

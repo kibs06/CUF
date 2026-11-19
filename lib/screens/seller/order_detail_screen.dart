@@ -23,6 +23,7 @@ class OrderDetailScreen extends StatefulWidget {
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _isUpdating = false;
+  bool _sendingReceipt = false;
 
   Map<String, dynamic> get order => widget.order;
 
@@ -79,6 +80,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   bool get _isReturnRequested =>
       _currentStatus.toLowerCase() == 'return_requested';
+
+  /// The address a receipt would go to: what the till recorded for this sale,
+  /// else the customer's registered profile email (already in the order row
+  /// the seller list fetches).
+  String? get _receiptEmail {
+    final typed = order['customer_email']?.toString().trim() ?? '';
+    if (typed.isNotEmpty) return typed;
+    final profile = order['profiles'];
+    if (profile is Map) {
+      final email = profile['email']?.toString().trim() ?? '';
+      if (email.isNotEmpty) return email;
+    }
+    return null;
+  }
+
+  /// The POS till has its own receipt actions, so this button belongs to the
+  /// online order queue only.
+  bool get _canEmailReceipt =>
+      _receiptEmail != null && (order['source']?.toString() ?? '') != 'pos';
 
   /// Seller decision on a return request: approve issues a product
   /// replacement (status → replaced; in-store on the spot, shipped when
@@ -586,7 +606,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             // the Mark Delivered confirm states that it records the sale.
             Text(
               nextStatus == 'delivered'
-                  ? 'This records the ₱${totalAmount.toStringAsFixed(0)} sale in your sales figures. The customer will be notified to confirm receipt.'
+                  ? 'This records the ₱${totalAmount.toStringAsFixed(0)} sale in '
+                      'your sales figures. '
+                      '${_receiptEmail == null ? 'No customer email is on file, so no receipt is emailed.' : 'Their receipt is emailed to ${_receiptEmail!}.'} '
+                      'The customer will be notified to confirm receipt.'
                   : 'The customer will be notified.',
               style: AppConstants.bodyStyle(
                 fontSize: 12,
@@ -667,6 +690,115 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
         );
       }
+    }
+  }
+
+  /// Email the receipt with one tap: the address is the one already on file,
+  /// so the seller types nothing. The server sends the same A5 receipt the
+  /// automatic path sends — opening a mail app would leave a draft to finish
+  /// by hand, which is the step this button removes.
+  Future<void> _sendReceipt() async {
+    final orderId = order['id']?.toString() ?? '';
+    final email = _receiptEmail;
+    if (orderId.isEmpty || email == null || _sendingReceipt) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppConstants.sellerCardBg,
+        title: Text(
+          'Email this receipt?',
+          style: AppConstants.bodyStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          "The customer's copy — the same receipt you would print — is sent to $email.",
+          style: AppConstants.bodyStyle(
+            fontSize: 13,
+            color: AppConstants.secondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppConstants.bodyStyle(color: AppConstants.secondary),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppConstants.primary),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Send receipt',
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _sendingReceipt = true);
+    try {
+      final result = await OrderService().sendReceiptToCustomer(orderId);
+      if (!mounted) return;
+      setState(() => _sendingReceipt = false);
+      final queued = result['queued'] == true;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_receiptResultMessage(result)),
+          backgroundColor:
+              queued ? AppConstants.success : AppConstants.secondary,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[ORDER] sending the receipt failed: $e');
+      if (!mounted) return;
+      setState(() => _sendingReceipt = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not send the receipt. Please try again.'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+    }
+  }
+
+  /// Turns the dispatcher's refusal reasons into something a seller can act on.
+  String _receiptResultMessage(Map<String, dynamic> result) {
+    final reason = (result['reason'] ?? '').toString();
+    final to = (result['to'] ?? '').toString();
+    switch (reason) {
+      case 'queued':
+        return to.isEmpty
+            ? 'Receipt emailed to the customer.'
+            : 'Receipt emailed to $to.';
+      case 'already_sent':
+        return to.isEmpty
+            ? "This order's receipt was already emailed."
+            : 'Already emailed to $to.';
+      case 'no_email':
+        return 'No customer email on file.';
+      case 'in_flight':
+        return 'A receipt is already going out — give it a moment.';
+      case 'retry_wait':
+        return 'This receipt is scheduled to retry shortly.';
+      case 'not_configured':
+        return 'Receipt email is not set up yet — ask the admin to finish the mail setup.';
+      case 'not_paid':
+        return 'This order is neither paid nor delivered yet.';
+      case 'exhausted':
+        return 'This receipt failed too many times: ${result['error'] ?? 'unknown error'}';
+      default:
+        return 'Could not queue the receipt.';
     }
   }
 
@@ -828,6 +960,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ),
                     ),
                   ),
+                  if (_canEmailReceipt) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: (_isUpdating || _sendingReceipt)
+                            ? null
+                            : _sendReceipt,
+                        icon: _sendingReceipt
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.receipt_long_outlined, size: 18),
+                        label: Text(
+                          'Email receipt',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppConstants.primary,
+                          side: BorderSide(
+                            color: AppConstants.primary.withValues(alpha: 0.4),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Goes to $_receiptEmail',
+                      textAlign: TextAlign.center,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
                   const Divider(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

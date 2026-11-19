@@ -112,6 +112,7 @@ dependencies:
   printing: ^5.15.1
   passkeys: ^2.24.2
   android_intent_plus: ^6.1.0
+  flutter_email_sender: ^11.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
