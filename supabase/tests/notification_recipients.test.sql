@@ -68,10 +68,13 @@ values ('a0000000-0000-0000-0000-000000000007','a0000000-0000-0000-0000-00000000
        ('a0000000-0000-0000-0000-000000000008','a0000000-0000-0000-0000-000000000006',
         NULL,'R Shoe B', 1000, 'General');
 
+-- Stock covers the bulk minimum quantity (20261119250000: a bulk request must
+-- ask for at least 10 units), so the requests below can be accepted and the
+-- only thing under test is who gets told.
 insert into public.inventory (product_id, size, stock)
-values ('a0000000-0000-0000-0000-000000000007','40', 5),
-       ('a0000000-0000-0000-0000-000000000007','41', 5),
-       ('a0000000-0000-0000-0000-000000000008','40', 5);
+values ('a0000000-0000-0000-0000-000000000007','40', 20),
+       ('a0000000-0000-0000-0000-000000000007','41', 20),
+       ('a0000000-0000-0000-0000-000000000008','40', 20);
 
 -- ══ 1. THE BATCH — one bad row must not abort the sweep ════════════
 -- Two overdue orders; the second has NO customer (`orders.customer_id` is
@@ -239,7 +242,7 @@ select set_config('request.jwt.claims',
 select lives_ok(
   $$select public.request_bulk_reservation(
       'a0000000-0000-0000-0000-000000000008'::uuid,
-      'a0000000-0000-0000-0000-000000000006'::uuid, 3)$$,
+      'a0000000-0000-0000-0000-000000000006'::uuid, 10)$$,
   '18: a bulk reservation can be requested from a store with no owner'
 );
 select is(
@@ -252,7 +255,7 @@ select is(
 select lives_ok(
   $$select public.request_bulk_reservation(
       'a0000000-0000-0000-0000-000000000007'::uuid,
-      'a0000000-0000-0000-0000-000000000005'::uuid, 3)$$,
+      'a0000000-0000-0000-0000-000000000005'::uuid, 10)$$,
   '20: a bulk reservation to a store WITH an owner is still accepted'
 );
 select is(

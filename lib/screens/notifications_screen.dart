@@ -98,8 +98,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     final orderType = _tabOrderTypes[_tabController.index];
     return provider.notifications
         .where((n) {
-          if (_categoryFilter != null && n.category != _categoryFilter)
+          if (_categoryFilter != null && n.category != _categoryFilter) {
             return false;
+          }
           if (orderType != null && n.orderType != orderType) return false;
           return true;
         })

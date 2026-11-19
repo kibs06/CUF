@@ -177,8 +177,9 @@ class PushNotificationService {
                   if (t != null) _removeToken(userId: prevUserId, token: t);
                 })
                 .catchError((e) {
-                  if (kDebugMode)
+                  if (kDebugMode) {
                     debugPrint('[Push] Auth token removal failed: $e');
+                  }
                 });
           }
           return;
@@ -194,8 +195,9 @@ class PushNotificationService {
               }
             })
             .catchError((e) {
-              if (kDebugMode)
+              if (kDebugMode) {
                 debugPrint('[Push] Auth token re-register failed: $e');
+              }
             });
       });
 
@@ -230,8 +232,9 @@ class PushNotificationService {
       // can be noticed without a restart.
       _lifecycle ??= AppLifecycleListener(
         onResume: () {
-          if (kDebugMode)
+          if (kDebugMode) {
             debugPrint('[Push] Lifecycle resumed — verifying token row');
+          }
           _ensureTokenRegistered();
         },
       );
@@ -309,8 +312,9 @@ class PushNotificationService {
     required Map<String, dynamic> data,
   }) async {
     try {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[Push] Creating notification channel if needed...');
+      }
       // Explicitly create the notification channel (required for Android 8+)
       await _ensureMessageChannel();
       if (kDebugMode) print('[Push] Notification channel created/verified');
@@ -330,8 +334,9 @@ class PushNotificationService {
       );
 
       final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[Push] Showing local notification (id=$notificationId)...');
+      }
       await _localNotifications.show(
         id: notificationId,
         title: title,
@@ -615,10 +620,11 @@ class PushNotificationService {
           .eq('customer_id', userId)
           .neq('fcm_token', token)
           .lt('updated_at', staleCutoff);
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[Push] Token stored for user: $userId (token: ${token.substring(0, 20)}...)',
         );
+      }
     } catch (e) {
       if (kDebugMode) print('[Push] Failed to store token: $e');
     }

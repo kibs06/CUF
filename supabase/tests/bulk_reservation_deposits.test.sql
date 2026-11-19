@@ -52,10 +52,13 @@ insert into public.products (id, store_id, seller_id, name, price, is_active)
 values ('a0000000-0000-0000-0000-00000000aaa1', 'a0000000-0000-0000-0000-00000000000e',
         'a0000000-0000-0000-0000-00000000000c', 'Dep Product', 100.00, true);
 
--- Sizes: 42 has the most stock (drawn first), 41 mid, 40 least.
+-- Sizes: 42 holds the most stock (drawn first), 40 and 41 hold 15 each.
+-- 50 units total, because every request below must clear the bulk minimum of
+-- 10 units (20261119250000) — the smallest request this suite can make is a
+-- tenth of the shelf, so the shelf has room for the sequences that follow.
 insert into public.inventory (product_id, size, stock) values
-  ('a0000000-0000-0000-0000-00000000aaa1', '40', 5),
-  ('a0000000-0000-0000-0000-00000000aaa1', '41', 10),
+  ('a0000000-0000-0000-0000-00000000aaa1', '40', 15),
+  ('a0000000-0000-0000-0000-00000000aaa1', '41', 15),
   ('a0000000-0000-0000-0000-00000000aaa1', '42', 20);
 
 -- ── structural checks ─────────────────────────────────────────────
@@ -115,7 +118,8 @@ select is(
 select is(
   (select deposit_amount from public.bulk_reservations
     where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
-  200.00::numeric, '10: deposit = ceil(20% of 10 × ₱100) = ₱200');
+  700.00::numeric,
+  '10: deposit = ceil(70% of 10 × ₱100) = ₱700 (20261119230000 raised the rate)');
 select is(
   (select reserved_stock from public.bulk_reservations
     where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
@@ -123,7 +127,7 @@ select is(
 select is(
   (select sum(stock) from public.inventory
     where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
-  35::bigint, '12: inventory untouched at approval (35 units)');
+  50::bigint, '12: inventory untouched at approval (50 units)');
 select ok(
   (select deposit_deadline > now() + interval '23 hours'
      and deposit_deadline <= now() + interval '24 hours 1 minute'
@@ -162,11 +166,11 @@ select is(
   (select reserved_stock from public.bulk_reservations
     where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
   10, '18: reserved_stock = 10');
--- Largest-first: 42: 20-10=10, 41: 10, 40: 5.
+-- Largest-first: 42: 20-10=10, 41: 15, 40: 15.
 select is(
   (select array_agg(stock order by size) from public.inventory
     where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
-  ARRAY[5,10,10], '19: stock drawn largest-size-first (40,41,42 → 5,10,10)');
+  ARRAY[15,15,10], '19: stock drawn largest-size-first (40,41,42 → 15,15,10)');
 select ok(
   (select deposit_paid_at is not null and reserved_at is not null
    from public.bulk_reservations
@@ -182,7 +186,7 @@ select set_config('request.jwt.claims',
   '{"sub":"a0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
 select lives_ok(
   $sql$ select public.request_bulk_reservation(
-    'a0000000-0000-0000-0000-00000000aaa1', 'a0000000-0000-0000-0000-00000000000e', 1,
+    'a0000000-0000-0000-0000-00000000aaa1', 'a0000000-0000-0000-0000-00000000000e', 10,
     '[]'::jsonb, null) $sql$,
   '22: second customer can request (first is now approved, not pending)');
 select set_config('request.jwt.claims',
@@ -241,7 +245,7 @@ select is(
 select is(
   (select sum(stock) from public.inventory
     where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
-  35::bigint, '28: stock restored exactly (5,10,10 → sum 35)');
+  50::bigint, '28: stock restored exactly (15,15,10 → sum 50)');
 
 -- ══ 4. CANCEL WHILE AWAITING_DEPOSIT → no forfeiture ══════════════
 -- This hold belongs to customer B, and cancel is customer-only.
@@ -263,7 +267,7 @@ select set_config('request.jwt.claims',
   '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
 select lives_ok(
   $sql$ select public.request_bulk_reservation(
-    'a0000000-0000-0000-0000-00000000aaa1', 'a0000000-0000-0000-0000-00000000000e', 2,
+    'a0000000-0000-0000-0000-00000000aaa1', 'a0000000-0000-0000-0000-00000000000e', 10,
     '[]'::jsonb, null) $sql$,
   '31: third request placed');
 select set_config('request.jwt.claims',
@@ -325,14 +329,14 @@ select is(
 select is(
   (select sum(stock) from public.inventory
     where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
-  35::bigint, '38: inventory unchanged by the deposit-window expiry');
+  50::bigint, '38: inventory unchanged by the deposit-window expiry');
 
 -- ══ 6. CONCURRENT CONFIRMS → exactly one wins ═════════════════════
 select set_config('request.jwt.claims',
   '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
 select lives_ok(
   $sql$ select public.request_bulk_reservation(
-    'a0000000-0000-0000-0000-00000000aaa1', 'a0000000-0000-0000-0000-00000000000e', 3,
+    'a0000000-0000-0000-0000-00000000aaa1', 'a0000000-0000-0000-0000-00000000000e', 10,
     '[]'::jsonb, null) $sql$,
   '39: request for the concurrency race');
 select set_config('request.jwt.claims',
@@ -383,7 +387,7 @@ select is(
                 where customer_id = 'a0000000-0000-0000-0000-00000000000a'
                   and status = 'approved'
                 order by created_at limit 1)),
-  3, '44: stock drawn exactly once (3)');
+  10, '44: stock drawn exactly once (10)');
 
 -- ══ 7. INSUFFICIENT STOCK AT PAYMENT TIME ═════════════════════════
 select set_config('request.jwt.claims',
@@ -402,10 +406,15 @@ select lives_ok(
         and status = 'pending'),
     true, 7, null) $sql$,
   '46: approved the oversized request');
--- Someone else buys 4 units through another path while the deposit waits
--- (42 had 17 after A's 3-unit hold → 13; total 5+10+13 = 28).
-update public.inventory set stock = stock - 4
- where product_id = 'a0000000-0000-0000-0000-00000000aaa1' and size = '42';
+-- While the deposit waits, the rest of the shelf sells: only 20 units are
+-- left when the seller tries to confirm. The request passed at 40 available,
+-- so only the confirm can discover the shortfall — which is the point here.
+-- Set the state outright rather than decrementing: an earlier confirm in this
+-- transaction drew from the largest size first, so the remaining split
+-- depends on how many holds were paid before this line.
+update public.inventory
+   set stock = case when size = '42' then 20 else 0 end
+ where product_id = 'a0000000-0000-0000-0000-00000000aaa1';
 select set_config('request.jwt.claims',
   '{"sub":"a0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
 select lives_ok(
@@ -424,8 +433,8 @@ select throws_ok(
     (select id from public.bulk_reservations
       where customer_id = 'a0000000-0000-0000-0000-00000000000b'
         and status = 'awaiting_deposit')) $sql$,
-  'INSUFFICIENT_STOCK_MISSING_2',
-  '48: confirm aborts loudly (INSUFFICIENT_STOCK_MISSING_2 — 30 requested, 28 left)');
+  'INSUFFICIENT_STOCK_MISSING_10',
+  '48: confirm aborts loudly (INSUFFICIENT_STOCK_MISSING_10 — 30 requested, 20 left)');
 select is(
   (select status from public.bulk_reservations
     where id = (select id from public.bulk_reservations
@@ -434,16 +443,17 @@ select is(
                 order by created_at limit 1)),
   'awaiting_deposit', '49: row does NOT silently become reserved');
 -- The RPC's partial draw rolled back (throws_ok runs under a savepoint);
--- inventory shows only the real movements: 35 - 3 (A's paid hold) - 4.
+-- inventory shows only the real movements: 5 + 5 + 10 = 20 after the sales,
+-- with A's earlier 10-unit hold already drawn and not restored.
 select is(
   (select sum(stock) from public.inventory
     where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
-  28::bigint, '50: failed draw rolled back (28 = 35 - 3 held - 4 bought)');
+  20::bigint, '50: failed draw rolled back (20 = 50 - 10 held - 20 bought)');
 
 -- ══ 8. reserved_stock_for_product ignores awaiting_deposit ════════
 select is(
   (select public.reserved_stock_for_product('a0000000-0000-0000-0000-00000000aaa1')),
-  3, '51: only the paid hold counts (awaiting_deposit contributes 0)');
+  10, '51: only the paid hold counts (awaiting_deposit contributes 0)');
 
 select * from finish();
 rollback;
