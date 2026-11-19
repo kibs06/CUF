@@ -30,6 +30,11 @@ class FootScanSetupScreenV2 extends StatefulWidget {
 }
 
 class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
+  /// Tap-to-measure is hidden for now — only the card-referenced camera
+  /// scan is offered. The whole tap flow below (chip, hand-placed points,
+  /// CTA label) is untouched; flip this to `true` to bring it back.
+  static const bool _tapMeasureEnabled = false;
+
   /// Shopping preference: men's / women's / kids' sizing.
   String _shoeCategory = 'men';
 
@@ -211,11 +216,13 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
   Widget _buildMeasureModeSection() {
     return _buildChipSection(
       title: 'How to measure',
-      subtitle: 'Card uses a bank card as a scale reference. Tap lets you '
-          'place the points yourself.',
-      options: const [
+      subtitle: _tapMeasureEnabled
+          ? 'Card uses a bank card as a scale reference. Tap lets you '
+              'place the points yourself.'
+          : 'Card uses a bank card as a scale reference.',
+      options: [
         ('card', 'Card scan'),
-        ('tap', 'Tap to measure'),
+        if (_tapMeasureEnabled) ('tap', 'Tap to measure'),
       ],
       selected: _measureMode,
       onSelect: (v) => setState(() => _measureMode = v),
