@@ -10,6 +10,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../utils/delivery_date.dart';
+import '../../utils/demo_mode.dart';
 import '../../utils/size_key.dart';
 import '../../services/direct_gcash_service.dart';
 import '../../services/voucher_service.dart';
@@ -504,7 +505,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     // platform account + order code. The customer pays in their own GCash
     // app and submits proof; a seller verifies it and an admin reconciles
     // the funds before any payout.
-    if (_paymentMethod == 'GCash') {
+    //
+    // DEMO MODE (build-time only — AppConstants.demoModeEnabled): a demo skips
+    // the hand-off and places the order through the normal checkout path with
+    // a generated reference, where the server marks a non-cash order paid. The
+    // banner above the payment methods has already said so on screen.
+    final demoGcashBypass =
+        AppConstants.demoModeEnabled && _paymentMethod == 'GCash';
+    if (_paymentMethod == 'GCash' && !demoGcashBypass) {
       await _startGcashCheckout(
         items: items,
         voucherCode: _appliedVoucher?.code,
@@ -535,6 +543,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         totalAmount: orderTotal,
         deliveryAddress: _selectedAddress!.formattedAddress,
         paymentMethod: _paymentMethod,
+        // Demo builds only: a generated 13-digit reference so the row is a
+        // normal paid GCash order (the server needs one to accept it), never
+        // a real transfer.
+        gcashReference: demoGcashBypass ? demoGcashReference() : null,
         shippingAddress: _selectedAddress!.toSnapshot(),
         voucherCode: _appliedVoucher?.code,
         idempotencyKey: _orderIdempotencyKey,
@@ -654,9 +666,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           .single();
       if (!mounted) return;
       await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => OrderTrackingScreen(order: order),
-        ),
+        MaterialPageRoute(builder: (_) => OrderTrackingScreen(order: order)),
       );
     } catch (e) {
       debugPrint('[CHECKOUT] open pending gcash failed: $e');
@@ -813,8 +823,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
     final selectedSubtotal = _checkoutSubtotal(selectedItems);
     // The platform's setting, not a constant: the server charges this line.
-    final selectedDeliveryFee =
-        selectedSubtotal > 0 ? cart.deliveryFeeAmount : 0.0;
+    final selectedDeliveryFee = selectedSubtotal > 0
+        ? cart.deliveryFeeAmount
+        : 0.0;
     final voucherDiscount = _voucherDiscount;
     final selectedTotal =
         selectedSubtotal + selectedDeliveryFee - voucherDiscount;
@@ -936,6 +947,46 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ],
                     ),
                   ),
+                  if (AppConstants.demoModeEnabled) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppConstants.error.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppConstants.error.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.build_circle_outlined,
+                              size: 16,
+                              color: AppConstants.error,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'DEVELOPER MODE — a GCash order is placed paid '
+                                'with no GCash transfer. Demo builds only; '
+                                'this flag must never ship.',
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppConstants.error,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   // Secure checkout indicator
                   Padding(

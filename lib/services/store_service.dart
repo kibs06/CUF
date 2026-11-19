@@ -123,7 +123,17 @@ class StoreService {
     }
 
     if (updates.isNotEmpty) {
-      await _client.from('stores').update(updates).eq('id', storeId);
+      try {
+        await _client.from('stores').update(updates).eq('id', storeId);
+      } on PostgrestException catch (e) {
+        // `contact_number` is newer than this table on some deployments. A
+        // store edit must not fail wholesale because one optional column is
+        // not there yet — retry without it and let the rest save.
+        if (!e.message.contains('contact_number')) rethrow;
+        debugPrint('[STORE] contact_number not available yet: ${e.message}');
+        updates.remove('contact_number');
+        await _client.from('stores').update(updates).eq('id', storeId);
+      }
       store.addAll(updates);
     }
 
@@ -182,6 +192,11 @@ class StoreService {
     required bool isOpen,
     String? description,
     List<String> tags = const [],
+
+    /// Shop contact number, set in Edit Store. Null leaves the stored value
+    /// untouched (so callers that do not edit it cannot wipe it); an empty
+    /// string clears it.
+    String? contactNumber,
     XFile? newLogoImage,
     XFile? newBannerImage,
     bool removeLogo = false,
@@ -194,6 +209,10 @@ class StoreService {
       'location': location.trim(),
       'brand_color': brandColor,
       'is_open': isOpen,
+      if (contactNumber != null)
+        'contact_number': contactNumber.trim().isEmpty
+            ? null
+            : contactNumber.trim(),
       'description': (description == null || description.trim().isEmpty)
           ? null
           : description.trim(),

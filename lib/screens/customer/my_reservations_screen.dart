@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../constants/app_constants.dart';
+import '../../constants/bulk_deposit.dart';
 import '../../services/reservation_service.dart';
 import '../../widgets/sole_card.dart';
 import 'bulk_deposit_pay_screen.dart';
@@ -28,12 +29,9 @@ class _MyReservationsScreenState extends State<MyReservationsScreen> {
   void initState() {
     super.initState();
     _load();
-    _countdownTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) {
-        if (mounted) setState(() {});
-      },
-    );
+    _countdownTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -59,9 +57,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen> {
   /// pops true once a proof is submitted → refresh.
   Future<void> _payDeposit(BulkReservation r) async {
     final submitted = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => BulkDepositPayScreen(reservation: r),
-      ),
+      MaterialPageRoute(builder: (_) => BulkDepositPayScreen(reservation: r)),
     );
     if (submitted == true) await _load();
   }
@@ -71,16 +67,18 @@ class _MyReservationsScreenState extends State<MyReservationsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Cancel reservation?',
-            style: AppConstants.headlineStyle(fontSize: 16)),
+        title: Text(
+          'Cancel reservation?',
+          style: AppConstants.headlineStyle(fontSize: 16),
+        ),
         content: Text(
           r.isApproved
               ? 'The ${r.quantity} reserved units go back to the store\'s '
-                  'stock. Your paid deposit of '
-                  '₱${(r.depositAmount ?? 0).toStringAsFixed(0)} is '
-                  'NON-REFUNDABLE and will be forfeited.'
+                    'stock. Your paid deposit of '
+                    '₱${(r.depositAmount ?? 0).toStringAsFixed(0)} is '
+                    'NON-REFUNDABLE and will be forfeited.'
               : 'Your request will be withdrawn. No deposit has been paid, '
-                  'so nothing is forfeited.',
+                    'so nothing is forfeited.',
           style: AppConstants.bodyStyle(fontSize: 13),
         ),
         actions: [
@@ -133,8 +131,10 @@ class _MyReservationsScreenState extends State<MyReservationsScreen> {
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
-        title: Text('My Reservations',
-            style: AppConstants.headlineStyle(fontSize: 17)),
+        title: Text(
+          'My Reservations',
+          style: AppConstants.headlineStyle(fontSize: 17),
+        ),
         backgroundColor: AppConstants.surfaceLight,
         surfaceTintColor: Colors.white,
         elevation: 0,
@@ -145,10 +145,15 @@ class _MyReservationsScreenState extends State<MyReservationsScreen> {
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(_error!,
-                            style: AppConstants.bodyStyle(fontSize: 13)),
+                        Text(
+                          _error!,
+                          style: AppConstants.bodyStyle(fontSize: 13),
+                        ),
                         const SizedBox(height: 12),
-                        TextButton(onPressed: _load, child: const Text('Retry')),
+                        TextButton(
+                          onPressed: _load,
+                          child: const Text('Retry'),
+                        ),
                       ],
                     )
                   : const CircularProgressIndicator(),
@@ -159,9 +164,11 @@ class _MyReservationsScreenState extends State<MyReservationsScreen> {
                   ? ListView(
                       children: [
                         const SizedBox(height: 120),
-                        Icon(Icons.inventory_2_outlined,
-                            size: 56,
-                            color: AppConstants.secondary.withValues(alpha: 0.3)),
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 56,
+                          color: AppConstants.secondary.withValues(alpha: 0.3),
+                        ),
                         const SizedBox(height: 16),
                         Center(
                           child: Text(
@@ -186,8 +193,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen> {
                       padding: const EdgeInsets.all(16),
                       itemCount: _items!.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (context, i) =>
-                          _ReservationTile(
+                      itemBuilder: (context, i) => _ReservationTile(
                         reservation: _items![i],
                         cancelling: _cancellingId,
                         onCancel: () => _cancel(_items![i]),
@@ -279,12 +285,16 @@ class _ReservationTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppConstants.bodyStyle(
-                            fontWeight: FontWeight.bold, fontSize: 13),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
@@ -308,11 +318,42 @@ class _ReservationTile extends StatelessWidget {
                     color: AppConstants.secondary,
                   ),
                 ),
+                // Bulk holds are collected in store — there is no shipping
+                // leg, and an active hold is exactly where a customer would
+                // otherwise start waiting for one.
+                if (r.isPending || r.isAwaitingDeposit || r.isApproved) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Pickup only — collect at '
+                    '${r.storeName.isEmpty ? 'the store' : r.storeName}. Bulk '
+                    'orders are not shipped.',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 11,
+                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+                // The voucher was priced when the request was made; showing it
+                // here is what the customer relies on to know the price at
+                // pickup is not the full one.
+                if (r.voucherCode != null && r.voucherCode!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Voucher ${r.voucherCode} — '
+                    '₱${(r.voucherDiscount ?? 0).toStringAsFixed(0)} off at '
+                    'pickup',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppConstants.success,
+                    ),
+                  ),
+                ],
                 if (r.isAwaitingDeposit) ...[
                   const SizedBox(height: 4),
                   Text(
                     'Deposit: ₱${(r.depositAmount ?? 0).toStringAsFixed(0)} '
-                    '(20% of estimated value)',
+                    '($kBulkReservationDepositLabel of estimated value)',
                     style: AppConstants.bodyStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -441,17 +482,31 @@ class _ReservationTile extends StatelessWidget {
   }
 
   Widget get _imagePlaceholder => Container(
-        width: 56,
-        height: 56,
-        color: AppConstants.secondary.withValues(alpha: 0.08),
-        child: Icon(Icons.image_outlined,
-            size: 22, color: AppConstants.secondary.withValues(alpha: 0.4)),
-      );
+    width: 56,
+    height: 56,
+    color: AppConstants.secondary.withValues(alpha: 0.08),
+    child: Icon(
+      Icons.image_outlined,
+      size: 22,
+      color: AppConstants.secondary.withValues(alpha: 0.4),
+    ),
+  );
 
   static String _formatDate(DateTime d) {
     const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[d.month]} ${d.day}, ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }

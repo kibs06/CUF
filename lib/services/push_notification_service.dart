@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils/notification_formatters.dart';
+import '../utils/push_routes.dart';
 
 /// Handles all FCM push notification logic:
 /// - Token registration & refresh
@@ -56,10 +57,28 @@ class PushNotificationService {
   /// Generic navigation callback for all non-message notification types.
   /// Signature: (String screen, String? referenceId)
   /// The shell widget wires this to route by screen name.
-  void Function(String screen, String? referenceId)? onNavigateToScreen;
+  /// Set once by the shell that is actually on screen (seller or customer).
+  ///
+  /// A plain field here was a real bug: a notification that LAUNCHED the app
+  /// (cold start) is buffered in `_pendingInitialNotification` until a callback
+  /// exists, and nothing ever drained that buffer — the shell assigned this
+  /// after `init()`, so tapping a bulk-reservation or payout push just opened
+  /// the app on the dashboard. The setter below consumes the buffer.
+  bool _hasScreenHandler = false;
+  void Function(String screen, String? referenceId)? _onNavigateToScreen;
+  void Function(String screen, String? referenceId)? get onNavigateToScreen =>
+      _onNavigateToScreen;
+  set onNavigateToScreen(
+    void Function(String screen, String? referenceId)? fn,
+  ) {
+    _onNavigateToScreen = fn;
+    _hasScreenHandler = fn != null;
+    _tryConsumePendingMessage();
+  }
 
   /// Buffer for initial message from cold start (before callback is set)
   RemoteMessage? _pendingInitialMessage;
+
   /// Buffer for initial non-message notification from cold start
   // TODO: If seller shell sets onNavigateToScreen while customer shell is active,
   // the callback could route to the wrong screen. Acceptable for v1.
@@ -139,8 +158,9 @@ class PushNotificationService {
       // ends up with NO row in device_tokens while the edge function
       // (verified correct) reports "No device tokens for user". This
       // listener re-attaches the token the moment a session appears.
-      _authSub =
-          Supabase.instance.client.auth.onAuthStateChange.listen((authState) {
+      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((
+        authState,
+      ) {
         final user = authState.session?.user;
         if (user == null) {
           // Signed out — remove this device's token from the account it
@@ -151,24 +171,32 @@ class PushNotificationService {
           _registeredUserId = null;
           _registrationVerified = false;
           if (prevUserId != null) {
-            _messaging.getToken().then((t) {
-              if (t != null) _removeToken(userId: prevUserId, token: t);
-            }).catchError((e) {
-              if (kDebugMode) debugPrint('[Push] Auth token removal failed: $e');
-            });
+            _messaging
+                .getToken()
+                .then((t) {
+                  if (t != null) _removeToken(userId: prevUserId, token: t);
+                })
+                .catchError((e) {
+                  if (kDebugMode)
+                    debugPrint('[Push] Auth token removal failed: $e');
+                });
           }
           return;
         }
         _registrationVerified = false;
-        _messaging.getToken().then((t) {
-          if (t != null) {
-            _storeToken(userId: user.id, token: t).then((_) {
-              _registrationVerified = true;
+        _messaging
+            .getToken()
+            .then((t) {
+              if (t != null) {
+                _storeToken(userId: user.id, token: t).then((_) {
+                  _registrationVerified = true;
+                });
+              }
+            })
+            .catchError((e) {
+              if (kDebugMode)
+                debugPrint('[Push] Auth token re-register failed: $e');
             });
-          }
-        }).catchError((e) {
-          if (kDebugMode) debugPrint('[Push] Auth token re-register failed: $e');
-        });
       });
 
       // 4c. If the session was already restored by the time init() ran
@@ -178,7 +206,9 @@ class PushNotificationService {
       await _ensureTokenRegistered();
 
       // 5. Handle foreground messages
-      _foregroundSub = FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+      _foregroundSub = FirebaseMessaging.onMessage.listen(
+        _handleForegroundMessage,
+      );
 
       // 6. Handle notification tap when app was backgrounded
       FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
@@ -200,7 +230,8 @@ class PushNotificationService {
       // can be noticed without a restart.
       _lifecycle ??= AppLifecycleListener(
         onResume: () {
-          if (kDebugMode) debugPrint('[Push] Lifecycle resumed — verifying token row');
+          if (kDebugMode)
+            debugPrint('[Push] Lifecycle resumed — verifying token row');
           _ensureTokenRegistered();
         },
       );
@@ -219,7 +250,7 @@ class PushNotificationService {
       _pendingInitialMessage = null;
       _handleNotificationTap(msg);
     }
-    if (_pendingInitialNotification != null && onNavigateToScreen != null) {
+    if (_pendingInitialNotification != null && _hasScreenHandler) {
       final msg = _pendingInitialNotification!;
       _pendingInitialNotification = null;
       _handleNotificationTap(msg);
@@ -229,7 +260,9 @@ class PushNotificationService {
   // ── Local Notifications ─────────────────────────────────────────
 
   Future<void> _initLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: false, // Already requested via FCM
       requestBadgePermission: false,
@@ -249,7 +282,10 @@ class PushNotificationService {
             final type = data['type'] as String?;
             if (type == 'new_message') {
               final conversationId = data['conversation_id'] as String?;
-              final senderName = data['sender_name'] as String? ?? data['store_name'] as String? ?? 'Store';
+              final senderName =
+                  data['sender_name'] as String? ??
+                  data['store_name'] as String? ??
+                  'Store';
               if (conversationId != null) {
                 onNavigateToChat?.call(conversationId, senderName);
               }
@@ -273,7 +309,8 @@ class PushNotificationService {
     required Map<String, dynamic> data,
   }) async {
     try {
-      if (kDebugMode) print('[Push] Creating notification channel if needed...');
+      if (kDebugMode)
+        print('[Push] Creating notification channel if needed...');
       // Explicitly create the notification channel (required for Android 8+)
       await _ensureMessageChannel();
       if (kDebugMode) print('[Push] Notification channel created/verified');
@@ -293,7 +330,8 @@ class PushNotificationService {
       );
 
       final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      if (kDebugMode) print('[Push] Showing local notification (id=$notificationId)...');
+      if (kDebugMode)
+        print('[Push] Showing local notification (id=$notificationId)...');
       await _localNotifications.show(
         id: notificationId,
         title: title,
@@ -326,9 +364,10 @@ class PushNotificationService {
 
   Future<void> _ensureDownloadChannel() async {
     try {
-      final androidPlugin =
-          _localNotifications.resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
           _downloadChannelId,
@@ -418,10 +457,15 @@ class PushNotificationService {
   /// drift: whichever id the server sends, a matching channel exists.
   Future<void> _ensureMessageChannel() async {
     try {
-      final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       if (androidPlugin != null) {
-        for (final channelId in const ['solevision_messages', 'cufmai_messages']) {
+        for (final channelId in const [
+          'solevision_messages',
+          'cufmai_messages',
+        ]) {
           await androidPlugin.createNotificationChannel(
             AndroidNotificationChannel(
               channelId,
@@ -452,8 +496,12 @@ class PushNotificationService {
     }
 
     final data = message.data;
-    final notificationTitle = message.notification?.title ?? data['title'] as String? ?? 'Notification';
-    final notificationBody = message.notification?.body ?? data['body'] as String? ?? '';
+    final notificationTitle =
+        message.notification?.title ??
+        data['title'] as String? ??
+        'Notification';
+    final notificationBody =
+        message.notification?.body ?? data['body'] as String? ?? '';
 
     // Show local notification banner for all types
     _showForegroundNotification(
@@ -492,7 +540,11 @@ class PushNotificationService {
     }
 
     // All other notification types → route via onNavigateToScreen
-    final screen = data['screen'] as String?;
+    //
+    // `screen` is normally set by the sender; the fallback covers payloads that
+    // predate it (or were re-sent from a DB trigger), which used to open the
+    // app on whatever tab was last used and look like a dead tap.
+    final screen = data['screen'] as String? ?? screenForPushType(type);
     final referenceId = data['referenceId'] as String?;
     if (screen != null && onNavigateToScreen != null) {
       onNavigateToScreen!.call(screen, referenceId);
@@ -535,20 +587,19 @@ class PushNotificationService {
     required String token,
   }) async {
     _registeredUserId = userId;
-    final platform = defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+    final platform = defaultTargetPlatform == TargetPlatform.iOS
+        ? 'ios'
+        : 'android';
 
     try {
       // Upsert — if the same (customer_id, fcm_token) row exists, update it
       // instead of throwing a duplicate key error (23505).
-      await Supabase.instance.client.from('device_tokens').upsert(
-        {
-          'customer_id': userId,
-          'fcm_token': token,
-          'platform': platform,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        onConflict: 'customer_id,fcm_token',
-      );
+      await Supabase.instance.client.from('device_tokens').upsert({
+        'customer_id': userId,
+        'fcm_token': token,
+        'platform': platform,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'customer_id,fcm_token');
       // Best-effort cleanup: delete OTHER stale tokens for this user — but
       // only ones that haven't been seen in a week. Deleting every other
       // token (the old behavior) silently breaks multi-device setups: the
@@ -564,7 +615,10 @@ class PushNotificationService {
           .eq('customer_id', userId)
           .neq('fcm_token', token)
           .lt('updated_at', staleCutoff);
-      if (kDebugMode) print('[Push] Token stored for user: $userId (token: ${token.substring(0, 20)}...)');
+      if (kDebugMode)
+        print(
+          '[Push] Token stored for user: $userId (token: ${token.substring(0, 20)}...)',
+        );
     } catch (e) {
       if (kDebugMode) print('[Push] Failed to store token: $e');
     }
@@ -614,7 +668,9 @@ class PushNotificationService {
 
       if (existing == null) {
         if (kDebugMode) {
-          debugPrint('[Push] Token row missing for ${user.id} — re-registering.');
+          debugPrint(
+            '[Push] Token row missing for ${user.id} — re-registering.',
+          );
         }
         await _storeToken(userId: user.id, token: token);
       }

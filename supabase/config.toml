@@ -574,6 +574,14 @@ verify_jwt = true
 [functions.send-replacement-notice]
 verify_jwt = true
 
+# send-bulk-deposit-receipt emails the customer their bulk-reservation deposit
+# receipt (PDF attached). Called by the seller app right after
+# `confirm_bulk_reservation_deposit`, with the seller's own session, so the
+# gateway JWT check stays ON and the function additionally requires the caller
+# to own the reservation's store (or be an admin).
+[functions.send-bulk-deposit-receipt]
+verify_jwt = true
+
 # send-payout-receipt emails and pushes the seller their payout receipt. Called
 # by the admin portal right after `mark_payout_paid` with the admin's own
 # session, so the gateway JWT check stays ON and the function additionally

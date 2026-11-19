@@ -5,9 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:app/screens/customer/widgets/bulk_reservation_sheet.dart';
 import 'package:app/services/reservation_service.dart';
+import 'package:app/services/voucher_service.dart';
 import 'package:app/widgets/sole_primary_button.dart';
 
 class MockReservationService extends Mock implements ReservationService {}
+
+class MockVoucherService extends Mock implements VoucherService {}
 
 final product = <String, dynamic>{
   'id': 'p-1',
@@ -34,6 +37,7 @@ void main() {
       '': {'40': 10, '41': 5},
     },
     String? initialColor,
+    VoucherService? voucherService,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -46,6 +50,7 @@ void main() {
                 stockByColor: stockByColor,
                 initialColor: initialColor,
                 service: mockService,
+                voucherService: voucherService,
               ),
               child: const Text('open'),
             ),
@@ -69,10 +74,7 @@ void main() {
   /// The stepper inside the row for [size] — the rows are ordered by size, so
   /// index 0 is the smallest.
   Future<void> stepSize(WidgetTester tester, String size, int times) async {
-    final row = find.ancestor(
-      of: find.text(size),
-      matching: find.byType(Row),
-    );
+    final row = find.ancestor(of: find.text(size), matching: find.byType(Row));
     final plus = find.descendant(of: row, matching: find.byIcon(Icons.add));
     for (var i = 0; i < times; i++) {
       await tester.tap(plus);
@@ -89,10 +91,10 @@ void main() {
     expect(find.textContaining('₱100 each'), findsOneWidget);
   });
 
-  testWidgets('cannot submit until at least one size is picked', (tester) async {
+  testWidgets('cannot submit until the bulk minimum is picked', (tester) async {
     await open(tester);
 
-    expect(find.text('Total: pick at least one size'), findsOneWidget);
+    expect(find.text('Total: pick at least 10 pairs'), findsOneWidget);
     final button = tester.widget<SolePrimaryButton>(
       find.byType(SolePrimaryButton),
     );
@@ -100,81 +102,115 @@ void main() {
 
     await submit(tester);
 
-    verifyNever(() => mockService.requestReservation(
-          productId: any(named: 'productId'),
-          storeId: any(named: 'storeId'),
-          quantity: any(named: 'quantity'),
-          requestedSizes: any(named: 'requestedSizes'),
-          note: any(named: 'note'),
-        ));
+    verifyNever(
+      () => mockService.requestReservation(
+        productId: any(named: 'productId'),
+        storeId: any(named: 'storeId'),
+        quantity: any(named: 'quantity'),
+        requestedSizes: any(named: 'requestedSizes'),
+        note: any(named: 'note'),
+        voucherCode: any(named: 'voucherCode'),
+      ),
+    );
   });
 
   testWidgets('sends exactly the sizes picked, tagged with the colour', (
     tester,
   ) async {
-    when(() => mockService.requestReservation(
-          productId: any(named: 'productId'),
-          storeId: any(named: 'storeId'),
-          quantity: any(named: 'quantity'),
-          requestedSizes: any(named: 'requestedSizes'),
-          note: any(named: 'note'),
-        )).thenAnswer((_) async => 'r-1');
+    when(
+      () => mockService.requestReservation(
+        productId: any(named: 'productId'),
+        storeId: any(named: 'storeId'),
+        quantity: any(named: 'quantity'),
+        requestedSizes: any(named: 'requestedSizes'),
+        note: any(named: 'note'),
+        voucherCode: any(named: 'voucherCode'),
+      ),
+    ).thenAnswer((_) async => 'r-1');
 
     await open(tester);
 
-    await stepSize(tester, '40', 2);
-    await stepSize(tester, '41', 1);
+    // The default stock is 10 + 5, so the pair below is exactly the bulk
+    // floor: 6 of one size and 4 of the other.
+    await stepSize(tester, '40', 6);
+    await stepSize(tester, '41', 4);
 
-    expect(find.text('Total: 3 pairs'), findsOneWidget);
+    expect(find.text('Total: 10 pairs'), findsOneWidget);
 
     await submit(tester);
 
-    final captured = verify(() => mockService.requestReservation(
-          productId: 'p-1',
-          storeId: 's-1',
-          quantity: captureAny(named: 'quantity'),
-          requestedSizes: captureAny(named: 'requestedSizes'),
-          note: any(named: 'note'),
-        )).captured;
+    final captured = verify(
+      () => mockService.requestReservation(
+        productId: 'p-1',
+        storeId: 's-1',
+        quantity: captureAny(named: 'quantity'),
+        requestedSizes: captureAny(named: 'requestedSizes'),
+        note: any(named: 'note'),
+        voucherCode: any(named: 'voucherCode'),
+      ),
+    ).captured;
 
-    expect(captured[0], 3);
+    expect(captured[0], 10);
     // Only the picked sizes travel — the old sheet guessed a breakdown from
     // stock levels, which the seller could not tell apart from a real request.
     expect(captured[1], [
-      {'size': '40', 'quantity': 2},
-      {'size': '41', 'quantity': 1},
+      {'size': '40', 'quantity': 6},
+      {'size': '41', 'quantity': 4},
     ]);
   });
 
   testWidgets('a size can never be asked for beyond its own stock', (
     tester,
   ) async {
-    await open(tester, stockByColor: const {
-      '': {'41': 2},
-    });
+    await open(
+      tester,
+      stockByColor: const {
+        '': {'41': 2},
+      },
+    );
 
     await stepSize(tester, '41', 5);
 
-    expect(find.text('Total: 2 pairs'), findsOneWidget);
+    expect(find.text('Total: 2 of 10 required'), findsOneWidget);
+    // Under the bulk floor (and under this size's stock) nothing is sent.
+    expect(
+      tester
+          .widget<SolePrimaryButton>(find.byType(SolePrimaryButton))
+          .onPressed,
+      isNull,
+    );
     await submit(tester);
+    verifyNever(
+      () => mockService.requestReservation(
+        productId: any(named: 'productId'),
+        storeId: any(named: 'storeId'),
+        quantity: any(named: 'quantity'),
+        requestedSizes: any(named: 'requestedSizes'),
+        note: any(named: 'note'),
+        voucherCode: any(named: 'voucherCode'),
+      ),
+    );
   });
 
   testWidgets('a multi-colour product picks the colour and tags every line', (
     tester,
   ) async {
-    when(() => mockService.requestReservation(
-          productId: any(named: 'productId'),
-          storeId: any(named: 'storeId'),
-          quantity: any(named: 'quantity'),
-          requestedSizes: any(named: 'requestedSizes'),
-          note: any(named: 'note'),
-        )).thenAnswer((_) async => 'r-1');
+    when(
+      () => mockService.requestReservation(
+        productId: any(named: 'productId'),
+        storeId: any(named: 'storeId'),
+        quantity: any(named: 'quantity'),
+        requestedSizes: any(named: 'requestedSizes'),
+        note: any(named: 'note'),
+        voucherCode: any(named: 'voucherCode'),
+      ),
+    ).thenAnswer((_) async => 'r-1');
 
     await open(
       tester,
       stockByColor: const {
         'Brown': {'40': 4},
-        'Black': {'41': 6},
+        'Black': {'41': 12},
       },
       initialColor: 'Black',
     );
@@ -187,19 +223,22 @@ void main() {
     expect(find.text('40'), findsNothing);
     expect(find.textContaining('Black · ₱100 each'), findsOneWidget);
 
-    await stepSize(tester, '41', 2);
+    await stepSize(tester, '41', 10);
     await submit(tester);
 
-    final captured = verify(() => mockService.requestReservation(
-          productId: any(named: 'productId'),
-          storeId: any(named: 'storeId'),
-          quantity: any(named: 'quantity'),
-          requestedSizes: captureAny(named: 'requestedSizes'),
-          note: any(named: 'note'),
-        )).captured;
+    final captured = verify(
+      () => mockService.requestReservation(
+        productId: any(named: 'productId'),
+        storeId: any(named: 'storeId'),
+        quantity: any(named: 'quantity'),
+        requestedSizes: captureAny(named: 'requestedSizes'),
+        note: any(named: 'note'),
+        voucherCode: any(named: 'voucherCode'),
+      ),
+    ).captured;
 
     expect(captured[0], [
-      {'size': '41', 'quantity': 2, 'color': 'Black'},
+      {'size': '41', 'quantity': 10, 'color': 'Black'},
     ]);
   });
 
@@ -214,14 +253,14 @@ void main() {
     );
 
     await stepSize(tester, '40', 3);
-    expect(find.text('Total: 3 pairs'), findsOneWidget);
+    expect(find.text('Total: 3 of 10 required'), findsOneWidget);
 
     // Sizes are per colour, so a Brown count must not silently become a Black
     // request for a size Black may not even have.
     await tester.tap(find.text('Black'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Total: pick at least one size'), findsOneWidget);
+    expect(find.text('Total: pick at least 10 pairs'), findsOneWidget);
     expect(find.text('41'), findsOneWidget);
   });
 
@@ -235,22 +274,156 @@ void main() {
   testWidgets('a refusal keeps the sheet open with readable copy', (
     tester,
   ) async {
-    when(() => mockService.requestReservation(
-          productId: any(named: 'productId'),
-          storeId: any(named: 'storeId'),
-          quantity: any(named: 'quantity'),
-          requestedSizes: any(named: 'requestedSizes'),
-          note: any(named: 'note'),
-        )).thenThrow(
+    when(
+      () => mockService.requestReservation(
+        productId: any(named: 'productId'),
+        storeId: any(named: 'storeId'),
+        quantity: any(named: 'quantity'),
+        requestedSizes: any(named: 'requestedSizes'),
+        note: any(named: 'note'),
+        voucherCode: any(named: 'voucherCode'),
+      ),
+    ).thenThrow(
       const PostgrestException(message: 'NOT_ENOUGH_STOCK', code: 'P0001'),
     );
 
     await open(tester);
-    await stepSize(tester, '40', 1);
+    await stepSize(tester, '40', 6);
+    await stepSize(tester, '41', 4);
     await submit(tester);
 
     // Still open (the sheet did not pop), so the customer can adjust.
-    expect(find.text('20% GCash deposit if approved'), findsOneWidget);
+    expect(find.text('70% GCash deposit if approved'), findsOneWidget);
     expect(find.text('Send Request'), findsOneWidget);
+  });
+
+  testWidgets('a voucher is priced by the server and sent with the request', (
+    tester,
+  ) async {
+    final vouchers = MockVoucherService();
+    when(
+      () => vouchers.validate(
+        code: any(named: 'code'),
+        items: any(named: 'items'),
+      ),
+    ).thenAnswer(
+      (_) async => const VoucherQuote(
+        ok: true,
+        reason: VoucherReason.ok,
+        message: 'Voucher applied.',
+        code: 'SAVE50',
+        subtotal: 1000,
+        discountAmount: 50,
+        total: 1050,
+      ),
+    );
+    when(
+      () => mockService.requestReservation(
+        productId: any(named: 'productId'),
+        storeId: any(named: 'storeId'),
+        quantity: any(named: 'quantity'),
+        requestedSizes: any(named: 'requestedSizes'),
+        note: any(named: 'note'),
+        voucherCode: any(named: 'voucherCode'),
+      ),
+    ).thenAnswer((_) async => 'r-1');
+
+    await open(tester, voucherService: vouchers);
+    // The bulk floor is 10 pairs, so the request cannot be sent below it.
+    await stepSize(tester, '40', 10);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Voucher code (optional)'),
+      'save50',
+    );
+    await tester.ensureVisible(find.text('Apply'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+
+    // The quote came back from the server, so the sheet shows the code it
+    // normalized and the money it took off — not the code as typed.
+    expect(find.textContaining('SAVE50 — −₱50.00 off'), findsOneWidget);
+    expect(
+      find.textContaining('₱50.00 off the price at pickup'),
+      findsOneWidget,
+    );
+
+    await submit(tester);
+
+    verify(
+      () => mockService.requestReservation(
+        productId: 'p-1',
+        storeId: 's-1',
+                  quantity: 10,
+          requestedSizes: any(named: 'requestedSizes'),
+          note: null,
+          voucherCode: 'SAVE50',
+      ),
+    ).called(1);
+  });
+
+  testWidgets(
+    'a rejected voucher shows the server message and blocks nothing',
+    (tester) async {
+      final vouchers = MockVoucherService();
+      when(
+        () => vouchers.validate(
+          code: any(named: 'code'),
+          items: any(named: 'items'),
+        ),
+      ).thenAnswer(
+        (_) async => const VoucherQuote(
+          ok: false,
+          reason: VoucherReason.expired,
+          message: 'That code has expired.',
+        ),
+      );
+
+      await open(tester, voucherService: vouchers);
+      await stepSize(tester, '40', 6);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Voucher code (optional)'),
+        'OLD50',
+      );
+      await tester.ensureVisible(find.text('Apply'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('That code has expired.'), findsOneWidget);
+      // Still no applied code, so the request carries none.
+      expect(find.textContaining('off this request'), findsNothing);
+    },
+  );
+
+  testWidgets('nine pairs is not bulk: the CTA stays disabled and says why', (
+    tester,
+  ) async {
+    await open(tester);
+
+    await stepSize(tester, '40', 9);
+
+    expect(find.text('Total: 9 of 10 required'), findsOneWidget);
+    expect(find.textContaining('Add 1 more pair'), findsOneWidget);
+    expect(
+      tester
+          .widget<SolePrimaryButton>(find.byType(SolePrimaryButton))
+          .onPressed,
+      isNull,
+    );
+
+    await submit(tester);
+    verifyNever(
+      () => mockService.requestReservation(
+        productId: any(named: 'productId'),
+        storeId: any(named: 'storeId'),
+        quantity: any(named: 'quantity'),
+        requestedSizes: any(named: 'requestedSizes'),
+        note: any(named: 'note'),
+        voucherCode: any(named: 'voucherCode'),
+      ),
+    );
   });
 }

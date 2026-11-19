@@ -946,29 +946,36 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               // Same state-agreement as Bulk Reservations: amber +
               // "Awaiting pickup" when holds need eyes, sage + "Nothing
               // on hold" when the counter is clear.
-              Expanded(
-                child: SellerMetricCard(
-                  label: 'PICKUP RESERVATIONS',
-                  value: '${data.activePickups}',
-                  subtitle: data.activePickups > 0
-                      ? 'Awaiting pickup'
-                      : 'Nothing on hold',
-                  valueColor: data.activePickups > 0
-                      ? SellerTheme.amberDark
-                      : SellerTheme.sage,
-                  dotColor: data.activePickups > 0
-                      ? SellerTheme.amberDark
-                      : SellerTheme.sage,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const PickupReservationsScreen(),
-                      ),
-                    );
-                  },
+              //
+              // Hidden for now (AppConstants.pickupReservationsEnabled): the
+              // whole card goes, not just its tap target — a counter tile
+              // counting holds nobody can open would be worse than no tile.
+              // Bulk Reservations then takes the full width on its own.
+              if (AppConstants.pickupReservationsEnabled) ...[
+                Expanded(
+                  child: SellerMetricCard(
+                    label: 'PICKUP RESERVATIONS',
+                    value: '${data.activePickups}',
+                    subtitle: data.activePickups > 0
+                        ? 'Awaiting pickup'
+                        : 'Nothing on hold',
+                    valueColor: data.activePickups > 0
+                        ? SellerTheme.amberDark
+                        : SellerTheme.sage,
+                    dotColor: data.activePickups > 0
+                        ? SellerTheme.amberDark
+                        : SellerTheme.sage,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const PickupReservationsScreen(),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
+                const SizedBox(width: 10),
+              ],
               // Bulk Reservations — reseller stock holds awaiting approval.
               // Same state-agreement as Low Stock: amber + "Awaiting
               // approval" when the queue needs eyes, sage + "Nothing
@@ -1054,7 +1061,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 // FREE pickup holds (ANQUI item 14). Their stock is already off
                 // the shelf, so they are a queue of their own rather than part of
                 // the bulk count below — and they never need a deposit decision.
-                if (data.activePickups > 0)
+                // Hidden for now with the rest of the flow; the chip is a tap
+                // target into the hidden screen, so it cannot stay behind.
+                if (AppConstants.pickupReservationsEnabled &&
+                    data.activePickups > 0)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: SellerAlertChip(

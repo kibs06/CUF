@@ -8,6 +8,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/bulk_buying.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/product_provider.dart';
@@ -2895,7 +2896,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                                             // `size` is already the canonical
                                             // size key this product's variants
                                             // are stored under.
-                                            setState(() => _selectedSize = size);
+                                            setState(
+                                              () => _selectedSize = size,
+                                            );
                                           }
                                         : null,
                                     child: Stack(
@@ -3035,8 +3038,12 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                             // Pickup hold — FREE, 1-2 pairs of one size, held 24h.
                             // A different flow from the bulk (reseller) hold
                             // below: this one holds stock immediately and takes
-                            // no deposit.
-                            if (_totalStock() > 0)
+                            // no deposit. Hidden for now with the rest of the
+                            // flow (AppConstants.pickupReservationsEnabled), so
+                            // no hold can be created that the customer would then
+                            // have no screen to see.
+                            if (AppConstants.pickupReservationsEnabled &&
+                                _totalStock() > 0)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Align(
@@ -3093,8 +3100,10 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                                 ),
                               ),
                             // Reseller entry point — request a bulk hold from
-                            // the seller (shown only when the product has stock).
-                            if (_totalStock() > 0)
+                            // the seller. Shown only when the product can meet
+                            // the bulk floor: a sheet whose CTA could never
+                            // enable is worse than no link at all.
+                            if (_totalStock() >= kBulkMinimumQuantity)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Align(
@@ -3123,7 +3132,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                                           ),
                                           const SizedBox(width: 5),
                                           Text(
-                                            'Buying to resell? Request a bulk hold',
+                                            'Buying to resell? Request a bulk '
+                                            'hold ($kBulkMinimumQuantity+ pairs)',
                                             style:
                                                 AppConstants.bodyStyle(
                                                   fontSize: 12,

@@ -19,6 +19,7 @@ import {
 import { Area, AreaChart, ResponsiveContainer } from 'recharts'
 
 import SaleReceiptModal from '../components/payments/SaleReceiptModal.jsx'
+import BulkBuying from './BulkBuying.jsx'
 import ReceiptDelivery from './Receipts.jsx'
 import AnimatedNumber from '../components/ui/AnimatedNumber.jsx'
 import AvatarInitials from '../components/ui/AvatarInitials.jsx'
@@ -388,10 +389,17 @@ export default function Transactions() {
   // One page, two questions: what we sold (the ledger) and whether each
   // customer actually has their receipt (the delivery trail, which used to be
   // its own page). Both read sales, so they belong behind one nav entry.
-  const tab = searchParams.get('tab') === 'delivery' ? 'delivery' : 'sales'
+  // One page, three questions: what we sold (the ledger), what resellers asked
+  // us to hold (bulk buying, no order and no sale behind it) and whether each
+  // customer actually has their receipt (the delivery trail, which used to be
+  // its own page).
+  const requestedTab = searchParams.get('tab')
+  const tab =
+    requestedTab === 'delivery' ? 'delivery' : requestedTab === 'bulk' ? 'bulk' : 'sales'
   const switchTab = (next) => {
     const params = new URLSearchParams(searchParams)
     if (next === 'delivery') params.set('tab', 'delivery')
+    else if (next === 'bulk') params.set('tab', 'bulk')
     else params.delete('tab')
     setSearchParams(params, { replace: true })
     setPage(1)
@@ -410,6 +418,11 @@ export default function Transactions() {
             label: 'Paid sales',
             count: rows.length || null,
             hint: 'One row per sale whose money actually arrived — POS and online.',
+          },
+          {
+            key: 'bulk',
+            label: 'Bulk buying',
+            hint: 'Reseller holds requested from product pages — what was asked for, and the deposit that secures it.',
           },
           {
             key: 'delivery',
@@ -447,6 +460,8 @@ export default function Transactions() {
 
       {tab === 'delivery' ? (
         <ReceiptDelivery />
+      ) : tab === 'bulk' ? (
+        <BulkBuying />
       ) : (
         <>
       <section

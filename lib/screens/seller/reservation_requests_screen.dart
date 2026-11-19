@@ -3,13 +3,22 @@
 // once the customer submits a deposit proof, verify it here — confirming
 // pulls the units out of sellable stock. Reject with a reason, or fulfill
 // a deposit-paid hold once the reseller picks up.
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
 import '../../services/reservation_service.dart';
 import '../../services/store_service.dart';
+import '../../constants/bulk_deposit.dart';
+import '../../utils/bulk_reservation_export.dart';
+import '../../widgets/seller/bulk_reservation_share_sheet.dart';
+import '../../widgets/seller/size_leader_rows.dart';
 import 'widgets/deposit_proof_review_sheet.dart';
+
 class ReservationRequestsScreen extends StatefulWidget {
   const ReservationRequestsScreen({super.key});
 
@@ -23,14 +32,19 @@ class ReservationRequestsScreen extends StatefulWidget {
 /// colour wherever it appears on the card.
 const Color _depositAmber = Color(0xFFB45309);
 
+/// What the queue's menu can do with the list currently on screen.
+enum _ListExport { share, csv }
+
 class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
   final _service = ReservationService.instance;
   final _storeService = StoreService.instance;
   List<BulkReservation>? _items;
   String? _storeId;
+  String? _storeName;
   String? _error;
   String _filter = 'all'; // all | pending | active (live holds) | resolved
   bool _busy = false;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -42,7 +56,9 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
     // Opportunistic sweep: release anything past its deadline.
     await _service.expireStaleReservations();
     try {
-      _storeId ??= (await _storeService.getMyStore())?['id']?.toString();
+      final store = await _storeService.getMyStore();
+      _storeId ??= store?['id']?.toString();
+      _storeName = store?['name']?.toString();
       if (_storeId == null) {
         if (!mounted) return;
         setState(() => _error = 'No store found for this account.');
@@ -104,7 +120,8 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
     switch (_filter) {
       case 'pending':
         return 'New reseller requests appear here. Approving one asks the '
-            'customer for a 20% GCash deposit within 24 hours.';
+            'customer for a $kBulkReservationDepositLabel GCash deposit '
+            'within 24 hours.';
       case 'active':
         return 'Approved reservations stay here — unpaid deposit windows and '
             'paid holds — until pickup or expiry.';
@@ -141,9 +158,11 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           backgroundColor: approve ? SellerTheme.sage : AppConstants.error,
-          content: Text(approve
-              ? 'Approved — the customer now has 24 hours to pay the deposit.'
-              : 'Request declined.'),
+          content: Text(
+            approve
+                ? 'Approved — the customer now has 24 hours to pay the deposit.'
+                : 'Request declined.',
+          ),
         ),
       );
       await _load();
@@ -178,23 +197,31 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Approve reservation',
-                    style: AppConstants.headlineStyle(fontSize: 17)),
+                Text(
+                  'Approve reservation',
+                  style: AppConstants.headlineStyle(fontSize: 17),
+                ),
                 const SizedBox(height: 4),
                 Text(
-                  'Approving asks the customer to pay a 20% GCash deposit '
-                  'within 24 hours. Stock leaves your sellable inventory '
+                  'Approving asks the customer to pay a '
+                  '$kBulkReservationDepositLabel GCash deposit within 24 '
+                  'hours. Stock leaves your sellable inventory '
                   'ONLY after you confirm their payment — approving alone '
-                  'holds nothing.',
+                  'holds nothing. Pickup only: the customer collects the '
+                  'units at your store, nothing is shipped.',
                   style: AppConstants.bodyStyle(
-                      fontSize: 12, color: AppConstants.secondary),
+                    fontSize: 12,
+                    color: AppConstants.secondary,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   'Hold deadline after the deposit is confirmed: '
                   '${r.quantity} units for the chosen number of days.',
                   style: AppConstants.bodyStyle(
-                      fontSize: 12, color: AppConstants.secondary),
+                    fontSize: 12,
+                    color: AppConstants.secondary,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Wrap(
@@ -228,12 +255,15 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     child: Text(
                       'Approve & request deposit (${selected > 1 ? '$selected days' : '1 day'} hold)',
                       style: AppConstants.bodyStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
@@ -257,8 +287,7 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -266,8 +295,10 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Decline request',
-                    style: AppConstants.headlineStyle(fontSize: 17)),
+                Text(
+                  'Decline request',
+                  style: AppConstants.headlineStyle(fontSize: 17),
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: ctrl,
@@ -276,8 +307,7 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
                   autofocus: true,
                   style: AppConstants.bodyStyle(fontSize: 13),
                   decoration: InputDecoration(
-                    hintText:
-                        'Reason (optional) — the customer sees this',
+                    hintText: 'Reason (optional) — the customer sees this',
                     counterText: '',
                     isDense: true,
                     contentPadding: const EdgeInsets.all(12),
@@ -297,11 +327,16 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    child: Text('Decline request',
-                        style: AppConstants.bodyStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    child: Text(
+                      'Decline request',
+                      style: AppConstants.bodyStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -317,8 +352,10 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Mark as fulfilled?',
-            style: AppConstants.headlineStyle(fontSize: 16)),
+        title: Text(
+          'Mark as fulfilled?',
+          style: AppConstants.headlineStyle(fontSize: 16),
+        ),
         content: Text(
           'Use this once the customer paid and picked up the '
           '${r.quantity} units.',
@@ -326,15 +363,17 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Back')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Back'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
               'Fulfilled',
               style: AppConstants.bodyStyle(
-                  fontWeight: FontWeight.w600,
-                  color: SellerTheme.sageDark),
+                fontWeight: FontWeight.w600,
+                color: SellerTheme.sageDark,
+              ),
             ),
           ),
         ],
@@ -359,14 +398,88 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
     }
   }
 
+  /// The tab's own name, so an exported list says which slice it is.
+  String get _filterLabel {
+    switch (_filter) {
+      case 'pending':
+        return 'Pending';
+      case 'active':
+        return 'Active';
+      case 'resolved':
+        return 'Resolved';
+      default:
+        return 'All';
+    }
+  }
+
+  void _toast(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: error ? AppConstants.error : AppConstants.primary,
+        content: Text(message),
+      ),
+    );
+  }
+
+  /// Opens the preview page first: a seller decides what leaves the phone
+  /// after seeing it laid out, not from a two-line text snippet. The PDF is
+  /// built only from that page's buttons.
+  Future<void> _shareList() async {
+    final list = _filtered;
+    if (list.isEmpty) {
+      _toast('Nothing to share in this list yet.');
+      return;
+    }
+    await showBulkReservationShareSheet(
+      context,
+      items: list,
+      filterLabel: _filterLabel,
+      storeName: _storeName,
+    );
+  }
+
+  Future<void> _downloadList() async {
+    final list = _filtered;
+    if (list.isEmpty) {
+      _toast('Nothing to download in this list yet.');
+      return;
+    }
+    setState(() => _exporting = true);
+    try {
+      // The BOM is for Excel: without it a CSV opened by double-click turns
+      // the peso sign and accents into mojibake.
+      final csv = '\uFEFF${reservationsCsv(list)}';
+      final day = DateTime.now().toIso8601String().substring(0, 10);
+      final saved = await FileSaver.instance.saveAs(
+        name: 'bulk-reservations-$day',
+        bytes: Uint8List.fromList(utf8.encode(csv)),
+        fileExtension: 'csv',
+        mimeType: MimeType.csv,
+      );
+      _toast(
+        saved == null
+            ? 'Download cancelled — no file was saved.'
+            : 'Saved to $saved',
+      );
+    } catch (e) {
+      _toast('Export failed: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
-        title: Text('Bulk Reservations',
-            style: AppConstants.headlineStyle(fontSize: 18)),
+        title: Text(
+          'Bulk Reservations',
+          style: AppConstants.headlineStyle(fontSize: 18),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -374,6 +487,42 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
             icon: const Icon(Icons.refresh, size: 20),
             onPressed: _busy ? null : _load,
             tooltip: 'Refresh',
+          ),
+          // The list is what a seller takes to a supplier or to a spreadsheet,
+          // so both exits sit one tap from the queue they describe. It exports
+          // the CURRENT tab: "share this list" must mean the list on screen.
+          PopupMenuButton<_ListExport>(
+            enabled: !_exporting,
+            tooltip: 'Share or download this list',
+            icon: const Icon(Icons.ios_share, size: 19),
+            onSelected: (choice) {
+              switch (choice) {
+                case _ListExport.share:
+                  _shareList();
+                case _ListExport.csv:
+                  _downloadList();
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: _ListExport.share,
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.share_outlined, size: 18),
+                  title: Text('Preview & share PDF'),
+                ),
+              ),
+              PopupMenuItem(
+                value: _ListExport.csv,
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.download_outlined, size: 18),
+                  title: Text('Download as CSV'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -447,8 +596,9 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
                           _emptyHint,
                           textAlign: TextAlign.center,
                           style: AppConstants.bodyStyle(
-                              fontSize: 13,
-                              color: AppConstants.secondary),
+                            fontSize: 13,
+                            color: AppConstants.secondary,
+                          ),
                         ),
                       ],
                     ),
@@ -464,6 +614,7 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, i) => _SellerReservationTile(
                       reservation: filtered[i],
+                      storeName: _storeName,
                       busy: _busy,
                       onApprove: () => _decide(filtered[i], approve: true),
                       onReject: () => _decide(filtered[i], approve: false),
@@ -493,21 +644,30 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
           style: AppConstants.bodyStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-            color: selected ? AppConstants.surfaceLight : AppConstants.secondary,
+            color: selected
+                ? AppConstants.surfaceLight
+                : AppConstants.secondary,
           ),
         ),
         backgroundColor: AppConstants.surfaceLight,
         selectedColor: AppConstants.primary,
-        side: BorderSide(
-          color: AppConstants.borderGray.withValues(alpha: 0.7),
-        ),
+        side: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.7)),
       ),
     );
   }
 }
 
-class _SellerReservationTile extends StatelessWidget {
+/// One reservation in the queue.
+///
+/// Collapsed, it answers the three questions the queue exists for — what, who,
+/// and how many — plus the one action the state allows. Expanded, it is the
+/// record: every size with its colour, the customer's note, the deposit gate,
+/// the hold deadline, when the request arrived, and the id a seller quotes when
+/// asking about it. It also carries the per-reservation share, because the
+/// thing a seller forwards to a supplier is one hold, not the whole queue.
+class _SellerReservationTile extends StatefulWidget {
   final BulkReservation reservation;
+  final String? storeName;
   final bool busy;
   final VoidCallback onApprove;
   final VoidCallback onReject;
@@ -516,6 +676,7 @@ class _SellerReservationTile extends StatelessWidget {
 
   const _SellerReservationTile({
     required this.reservation,
+    this.storeName,
     required this.busy,
     required this.onApprove,
     required this.onReject,
@@ -524,10 +685,28 @@ class _SellerReservationTile extends StatelessWidget {
   });
 
   @override
+  State<_SellerReservationTile> createState() => _SellerReservationTileState();
+}
+
+class _SellerReservationTileState extends State<_SellerReservationTile> {
+  bool _expanded = false;
+
+  BulkReservation get r => widget.reservation;
+
+  /// Same preview the app bar opens, scoped to this one hold — a seller
+  /// forwards one request to a supplier far more often than the whole queue.
+  Future<void> _share() async {
+    await showBulkReservationShareSheet(
+      context,
+      items: [r],
+      filterLabel: 'Single reservation',
+      storeName: widget.storeName,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final r = reservation;
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         // Same card as an order card: one card language across the seller's
         // queues, including the raised fill and hairline that carry dark mode.
@@ -539,205 +718,303 @@ class _SellerReservationTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  '${r.quantity} units — ${r.productName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppConstants.bodyStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: AppConstants.secondary,
+          // ── Header — the whole strip toggles the details ─────────────
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '${r.quantity} units — ${r.productName}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppConstants.bodyStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: AppConstants.secondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _StatusChip(status: r.status),
+                      const SizedBox(width: 2),
+                      // Chevron is the affordance: it points the way the card
+                      // will move, and turns as the details open.
+                      AnimatedRotation(
+                        turns: _expanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 20,
+                          color: SellerTheme.textMuted,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _StatusChip(status: r.status),
-            ],
-          ),
-          Divider(height: 16, color: SellerTheme.cardBorder),
-          Text(
-            '${r.customerName ?? 'A customer'}'
-            '${r.createdAt != null ? ' · ${_fmt(r.createdAt!)}' : ''}',
-            style: AppConstants.bodyStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppConstants.secondary,
-            ),
-          ),
-          // Requested size breakdown (informational)
-          if (r.requestedSizes.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                for (final s in r.requestedSizes)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color:
-                          AppConstants.secondary.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(8),
+                  Divider(height: 16, color: SellerTheme.cardBorder),
+                  Text(
+                    '${r.customerName ?? 'A customer'}'
+                    '${r.createdAt != null ? ' · ${_fmt(r.createdAt!)}' : ''}',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppConstants.secondary,
                     ),
-                    child: Text(
-                      // The colour leads: it is the variant the customer is
-                      // asking for, and what the seller has to pull.
-                      '${s['color'] == null ? '' : '${s['color']} · '}'
-                      'Size ${s['size']}: ${s['quantity']}',
+                  ),
+                  // Collapsed glimpse of the sizes: enough to know whether the
+                  // hold is one size or a spread, without opening the card.
+                  if (!_expanded && r.requestedSizes.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      sizesSummary(r),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppConstants.bodyStyle(
-                        fontSize: 11,
-                        color: AppConstants.secondary,
+                        fontSize: 11.5,
+                        color: SellerTheme.textMuted,
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ],
-          if (r.note != null && r.note!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              '"${r.note}"',
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                color: SellerTheme.textSecondary,
-              ).copyWith(fontStyle: FontStyle.italic),
-            ),
-          ],
-          if (r.isAwaitingDeposit) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Deposit: ₱${(r.depositAmount ?? 0).toStringAsFixed(0)} — waiting for the customer'
-              '${r.depositDeadline != null ? ' · ${_fmt(r.depositDeadline!)} to pay' : ''}',
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: _depositAmber,
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              'No stock is held yet — it leaves your inventory only after you confirm their payment.',
-              style: AppConstants.bodyStyle(
-                fontSize: 11,
-                color: SellerTheme.textMuted,
-              ),
-            ),
-          ],
-          if (r.isApproved && r.expiresAt != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Held until ${_fmt(r.expiresAt!)}'
-              '${r.depositStatus == 'paid' ? ' · deposit ₱${(r.depositAmount ?? 0).toStringAsFixed(0)} paid' : ''}',
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: SellerTheme.sageDark,
-              ),
-            ),
-          ],
-          if (r.status == 'expired') ...[
-            const SizedBox(height: 6),
-            Text(
-              'Expired — stock returned to inventory',
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                color: AppConstants.error,
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          // Actions — 36px-high buttons on the same 10px radius as an order
-          // card's, so the two queues are tapped the same way.
-          if (r.isPending)
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 36,
-                    child: OutlinedButton(
-                      onPressed: busy ? null : onReject,
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppConstants.error),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: Text(
-                        'Decline',
-                        style: AppConstants.bodyStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppConstants.error,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 36,
-                    child: FilledButton(
-                      onPressed: busy ? null : onApprove,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: SellerTheme.sage,
-                        disabledBackgroundColor:
-                            SellerTheme.sage.withValues(alpha: 0.6),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: busy
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              'Approve & Hold',
-                              style: AppConstants.bodyStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          // The state's one primary action, full width and tinted by state —
-          // the shape an order card's primary button already has.
-          else if (r.isAwaitingDeposit)
-            _TileAction(
-              label: 'Verify Deposit Payment',
-              color: _depositAmber,
-              busy: busy,
-              onPressed: onVerifyDeposit,
-            )
-          else if (r.isApproved)
-            _TileAction(
-              label: 'Mark Fulfilled',
-              color: SellerTheme.sage,
-              busy: busy,
-              onPressed: onFulfill,
-            ),
+          ),
+
+          // ── Details ──────────────────────────────────────────────────
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: _expanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
+                    child: _buildDetails(),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+
+          // ── Actions — the state's one move, always visible ───────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+            child: _buildActions(),
+          ),
         ],
       ),
     );
   }
 
+  Widget _buildDetails() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (r.requestedSizes.isNotEmpty) ...[
+          // One size per line, leader to the count: chips forced the reader to
+          // parse a sentence, and a pulling list is read down the column.
+          Text(
+            'SIZES REQUESTED',
+            style: AppConstants.monoStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: SellerTheme.textMuted,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizeLeaderRows(reservation: r),
+          const SizedBox(height: 8),
+        ],
+        if (r.note != null && r.note!.trim().isNotEmpty) ...[
+          _DetailLine(label: 'Note', value: '"${r.note!.trim()}"'),
+          const SizedBox(height: 4),
+        ],
+        if (r.createdAt != null)
+          _DetailLine(label: 'Requested', value: _stamp(r.createdAt!)),
+        // The code the customer claimed, and what it took off the price they
+        // will pay at pickup — the store has to honour it at handover.
+        if (r.voucherCode != null && r.voucherCode!.isNotEmpty)
+          _DetailLine(
+            label: 'Voucher',
+            value:
+                '${r.voucherCode} · −₱'
+                '${(r.voucherDiscount ?? 0).toStringAsFixed(2)} off at pickup',
+          ),
+        if (r.depositAmount != null)
+          _DetailLine(
+            label: 'Deposit',
+            value:
+                '₱${r.depositAmount!.toStringAsFixed(0)} · ${r.depositStatus}'
+                '${r.depositDeadline != null ? ' · due ${_stamp(r.depositDeadline!)}' : ''}',
+          ),
+        if (r.depositPaidAt != null)
+          _DetailLine(label: 'Deposit paid', value: _stamp(r.depositPaidAt!)),
+        if (r.expiresAt != null && !r.isTerminal)
+          _DetailLine(
+            label: r.isApproved ? 'Held until' : 'Window ends',
+            value: _stamp(r.expiresAt!),
+          ),
+        if (r.isAwaitingDeposit) ...[
+          const SizedBox(height: 6),
+          Text(
+            'No stock is held yet — it leaves your inventory only after you confirm their payment.',
+            style: AppConstants.bodyStyle(
+              fontSize: 11,
+              color: SellerTheme.textMuted,
+            ),
+          ),
+        ],
+        if (r.status == 'expired') ...[
+          const SizedBox(height: 6),
+          Text(
+            'Expired — stock returned to inventory',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.error,
+            ),
+          ),
+        ],
+        if (r.rejectionReason != null && r.rejectionReason!.trim().isNotEmpty)
+          _DetailLine(label: 'Declined', value: r.rejectionReason!.trim()),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'ID ${r.id.length > 8 ? r.id.substring(0, 8) : r.id}',
+                style: AppConstants.monoStyle(
+                  fontSize: 10.5,
+                  color: SellerTheme.textMuted,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _share,
+              icon: const Icon(Icons.ios_share, size: 15),
+              label: Text(
+                'Share',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: SellerTheme.sageDark,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActions() {
+    if (r.isPending) {
+      return Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 36,
+              child: OutlinedButton(
+                onPressed: widget.busy ? null : widget.onReject,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppConstants.error),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  'Decline',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppConstants.error,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SizedBox(
+              height: 36,
+              child: FilledButton(
+                onPressed: widget.busy ? null : widget.onApprove,
+                style: FilledButton.styleFrom(
+                  backgroundColor: SellerTheme.sage,
+                  disabledBackgroundColor: SellerTheme.sage.withValues(
+                    alpha: 0.6,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: widget.busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        'Approve & Hold',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    if (r.isAwaitingDeposit) {
+      return _TileAction(
+        label: 'Verify Deposit Payment',
+        color: _depositAmber,
+        busy: widget.busy,
+        onPressed: widget.onVerifyDeposit,
+      );
+    }
+    if (r.isApproved) {
+      return _TileAction(
+        label: 'Mark Fulfilled',
+        color: SellerTheme.sage,
+        busy: widget.busy,
+        onPressed: widget.onFulfill,
+      );
+    }
+    // Resolved rows have no action left; the card keeps a little breathing
+    // room rather than collapsing the padding to nothing.
+    return const SizedBox.shrink();
+  }
+
+  /// `Nov 20 (3d left)` — a compact deadline for the header line.
   static String _fmt(DateTime d) {
     const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final now = DateTime.now();
     final diff = d.difference(now);
@@ -746,6 +1023,73 @@ class _SellerReservationTile extends StatelessWidget {
     if (diff.inHours >= 1) return '$date (${diff.inHours}h left)';
     if (diff.isNegative) return date;
     return '$date (${diff.inMinutes}m left)';
+  }
+
+  /// A full timestamp for the details block — the header's relative form
+  /// ("3d left") is useful at a glance and useless in a record.
+  static String _stamp(DateTime d) {
+    final local = d.toLocal();
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final h24 = local.hour;
+    final h = h24 % 12 == 0 ? 12 : h24 % 12;
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '${months[local.month]} ${local.day}, ${local.year} · $h:$mm '
+        '${h24 >= 12 ? 'PM' : 'AM'}';
+  }
+}
+
+/// One `label — value` line in the expanded block. Label in muted caps, value
+/// on the next line: a long deposit string wraps instead of squeezing.
+class _DetailLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: AppConstants.bodyStyle(
+                fontSize: 11,
+                color: SellerTheme.textMuted,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: AppConstants.bodyStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: AppConstants.secondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

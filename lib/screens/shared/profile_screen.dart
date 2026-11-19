@@ -193,11 +193,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// strand a rejected seller) or claim a badge the admin never granted.
   Future<String> _loadBusinessStatus(String profileId) async {
     try {
-      final row = await AuthService.instance.fetchBusinessVerification(profileId);
+      final row = await AuthService.instance.fetchBusinessVerification(
+        profileId,
+      );
       final status =
           row?['verification_status']?.toString() ?? AppConstants.bizStatusNone;
-      final permitUntil =
-          DateTime.tryParse(row?['permit_valid_until']?.toString() ?? '');
+      final permitUntil = DateTime.tryParse(
+        row?['permit_valid_until']?.toString() ?? '',
+      );
       if (mounted) {
         setState(() {
           _bizStatus = status;
@@ -245,7 +248,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(newOpen ? 'Store is now open' : 'Store is now closed'),
+            content: Text(
+              newOpen ? 'Store is now open' : 'Store is now closed',
+            ),
             backgroundColor: AppConstants.success,
           ),
         );
@@ -255,7 +260,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() => _isTogglingStore = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'),
+            content: Text(
+              'Error: ${e.toString().replaceAll('Exception: ', '')}',
+            ),
             backgroundColor: AppConstants.error,
           ),
         );
@@ -294,7 +301,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(success ? 'Profile updated' : auth.errorMessage ?? 'Failed to update profile.'),
+        content: Text(
+          success
+              ? 'Profile updated'
+              : auth.errorMessage ?? 'Failed to update profile.',
+        ),
         backgroundColor: success ? AppConstants.success : AppConstants.error,
       ),
     );
@@ -424,9 +435,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // appearance row. Settings hides the customer-only rows.
                   onPressed: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SettingsScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
                     );
                   },
                   tooltip: 'Settings',
@@ -506,11 +515,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _settingsRow(
                         icon: Icons.new_releases_outlined,
                         title: "What's New",
-                        subtitle: context.watch<UpdateProvider>().installedVersion != null
+                        subtitle:
+                            context.watch<UpdateProvider>().installedVersion !=
+                                null
                             ? 'v${context.watch<UpdateProvider>().installedVersion}'
                             : null,
-                        showDotBadge:
-                            context.watch<UpdateProvider>().hasUnviewedUpdate,
+                        showDotBadge: context
+                            .watch<UpdateProvider>()
+                            .hasUnviewedUpdate,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -545,8 +557,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             CircleAvatar(
               radius: 44,
               backgroundColor: AppConstants.primary.withValues(alpha: 0.12),
-              backgroundImage:
-                  auth.avatarUrl != null ? NetworkImage(auth.avatarUrl!) : null,
+              backgroundImage: auth.avatarUrl != null
+                  ? NetworkImage(auth.avatarUrl!)
+                  : null,
               child: _isUploadingAvatar
                   ? const SizedBox(
                       width: 22,
@@ -557,14 +570,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     )
                   : auth.avatarUrl == null
-                      ? Text(
-                          _initials(auth.displayName),
-                          style: AppConstants.headlineStyle(
-                            fontSize: 28,
-                            color: AppConstants.primary,
-                          ),
-                        )
-                      : null,
+                  ? Text(
+                      _initials(auth.displayName),
+                      style: AppConstants.headlineStyle(
+                        fontSize: 28,
+                        color: AppConstants.primary,
+                      ),
+                    )
+                  : null,
             ),
             Positioned(
               right: -2,
@@ -635,8 +648,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           businessStatus: _bizStatus,
         ),
         const SizedBox(height: 12),
-        if (auth.userRole != AppConstants.roleSeller)
-          _buildFollowingStat(auth),
+        if (auth.userRole != AppConstants.roleSeller) _buildFollowingStat(auth),
       ],
     );
   }
@@ -656,7 +668,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppConstants.surfaceLight,
-                borderRadius: BorderRadius.circular(16),                  border: Border.all(color: AppConstants.borderGray.withValues(alpha: 0.4)),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppConstants.borderGray.withValues(alpha: 0.4),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -676,7 +691,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _fieldLabel('Email'),
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 13,
+                    ),
                     decoration: BoxDecoration(
                       color: AppConstants.borderGray.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(12),
@@ -689,7 +707,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             style: AppConstants.bodyStyle(fontSize: 14),
                           ),
                         ),
-                        Icon(Icons.lock_outline, size: 16, color: Colors.grey.shade500),
+                        Icon(
+                          Icons.lock_outline,
+                          size: 16,
+                          color: Colors.grey.shade500,
+                        ),
                       ],
                     ),
                   ),
@@ -839,25 +861,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final status = snapshot.data ?? AppConstants.bizStatusNone;
         final (bg, fg, label) = switch (status) {
           AppConstants.bizStatusVerified => (
-              AppConstants.success.withValues(alpha: 0.15),
-              AppConstants.success,
-              'Verified',
-            ),
+            AppConstants.success.withValues(alpha: 0.15),
+            AppConstants.success,
+            'Verified',
+          ),
           AppConstants.bizStatusPending => (
-              Colors.amber.withValues(alpha: 0.2),
-              const Color(0xFFB45309),
-              'Pending',
-            ),
+            Colors.amber.withValues(alpha: 0.2),
+            const Color(0xFFB45309),
+            'Pending',
+          ),
           AppConstants.bizStatusRejected => (
-              AppConstants.error.withValues(alpha: 0.15),
-              AppConstants.error,
-              'Rejected',
-            ),
+            AppConstants.error.withValues(alpha: 0.15),
+            AppConstants.error,
+            'Rejected',
+          ),
           _ => (
-              AppConstants.secondary.withValues(alpha: 0.08),
-              AppConstants.secondary.withValues(alpha: 0.6),
-              'Optional',
-            ),
+            AppConstants.secondary.withValues(alpha: 0.08),
+            AppConstants.secondary.withValues(alpha: 0.6),
+            'Optional',
+          ),
         };
         return Padding(
           padding: const EdgeInsets.only(right: 4),
@@ -920,9 +942,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const MyOrdersScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const MyOrdersScreen()),
                 );
               },
               child: Row(
@@ -935,7 +955,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: AppConstants.primary,
                     ),
                   ),
-                  const Icon(Icons.chevron_right, size: 16, color: AppConstants.primary),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 16,
+                    color: AppConstants.primary,
+                  ),
                 ],
               ),
             ),
@@ -954,9 +978,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => MyOrdersScreen(
-                          initialFilter: item.filter,
-                        ),
+                        builder: (_) =>
+                            MyOrdersScreen(initialFilter: item.filter),
                       ),
                     );
                   },
@@ -1041,19 +1064,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // Pickup holds — the free 24-hour hold a customer makes on a
             // product page. Separate row from the bulk (reseller) holds below,
             // because the two are different flows (no deposit, no approval).
-            _settingsRow(
-              icon: Icons.storefront_outlined,
-              title: 'My Pickup Reservations',
-              subtitle: 'Free 24-hour holds waiting for you',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const MyPickupReservationsScreen(),
-                  ),
-                );
-              },
-            ),
-            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            // Hidden for now with the rest of the flow (see
+            // AppConstants.pickupReservationsEnabled).
+            if (AppConstants.pickupReservationsEnabled) ...[
+              _settingsRow(
+                icon: Icons.storefront_outlined,
+                title: 'My Pickup Reservations',
+                subtitle: 'Free 24-hour holds waiting for you',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const MyPickupReservationsScreen(),
+                    ),
+                  );
+                },
+              ),
+              const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            ],
             // Bulk (reseller) reservations — holds requested from product
             // pages; any customer can resell, which is why this is not gated on
             // a separate "reseller" role.
@@ -1093,9 +1120,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               subtitle: 'Create discount codes and see who used them',
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const VouchersScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const VouchersScreen()),
                 );
               },
             ),
@@ -1308,15 +1333,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           children: [
                             Builder(
                               builder: (context) {
-                                final rating =
-                                    (store['rating'] as num?)?.toDouble();
+                                final rating = (store['rating'] as num?)
+                                    ?.toDouble();
                                 final count =
-                                    (store['review_count'] as num?)?.toInt() ?? 0;
+                                    (store['review_count'] as num?)?.toInt() ??
+                                    0;
                                 final label = rating != null && count > 0
                                     ? '${rating.toStringAsFixed(1)} ★ ($count)'
                                     : count > 0
-                                        ? '($count)'
-                                        : 'View';
+                                    ? '($count)'
+                                    : 'View';
                                 return Text(
                                   label,
                                   style: AppConstants.bodyStyle(
@@ -1331,8 +1357,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             Icon(
                               Icons.chevron_right,
                               size: 18,
-                              color:
-                                  AppConstants.secondary.withValues(alpha: 0.4),
+                              color: AppConstants.secondary.withValues(
+                                alpha: 0.4,
+                              ),
                             ),
                           ],
                         ),
@@ -1341,9 +1368,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           if (storeId == null || storeId.isEmpty) return;
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => SellerReviewsScreen(
-                                storeId: storeId,
-                              ),
+                              builder: (_) =>
+                                  SellerReviewsScreen(storeId: storeId),
                             ),
                           );
                         },
@@ -1371,7 +1397,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isLoaded = followProvider.isLoaded;
 
     return Semantics(
-      label: isLoaded ? 'Following, $count, opens list of followed stores' : 'Loading following count',
+      label: isLoaded
+          ? 'Following, $count, opens list of followed stores'
+          : 'Loading following count',
       button: true,
       child: GestureDetector(
         onTap: () {
@@ -1476,8 +1504,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         : DateTime.tryParse(value?.toString() ?? '');
     if (date == null) return 'Unknown';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.year}';
   }
@@ -1485,8 +1523,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── Business-permit expiry (verified sellers) ──────────────────
 
   static const List<String> _monthsShort = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   String _permitDateLabel(DateTime date) =>
@@ -1495,9 +1543,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// Whole days from today to [until], negative once it has passed.
   int _daysUntil(DateTime until) {
     final today = DateTime.now();
-    return DateTime(until.year, until.month, until.day)
-        .difference(DateTime(today.year, today.month, today.day))
-        .inDays;
+    return DateTime(
+      until.year,
+      until.month,
+      until.day,
+    ).difference(DateTime(today.year, today.month, today.day)).inDays;
   }
 
   /// The reminder in words. A missing date is an ask, not an error: the
@@ -1600,7 +1650,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 subtitle,
                 style: AppConstants.bodyStyle(
                   fontSize: 12,
-                  color: subtitleColor ??
+                  color:
+                      subtitleColor ??
                       AppConstants.secondary.withValues(alpha: 0.5),
                 ),
               ),
@@ -1648,8 +1699,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-
-
 }
 
 // ══════════════════════════════════════════════════════════════════

@@ -26,6 +26,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
   final _taglineController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
+  final _contactController = TextEditingController();
   final _storeService = StoreService.instance;
   final _imagePicker = ImagePicker();
 
@@ -61,11 +62,15 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     _taglineController.text = s['tagline'] ?? '';
     _descriptionController.text = s['description'] ?? '';
     _locationController.text = s['location'] ?? '';
+    _contactController.text = s['contact_number'] ?? '';
     _brandColor = s['brand_color'] ?? '#8B5A2B';
     _isOpen = s['is_open'] ?? true;
     final tags = s['tags'];
     if (tags is List) {
-      _tags = tags.map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList();
+      _tags = tags
+          .map((e) => e?.toString() ?? '')
+          .where((e) => e.isNotEmpty)
+          .toList();
     }
   }
 
@@ -75,6 +80,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     _taglineController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _contactController.dispose();
 
     super.dispose();
   }
@@ -94,14 +100,13 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         brandColor: _brandColor,
         isOpen: _isOpen,
         description: _descriptionController.text,
+        contactNumber: _contactController.text,
         tags: _tags,
         newLogoImage: _newLogoImage,
         newBannerImage: _newBannerImage,
         removeLogo: _removeLogo,
         removeBanner: _removeBanner,
       );
-
-
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -117,7 +122,8 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Error: ${e.toString().replaceAll('Exception: ', '')}'),
+              'Error: ${e.toString().replaceAll('Exception: ', '')}',
+            ),
             backgroundColor: AppConstants.error,
           ),
         );
@@ -155,7 +161,9 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
                 children: [
                   // ── Section 1: Banner & Logo ──
                   _buildSectionHeader(
-                      'Store Banner & Logo', Icons.photo_library_outlined),
+                    'Store Banner & Logo',
+                    Icons.photo_library_outlined,
+                  ),
                   const SizedBox(height: 12),
                   _buildBannerAndLogoSecion(),
                   const SizedBox(height: 28),
@@ -205,18 +213,22 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
 
   // ── Banner & Logo ──
 
-  bool get _hasBanner => _newBannerImage != null ||
-      (widget.store['banner_url']?.toString().isNotEmpty == true && !_removeBanner);
-  bool get _hasLogo => _newLogoImage != null ||
+  bool get _hasBanner =>
+      _newBannerImage != null ||
+      (widget.store['banner_url']?.toString().isNotEmpty == true &&
+          !_removeBanner);
+  bool get _hasLogo =>
+      _newLogoImage != null ||
       (widget.store['logo_url']?.toString().isNotEmpty == true && !_removeLogo);
 
   Widget _buildBannerAndLogoSecion() {
     final existingBannerUrl = widget.store['banner_url']?.toString();
     final existingLogoUrl = widget.store['logo_url']?.toString();
-    final showBanner = _newBannerImage != null ||
+    final showBanner =
+        _newBannerImage != null ||
         (existingBannerUrl != null && !_removeBanner);
-    final showLogo = _newLogoImage != null ||
-        (existingLogoUrl != null && !_removeLogo);
+    final showLogo =
+        _newLogoImage != null || (existingLogoUrl != null && !_removeLogo);
 
     return SizedBox(
       height: 200,
@@ -241,40 +253,43 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
                       ),
                     )
                   : showBanner && existingBannerUrl != null
-                      ? ClipRRect(
-                          borderRadius: AppConstants.cardRadius,
-                          child: CachedNetworkImage(
-                            imageUrl: existingBannerUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (_, _) => const Center(
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppConstants.primary),
-                              ),
+                  ? ClipRRect(
+                      borderRadius: AppConstants.cardRadius,
+                      child: CachedNetworkImage(
+                        imageUrl: existingBannerUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppConstants.primary,
                             ),
                           ),
-                        )
-                      : Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.camera_alt,
-                                size: 36,
-                                color: AppConstants.primary
-                                    .withValues(alpha: 0.5)),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Tap to add banner',
-                              style: AppConstants.bodyStyle(
-                                fontSize: 12,
-                                color: AppConstants.secondary
-                                    .withValues(alpha: 0.5),
-                              ),
-                            ),
-                          ],
                         ),
+                      ),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.camera_alt,
+                          size: 36,
+                          color: AppConstants.primary.withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Tap to add banner',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            color: AppConstants.secondary.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
           // Banner delete button
@@ -291,11 +306,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
                     color: Colors.black.withValues(alpha: 0.5),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.close,
-                    color: Colors.white,
-                    size: 16,
-                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 16),
                 ),
               ),
             ),
@@ -315,7 +326,9 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
                       shape: BoxShape.circle,
                       color: AppConstants.surfaceLight,
                       border: Border.all(
-                          color: AppConstants.surfaceLight, width: 3),
+                        color: AppConstants.surfaceLight,
+                        width: 3,
+                      ),
                       boxShadow: AppConstants.warmShadow,
                     ),
                     child: _newLogoImage != null
@@ -327,26 +340,28 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
                             ),
                           )
                         : showLogo && existingLogoUrl != null
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(40),
-                                child: CachedNetworkImage(
-                                  imageUrl: existingLogoUrl,
-                                  fit: BoxFit.cover,
-                                  placeholder: (_, _) => Center(
-                                    child: SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: AppConstants.primary),
-                                    ),
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(40),
+                            child: CachedNetworkImage(
+                              imageUrl: existingLogoUrl,
+                              fit: BoxFit.cover,
+                              placeholder: (_, _) => Center(
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppConstants.primary,
                                   ),
                                 ),
-                              )
-                            : Icon(Icons.store_outlined,
-                                size: 32,
-                                color: AppConstants.primary
-                                    .withValues(alpha: 0.5)),
+                              ),
+                            ),
+                          )
+                        : Icon(
+                            Icons.store_outlined,
+                            size: 32,
+                            color: AppConstants.primary.withValues(alpha: 0.5),
+                          ),
                   ),
                 ),
                 if (_hasLogo)
@@ -387,7 +402,9 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         title: Text(
           'Remove $label',
           style: AppConstants.bodyStyle(
-              fontSize: 18, fontWeight: FontWeight.bold),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         content: Text(
           'Are you sure you want to remove the store $label? '
@@ -403,9 +420,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
             ),
           ),
           TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: AppConstants.error,
-            ),
+            style: TextButton.styleFrom(foregroundColor: AppConstants.error),
             onPressed: () {
               Navigator.pop(context);
               setState(() {
@@ -461,7 +476,9 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
           Text(
             'Store Name *',
             style: AppConstants.bodyStyle(
-                fontWeight: FontWeight.bold, fontSize: 14),
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(height: 6),
           TextFormField(
@@ -483,28 +500,34 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
           Text(
             'Tagline',
             style: AppConstants.bodyStyle(
-                fontWeight: FontWeight.bold, fontSize: 14),
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(height: 6),
           TextFormField(
             controller: _taglineController,
             style: AppConstants.bodyStyle(fontSize: 15),
             decoration: _inputDecoration(
-                'e.g. Handcrafted in Carcar since 1998'),
+              'e.g. Handcrafted in Carcar since 1998',
+            ),
             maxLength: 100,
           ),
           const SizedBox(height: 16),
           Text(
             'Description (optional)',
             style: AppConstants.bodyStyle(
-                fontWeight: FontWeight.bold, fontSize: 14),
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(height: 6),
           TextFormField(
             controller: _descriptionController,
             style: AppConstants.bodyStyle(fontSize: 15),
             decoration: _inputDecoration(
-                'Tell customers about your craft — materials, styles, story.'),
+              'Tell customers about your craft — materials, styles, story.',
+            ),
             maxLines: 4,
             maxLength: 500,
           ),
@@ -513,7 +536,9 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
           Text(
             'Store tags',
             style: AppConstants.bodyStyle(
-                fontWeight: FontWeight.bold, fontSize: 14),
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -534,7 +559,9 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
           Text(
             'Location *',
             style: AppConstants.bodyStyle(
-                fontWeight: FontWeight.bold, fontSize: 14),
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(height: 6),
           TextFormField(
@@ -544,6 +571,46 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
             validator: (val) {
               if (val == null || val.trim().isEmpty) {
                 return 'Location is required';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          // Shop contact number, NOT the GCash number: this is how a customer
+          // reaches the store about a hold, a short transfer or a pickup time.
+          // Shown on the bulk deposit screen and on the deposit receipt.
+          Text(
+            'Contact number (optional)',
+            style: AppConstants.bodyStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Shown to customers once they have a deposit to pay, so they can '
+            'reach you about the hold. Your GCash number stays separate.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: _contactController,
+            keyboardType: TextInputType.phone,
+            maxLength: 20,
+            style: AppConstants.bodyStyle(fontSize: 15),
+            decoration: _inputDecoration('e.g. 0917 123 4567'),
+            validator: (val) {
+              final text = (val ?? '').trim();
+              if (text.isEmpty) return null;
+              if (!RegExp(r'^[0-9+() -]+$').hasMatch(text)) {
+                return 'Digits, spaces and + ( ) - only';
+              }
+              if (text.replaceAll(RegExp(r'\D'), '').length < 7) {
+                return 'That looks too short for a phone number';
               }
               return null;
             },
@@ -569,7 +636,9 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
           Text(
             'Brand Color',
             style: AppConstants.bodyStyle(
-                fontWeight: FontWeight.bold, fontSize: 14),
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -589,16 +658,16 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
                     color: color,
                     shape: BoxShape.circle,
                     border: isSelected
-                        ? Border.all(
-                            color: AppConstants.secondary, width: 3)
+                        ? Border.all(color: AppConstants.secondary, width: 3)
                         : Border.all(
-                            color: AppConstants.borderGray
-                                .withValues(alpha: 0.5)),
+                            color: AppConstants.borderGray.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
                     boxShadow: isSelected ? AppConstants.warmShadow : null,
                   ),
                   child: isSelected
-                      ? const Icon(Icons.check,
-                          color: Colors.white, size: 20)
+                      ? const Icon(Icons.check, color: Colors.white, size: 20)
                       : null,
                 ),
               );
@@ -607,9 +676,10 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
           const SizedBox(height: 10),
           Text(
             _presetColors.firstWhere(
-              (c) => c['hex'] == _brandColor,
-              orElse: () => _presetColors.first,
-            )['name'] as String,
+                  (c) => c['hex'] == _brandColor,
+                  orElse: () => _presetColors.first,
+                )['name']
+                as String,
             style: AppConstants.bodyStyle(
               fontSize: 12,
               color: AppConstants.secondary.withValues(alpha: 0.6),
@@ -619,10 +689,6 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
       ),
     );
   }
-
-
-
-
 
   // ── Open Toggle ──
 
@@ -648,7 +714,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
                 : 'Store is closed to customers',
             style: AppConstants.bodyStyle(
               fontSize: 12,
-            color: AppConstants.secondary.withValues(alpha: 0.6),
+              color: AppConstants.secondary.withValues(alpha: 0.6),
             ),
           ),
           value: _isOpen,
@@ -670,27 +736,26 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
       ),
       filled: true,
       fillColor: AppConstants.surfaceLight,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: AppConstants.buttonRadius,
         borderSide: BorderSide(
-            color: AppConstants.borderGray.withValues(alpha: 0.5)),
+          color: AppConstants.borderGray.withValues(alpha: 0.5),
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: AppConstants.buttonRadius,
         borderSide: BorderSide(
-            color: AppConstants.borderGray.withValues(alpha: 0.5)),
+          color: AppConstants.borderGray.withValues(alpha: 0.5),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: AppConstants.buttonRadius,
-        borderSide:
-            const BorderSide(color: AppConstants.primary, width: 1.5),
+        borderSide: const BorderSide(color: AppConstants.primary, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: AppConstants.buttonRadius,
-        borderSide:
-            const BorderSide(color: AppConstants.error, width: 1.5),
+        borderSide: const BorderSide(color: AppConstants.error, width: 1.5),
       ),
     );
   }

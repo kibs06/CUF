@@ -15,6 +15,7 @@ import 'gcash_payment_queue_screen.dart';
 import 'custom_orders_screen.dart';
 import 'manage_products_screen.dart';
 import 'order_detail_screen.dart';
+import 'reservation_requests_screen.dart';
 import 'seller_earnings_screen.dart';
 import 'seller_inbox_screen.dart';
 import 'store_reviews_screen.dart';
@@ -55,55 +56,52 @@ class _SellerNotificationCenterScreenState
               child: CircularProgressIndicator(color: AppConstants.primary),
             )
           : provider.notifications.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  color: AppConstants.primary,
-                  onRefresh: () => provider.loadNotifications(),
-                  child: SlidableAutoCloseBehavior(
-                    closeWhenOpened: true,
-                    closeWhenTapped: true,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      itemCount: provider.notifications.length,
-                      itemBuilder: (context, index) {
-                        final notif = provider.notifications[index];
-                        return _NotificationSlidable(
-                          notification: notif,
-                          index: index,
-                          isSelectionMode: provider.isSelectionMode,
-                          isSelected:
-                              provider.selectedIds.contains(notif.id),
-                          onTap: provider.isSelectionMode
-                              ? () => provider.toggleSelection(notif.id)
-                              : () => _handleTap(provider, notif),
-                          onLongPress: provider.isSelectionMode
-                              ? null
-                              : () {
-                                  provider.enterSelectionMode();
-                                  provider.toggleSelection(notif.id);
-                                },
-                          onDelete: () =>
-                              _handleDelete(provider, notif, index),
-                          onToggleRead: () {
-                            if (notif.isRead) {
-                              provider.markAsUnread(notif.id);
-                            } else {
-                              provider.markAsRead(notif.id);
-                            }
-                          },
-                          onView: () => _handleTap(provider, notif),
-                        );
+          ? _buildEmptyState()
+          : RefreshIndicator(
+              color: AppConstants.primary,
+              onRefresh: () => provider.loadNotifications(),
+              child: SlidableAutoCloseBehavior(
+                closeWhenOpened: true,
+                closeWhenTapped: true,
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  itemCount: provider.notifications.length,
+                  itemBuilder: (context, index) {
+                    final notif = provider.notifications[index];
+                    return _NotificationSlidable(
+                      notification: notif,
+                      index: index,
+                      isSelectionMode: provider.isSelectionMode,
+                      isSelected: provider.selectedIds.contains(notif.id),
+                      onTap: provider.isSelectionMode
+                          ? () => provider.toggleSelection(notif.id)
+                          : () => _handleTap(provider, notif),
+                      onLongPress: provider.isSelectionMode
+                          ? null
+                          : () {
+                              provider.enterSelectionMode();
+                              provider.toggleSelection(notif.id);
+                            },
+                      onDelete: () => _handleDelete(provider, notif, index),
+                      onToggleRead: () {
+                        if (notif.isRead) {
+                          provider.markAsUnread(notif.id);
+                        } else {
+                          provider.markAsRead(notif.id);
+                        }
                       },
-                    ),
-                  ),
+                      onView: () => _handleTap(provider, notif),
+                    );
+                  },
                 ),
+              ),
+            ),
     );
   }
 
   // ── App Bars ─────────────────────────────────────────────────
 
-  PreferredSizeWidget _buildNormalAppBar(
-      SellerNotificationProvider provider) {
+  PreferredSizeWidget _buildNormalAppBar(SellerNotificationProvider provider) {
     return AppBar(
       backgroundColor: AppConstants.chrome,
       elevation: 0,
@@ -136,10 +134,13 @@ class _SellerNotificationCenterScreenState
   }
 
   PreferredSizeWidget _buildSelectionAppBar(
-      SellerNotificationProvider provider) {
-    final allSelected = provider.notifications.isNotEmpty &&
-        provider.notifications
-            .every((n) => provider.selectedIds.contains(n.id));
+    SellerNotificationProvider provider,
+  ) {
+    final allSelected =
+        provider.notifications.isNotEmpty &&
+        provider.notifications.every(
+          (n) => provider.selectedIds.contains(n.id),
+        );
 
     return AppBar(
       backgroundColor: AppConstants.chrome,
@@ -160,9 +161,7 @@ class _SellerNotificationCenterScreenState
         // Select all / Deselect all
         IconButton(
           icon: Icon(
-            allSelected
-                ? Icons.deselect_outlined
-                : Icons.select_all_outlined,
+            allSelected ? Icons.deselect_outlined : Icons.select_all_outlined,
             color: Colors.white,
           ),
           tooltip: allSelected ? 'Deselect all' : 'Select all',
@@ -178,8 +177,7 @@ class _SellerNotificationCenterScreenState
         ),
         // Mark as read
         IconButton(
-          icon:
-              const Icon(Icons.mark_email_read_outlined, color: Colors.white),
+          icon: const Icon(Icons.mark_email_read_outlined, color: Colors.white),
           tooltip: 'Mark as read',
           onPressed: provider.selectedCount > 0
               ? () async {
@@ -204,8 +202,7 @@ class _SellerNotificationCenterScreenState
     );
   }
 
-  Future<void> _confirmBulkDelete(
-      SellerNotificationProvider provider) async {
+  Future<void> _confirmBulkDelete(SellerNotificationProvider provider) async {
     final count = provider.selectedCount;
     if (count <= 1) {
       final deleted = await provider.deleteSelected();
@@ -229,8 +226,7 @@ class _SellerNotificationCenterScreenState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Delete $count notifications?'),
         content: const Text('This action can be undone.'),
         actions: [
@@ -240,8 +236,7 @@ class _SellerNotificationCenterScreenState
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-                backgroundColor: AppConstants.error),
+            style: FilledButton.styleFrom(backgroundColor: AppConstants.error),
             child: const Text('Delete'),
           ),
         ],
@@ -288,9 +283,7 @@ class _SellerNotificationCenterScreenState
         // the detail screen has no confirm action for that status.
         if (notif.title.startsWith('Payment awaiting confirmation')) {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const GcashPaymentQueueScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const GcashPaymentQueueScreen()),
           );
         } else if (notif.referenceId != null) {
           _navigateToOrderDetail(notif.referenceId!);
@@ -300,8 +293,18 @@ class _SellerNotificationCenterScreenState
         // "Payout sent" — written by send-payout-receipt when the admin records
         // the transfer. The row exists so the news survives the push being
         // swiped away; it lands on the payout history the notice talks about.
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SellerEarningsScreen()));
+        break;
+      case 'bulk_reservation':
+      case 'bulk_reservation_deposit':
+        // Both bulk-reservation events — a new request and a customer's deposit
+        // proof — are decided on the same queue: approve/decline, or verify the
+        // proof. Written by the triggers in 20261119210000, which exist because
+        // the push is the only other place these appeared.
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SellerEarningsScreen()),
+          MaterialPageRoute(builder: (_) => const ReservationRequestsScreen()),
         );
         break;
       case 'low_stock':
@@ -334,21 +337,20 @@ class _SellerNotificationCenterScreenState
             : null;
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ManageProductsScreen(
-              initialProductId: target?.productId,
-            ),
+            builder: (_) =>
+                ManageProductsScreen(initialProductId: target?.productId),
           ),
         );
         break;
       case 'custom_order_request':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const CustomOrdersScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const CustomOrdersScreen()));
         break;
       case 'new_message':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SellerInboxScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SellerInboxScreen()));
         break;
       case 'return_request':
       case 'replacement_received':
@@ -379,21 +381,20 @@ class _SellerNotificationCenterScreenState
       final data = await Supabase.instance.client
           .from('orders')
           .select(
-              '*, profiles!orders_customer_id_fkey(full_name, email), order_items(*, products(name))')
+            '*, profiles!orders_customer_id_fkey(full_name, email), order_items(*, products(name))',
+          )
           .eq('id', orderId)
           .single();
       if (mounted) {
         Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => OrderDetailScreen(order: data),
-          ),
+          MaterialPageRoute(builder: (_) => OrderDetailScreen(order: data)),
         );
       }
     } catch (e) {
       if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ManageOrdersScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ManageOrdersScreen()));
       }
     }
   }
@@ -629,11 +630,7 @@ class _NotificationRowContent extends StatelessWidget {
                     color: _typeColor.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    _typeIcon,
-                    size: 20,
-                    color: _typeColor,
-                  ),
+                  child: Icon(_typeIcon, size: 20, color: _typeColor),
                 ),
               const SizedBox(width: 12),
 
@@ -689,8 +686,7 @@ class _NotificationRowContent extends StatelessWidget {
                         notification.body,
                         style: AppConstants.bodyStyle(
                           fontSize: 12,
-                          color: AppConstants.secondary
-                              .withValues(alpha: 0.6),
+                          color: AppConstants.secondary.withValues(alpha: 0.6),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -700,8 +696,7 @@ class _NotificationRowContent extends StatelessWidget {
                       notification.relativeTime,
                       style: AppConstants.bodyStyle(
                         fontSize: 11,
-                        color: AppConstants.secondary
-                            .withValues(alpha: 0.4),
+                        color: AppConstants.secondary.withValues(alpha: 0.4),
                       ),
                     ),
                   ],
@@ -763,6 +758,12 @@ class _NotificationRowContent extends StatelessWidget {
       case 'payout':
         // Money leaving the platform, so a wallet rather than a receipt.
         return Icons.account_balance_wallet_outlined;
+      case 'bulk_reservation':
+        // Stock someone wants held — a box, not a receipt.
+        return Icons.inventory_2_outlined;
+      case 'bulk_reservation_deposit':
+        // Money the store has to check in its own GCash app.
+        return Icons.payments_outlined;
       case 'new_review':
         return Icons.star_outline;
       case 'review_comment':
@@ -803,6 +804,11 @@ class _NotificationRowContent extends StatelessWidget {
       case 'payout':
         // Green: money that has already arrived, like a completed payout.
         return AppConstants.success;
+      case 'bulk_reservation':
+      case 'bulk_reservation_deposit':
+        // Amber for both: each one waits on the seller, so neither should read
+        // as settled news.
+        return SellerTheme.amberDark;
       case 'new_review':
         // Same green as the customer feed's review colour, so review news
         // reads the same on either side.

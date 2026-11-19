@@ -105,8 +105,10 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Confirm deposit received?',
-            style: AppConstants.headlineStyle(fontSize: 16)),
+        title: Text(
+          'Confirm deposit received?',
+          style: AppConstants.headlineStyle(fontSize: 16),
+        ),
         content: Text(
           'Verify the ₱${widget.reservation.depositAmount?.toStringAsFixed(0) ?? '—'} '
           'payment in your GCash app first. Confirming reserves the '
@@ -115,14 +117,17 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Back')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Back'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
               'Confirm & hold stock',
               style: AppConstants.bodyStyle(
-                  fontWeight: FontWeight.w600, color: SellerTheme.sageDark),
+                fontWeight: FontWeight.w600,
+                color: SellerTheme.sageDark,
+              ),
             ),
           ),
         ],
@@ -131,7 +136,11 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
     if (confirmed != true || !mounted) return;
     setState(() => _busy = true);
     try {
-      await _reservationService.confirmDeposit(widget.reservation.id);
+      // The receipt mail result comes back with the confirmation, so this toast
+      // can say whether the customer actually received their proof of payment.
+      final receipt = await _reservationService.confirmDeposit(
+        widget.reservation.id,
+      );
       if (!mounted) return;
       Navigator.of(context).pop();
       widget.onResolved();
@@ -139,8 +148,11 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           backgroundColor: SellerTheme.sage,
+          duration: const Duration(seconds: 5),
           content: Text(
-              'Deposit confirmed — ${widget.reservation.quantity} units reserved.'),
+            'Deposit confirmed — ${widget.reservation.quantity} units '
+            'reserved. ${depositReceiptResultLine(receipt)}',
+          ),
         ),
       );
     } catch (e) {
@@ -170,8 +182,10 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Reject deposit payment',
-                    style: AppConstants.headlineStyle(fontSize: 17)),
+                Text(
+                  'Reject deposit payment',
+                  style: AppConstants.headlineStyle(fontSize: 17),
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: reasonCtrl,
@@ -200,11 +214,16 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    child: Text('Reject payment',
-                        style: AppConstants.bodyStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    child: Text(
+                      'Reject payment',
+                      style: AppConstants.bodyStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -216,8 +235,10 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
     if (reason == null || !mounted) return; // cancelled
     setState(() => _busy = true);
     try {
-      await _reservationService.rejectDeposit(widget.reservation.id,
-          rejectionReason: reason.isEmpty ? null : reason);
+      await _reservationService.rejectDeposit(
+        widget.reservation.id,
+        rejectionReason: reason.isEmpty ? null : reason,
+      );
       if (!mounted) return;
       Navigator.of(context).pop();
       widget.onResolved();
@@ -241,7 +262,9 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
   Widget build(BuildContext context) {
     final r = widget.reservation;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: AppConstants.surfaceLight,
@@ -266,14 +289,18 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text('Verify deposit payment',
-                    style: AppConstants.headlineStyle(fontSize: 18)),
+                Text(
+                  'Verify deposit payment',
+                  style: AppConstants.headlineStyle(fontSize: 18),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   '${r.quantity} units of ${r.productName} — '
                   '${r.customerName ?? 'A customer'}',
                   style: AppConstants.bodyStyle(
-                      fontSize: 12, color: AppConstants.secondary),
+                    fontSize: 12,
+                    color: AppConstants.secondary,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 if (_loading)
@@ -284,9 +311,13 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                     ),
                   )
                 else if (_error != null)
-                  Text(_error!,
-                      style: AppConstants.bodyStyle(
-                          fontSize: 13, color: AppConstants.error))
+                  Text(
+                    _error!,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      color: AppConstants.error,
+                    ),
+                  )
                 else ...[
                   // Amount + reference card
                   Container(
@@ -299,9 +330,13 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Expected deposit',
-                            style: AppConstants.bodyStyle(
-                                fontSize: 11, color: AppConstants.secondary)),
+                        Text(
+                          'Expected deposit',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11,
+                            color: AppConstants.secondary,
+                          ),
+                        ),
                         Text(
                           '₱${r.depositAmount?.toStringAsFixed(2) ?? '—'}',
                           style: AppConstants.headlineStyle(fontSize: 22),
@@ -311,8 +346,9 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                           Text(
                             'Reference: ${_proof!['reference_number']}',
                             style: AppConstants.monoStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ],
@@ -320,9 +356,13 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                   ),
                   const SizedBox(height: 14),
                   // Screenshot
-                  Text('Payment screenshot',
-                      style: AppConstants.bodyStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
+                  Text(
+                    'Payment screenshot',
+                    style: AppConstants.bodyStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
@@ -335,8 +375,9 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                               child: Text(
                                 'Screenshot unavailable',
                                 style: AppConstants.bodyStyle(
-                                    fontSize: 12,
-                                    color: AppConstants.secondary),
+                                  fontSize: 12,
+                                  color: AppConstants.secondary,
+                                ),
                               ),
                             )
                           : Image.network(
@@ -344,15 +385,17 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                               fit: BoxFit.contain,
                               loadingBuilder: (_, child, progress) =>
                                   progress == null
-                                      ? child
-                                      : const Center(
-                                          child: CircularProgressIndicator()),
+                                  ? child
+                                  : const Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
                               errorBuilder: (_, _, _) => Center(
                                 child: Text(
                                   'Could not load the screenshot',
                                   style: AppConstants.bodyStyle(
-                                      fontSize: 12,
-                                      color: AppConstants.secondary),
+                                    fontSize: 12,
+                                    color: AppConstants.secondary,
+                                  ),
                                 ),
                               ),
                             ),
@@ -364,14 +407,20 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                     'before confirming. Confirming pulls the units out of your '
                     'sellable stock immediately.',
                     style: AppConstants.bodyStyle(
-                        fontSize: 11, color: AppConstants.secondary),
+                      fontSize: 11,
+                      color: AppConstants.secondary,
+                    ),
                   ),
                 ],
                 if (_error != null && _proof != null) ...[
                   const SizedBox(height: 10),
-                  Text(_error!,
-                      style: AppConstants.bodyStyle(
-                          fontSize: 12, color: AppConstants.error)),
+                  Text(
+                    _error!,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      color: AppConstants.error,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 16),
                 if (!_loading && _proof != null)
@@ -383,14 +432,17 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppConstants.error,
                             side: BorderSide(
-                                color:
-                                    AppConstants.error.withValues(alpha: 0.5)),
+                              color: AppConstants.error.withValues(alpha: 0.5),
+                            ),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          child: const Text('Reject',
-                              style: TextStyle(fontSize: 13)),
+                          child: const Text(
+                            'Reject',
+                            style: TextStyle(fontSize: 13),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),

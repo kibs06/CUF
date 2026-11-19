@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../constants/bulk_buying.dart';
+import '../constants/bulk_deposit.dart';
 import 'upload_service.dart';
 
 /// A reseller bulk reservation: the customer asks to hold [quantity] units
@@ -21,6 +23,7 @@ class BulkReservation {
   final int reservedStock;
   final List<Map<String, dynamic>> requestedSizes;
   final String? note;
+
   /// 'pending' | 'awaiting_deposit' | 'approved' | 'rejected' | 'cancelled'
   /// | 'expired' | 'fulfilled'
   final String status;
@@ -28,13 +31,20 @@ class BulkReservation {
   final DateTime? createdAt;
   final String? rejectionReason;
   // Deposit gate (20260913140000_add_bulk_reservation_deposits.sql).
-  /// Resolved peso amount owed — 20% of the estimated value at approval,
-  /// rounded up to a whole peso; null before approval.
+  /// Resolved peso amount owed — a share of the estimated value at approval
+  /// (70% today, `bulk_reservation_deposit_rate()`), rounded up to a whole
+  /// peso; null before approval.
   final double? depositAmount;
+
   /// 'not_required' | 'unpaid' | 'paid' | 'forfeited' | 'refunded'
   final String depositStatus;
   final DateTime? depositDeadline;
   final DateTime? depositPaidAt;
+  // Voucher claimed when the request was made (20261119260000), resolved at
+  // that moment: the code is what the store honours, the discount is the peso
+  // value the 70% deposit was computed without.
+  final String? voucherCode;
+  final double? voucherDiscount;
   // Joined display fields (customer-side: product; seller-side: profile).
   final String productName;
   final String? productImage;
@@ -55,6 +65,8 @@ class BulkReservation {
     this.depositStatus = 'not_required',
     this.depositDeadline,
     this.depositPaidAt,
+    this.voucherCode,
+    this.voucherDiscount,
     this.expiresAt,
     this.createdAt,
     this.rejectionReason,
@@ -78,8 +90,7 @@ class BulkReservation {
 
   /// True while the deposit window is still open (awaiting_deposit and
   /// the deadline has not passed). The 24h sweep expires it otherwise.
-  bool get needsDeposit =>
-      isAwaitingDeposit && depositStatus == 'unpaid';
+  bool get needsDeposit => isAwaitingDeposit && depositStatus == 'unpaid';
 
   /// The 24h deposit window has lapsed (the opportunistic sweep expires
   /// the row server-side; this drives the customer-facing countdown).
@@ -130,10 +141,14 @@ class BulkReservation {
       }
       final images = p['product_images'];
       if (images is List && images.isNotEmpty) {
-        final sorted = List<Map<String, dynamic>>.from(
-          images.map((e) => Map<String, dynamic>.from(e as Map)),
-        )..sort((a, b) => ((a['display_order'] as num?)?.toInt() ?? 0)
-            .compareTo((b['display_order'] as num?)?.toInt() ?? 0));
+        final sorted =
+            List<Map<String, dynamic>>.from(
+              images.map((e) => Map<String, dynamic>.from(e as Map)),
+            )..sort(
+              (a, b) => ((a['display_order'] as num?)?.toInt() ?? 0).compareTo(
+                (b['display_order'] as num?)?.toInt() ?? 0,
+              ),
+            );
         final first = sorted.first['image_url']?.toString() ?? '';
         if (first.isNotEmpty) image = first;
       }
@@ -144,8 +159,9 @@ class BulkReservation {
       // `full_name`, not `name` — see the doc comment above. Left null (not
       // '') when the join is missing, so the queue's own 'A customer'
       // fallback still applies.
-      customerName =
-          Map<String, dynamic>.from(profile)['full_name']?.toString();
+      customerName = Map<String, dynamic>.from(
+        profile,
+      )['full_name']?.toString();
     }
     return BulkReservation(
       id: json['id']?.toString() ?? '',
@@ -156,9 +172,10 @@ class BulkReservation {
       reservedStock: (json['reserved_stock'] as num?)?.toInt() ?? 0,
       requestedSizes: json['requested_sizes'] is List
           ? List<Map<String, dynamic>>.from(
-              (json['requested_sizes'] as List)
-                  .whereType<Map>()
-                  .map((e) => Map<String, dynamic>.from(e)))
+              (json['requested_sizes'] as List).whereType<Map>().map(
+                (e) => Map<String, dynamic>.from(e),
+              ),
+            )
           : const [],
       note: json['note']?.toString(),
       status: json['status']?.toString() ?? 'pending',
@@ -169,6 +186,8 @@ class BulkReservation {
       depositStatus: json['deposit_status']?.toString() ?? 'not_required',
       depositDeadline: _parseDate(json['deposit_deadline']),
       depositPaidAt: _parseDate(json['deposit_paid_at']),
+      voucherCode: json['voucher_code']?.toString(),
+      voucherDiscount: (json['voucher_discount'] as num?)?.toDouble(),
       productName: productName,
       productImage: image,
       customerName: customerName,
@@ -182,8 +201,28 @@ class BulkReservation {
 String friendlyReservationError(Object error) {
   final msg = error.toString();
   String code = msg;
-  final match = RegExp(r'"([A-Z_]+)[^"]*"').firstMatch(msg);
+  // The RPC's code can arrive on its own, quoted, or inside a Postgrest message
+  // ("PostgrestException(message: BULK_MINIMUM_QUANTITY (10), …)"), so match
+  // the first UPPER_SNAKE token wherever it sits. Before this, a code carried
+  // inside the wrapper fell through to the generic error.
+  final match =
+      RegExp(r'"([A-Z_]+)[^"]*"').firstMatch(msg) ??
+      RegExp(r'\b([A-Z][A-Z0-9_]{3,})\b').firstMatch(msg);
   if (match != null) code = match.group(1)!;
+  // The server's floor for a bulk request. Refused here rather than silently
+  // accepted: ten units below is a normal purchase, and the message has to say
+  // what to do about it.
+  // The voucher was priced when the customer applied it; this is the race
+  // where it expired or was used up before the request landed. The sheet's
+  // own quote is what normally explains it.
+  if (code.startsWith('VOUCHER_')) {
+    return 'That voucher can\'t be applied to this request any more. Remove it '
+        'and send the request again, or apply a different code.';
+  }
+  if (code.startsWith('BULK_MINIMUM_QUANTITY')) {
+    return 'Bulk buying starts at $kBulkMinimumQuantity pairs. Add more '
+        'pairs to request a hold, or order normally below that.';
+  }
   if (code.startsWith('INSUFFICIENT_STOCK')) {
     return 'Not enough stock is available right now — try a smaller quantity.';
   }
@@ -245,6 +284,55 @@ String bulkReservationDeclinedPushBody({
   return 'The seller declined your $quantity-unit reservation request$suffix';
 }
 
+/// The FCM push body for a confirmed deposit — the store checked the GCash
+/// transfer and the units are now held.
+///
+/// Leads with the money (the customer's first question is "did they get it?"),
+/// then the units, then the deadline the hold actually ends on. It also names
+/// the pickup: bulk buying has no shipping leg, and this push is where a
+/// customer with a paid hold would otherwise expect one. The non-refundable
+/// line is repeated here because the push is often the only place the customer
+/// reads the terms again, and this is the moment the deposit becomes real.
+@visibleForTesting
+String bulkReservationDepositConfirmedPushBody({
+  required int quantity,
+  required int deposit,
+  String? heldUntil,
+}) {
+  final hold = heldUntil == null || heldUntil.trim().isEmpty
+      ? ''
+      : ' until ${heldUntil.trim()}';
+  return 'The store confirmed your ₱$deposit deposit. Your $quantity-unit '
+      'reservation is now held for you$hold. Pick the units up at the store '
+      '— bulk holds are not shipped. The deposit stays non-refundable — '
+      'cancel before the hold ends to avoid losing it.';
+}
+
+/// The one line a seller sees after confirming a deposit, naming what happened
+/// to the customer's receipt email.
+///
+/// Kept pure and shared, and used by the proof-review sheet's confirmation
+/// toast: that toast is the only place a seller learns the mail did not go out,
+/// and "Deposit confirmed" alone would let a missing receipt (no address on
+/// file, Gmail down) pass as success.
+String depositReceiptResultLine(Map<String, dynamic> result) {
+  if (result['sent'] == true) {
+    final to = (result['to'] ?? '').toString().trim();
+    return to.isEmpty ? 'Receipt emailed.' : 'Receipt emailed to $to.';
+  }
+  switch ((result['reason'] ?? '').toString()) {
+    case 'already_sent':
+      return 'Receipt was already emailed.';
+    case 'no_email':
+      return 'No email on file - receipt not sent.';
+    case 'email_not_configured':
+      return 'Receipt not sent: mail is not set up on the server.';
+    case 'deposit_not_paid':
+      return 'Receipt not sent: the deposit is not marked paid.';
+  }
+  return 'Receipt not sent - the deposit is still confirmed.';
+}
+
 /// The FCM push body for a rejected deposit proof.
 ///
 /// Mirrors `reject_bulk_reservation_deposit`'s in-app message, including the
@@ -289,23 +377,30 @@ class ReservationService {
     required int quantity,
     List<Map<String, dynamic>> requestedSizes = const [],
     String? note,
+    String? voucherCode,
   }) async {
-    final data = await _client.rpc('request_bulk_reservation', params: {
-      'p_product_id': productId,
-      'p_store_id': storeId,
-      'p_quantity': quantity,
-      'p_requested_sizes': requestedSizes,
-      'p_note': note,
-    });
+    final data = await _client.rpc(
+      'request_bulk_reservation',
+      params: {
+        'p_product_id': productId,
+        'p_store_id': storeId,
+        'p_quantity': quantity,
+        'p_requested_sizes': requestedSizes,
+        'p_note': note,
+        'p_voucher_code': voucherCode,
+      },
+    );
     final reservationId = data?.toString() ?? '';
 
     // Fire-and-forget: push failures must never fail the request itself.
-    unawaited(_pushSellerNewRequest(
-      reservationId: reservationId,
-      storeId: storeId,
-      productId: productId,
-      quantity: quantity,
-    ));
+    unawaited(
+      _pushSellerNewRequest(
+        reservationId: reservationId,
+        storeId: storeId,
+        productId: productId,
+        quantity: quantity,
+      ),
+    );
 
     return reservationId;
   }
@@ -336,14 +431,18 @@ class ReservationService {
           .maybeSingle();
       final productName = product?['name']?.toString() ?? 'a product';
 
-      await _client.functions.invoke('send-notification-push', body: {
-        'recipientUserId': ownerId,
-        'title': 'New bulk reservation request',
-        'body': 'A customer requested $quantity units of $productName for resale.',
-        'type': 'bulk_reservation_request',
-        if (reservationId.isNotEmpty) 'referenceId': reservationId,
-        'screen': 'seller_reservations',
-      });
+      await _client.functions.invoke(
+        'send-notification-push',
+        body: {
+          'recipientUserId': ownerId,
+          'title': 'New bulk reservation request',
+          'body':
+              'A customer requested $quantity units of $productName for resale.',
+          'type': 'bulk_reservation_request',
+          if (reservationId.isNotEmpty) 'referenceId': reservationId,
+          'screen': 'seller_reservations',
+        },
+      );
     } catch (e) {
       debugPrint('[ReservationService] Push trigger failed: $e');
     }
@@ -354,20 +453,24 @@ class ReservationService {
     final rows = await _client
         .from('bulk_reservations')
         .select(
-            '*, products(name, stores(name), product_images(image_url, display_order))')
+          '*, products(name, stores(name), product_images(image_url, display_order))',
+        )
         .order('created_at', ascending: false)
         .limit(50);
     return rows
         .map<BulkReservation>(
-            (r) => BulkReservation.fromJson(Map<String, dynamic>.from(r)))
+          (r) => BulkReservation.fromJson(Map<String, dynamic>.from(r)),
+        )
         .toList();
   }
 
   /// Customer: cancel a pending/approved reservation (stock returns).
   /// Cancelling a PAID hold forfeits the deposit (server-enforced).
   Future<void> cancelReservation(String reservationId) async {
-    await _client.rpc('cancel_bulk_reservation',
-        params: {'p_reservation_id': reservationId});
+    await _client.rpc(
+      'cancel_bulk_reservation',
+      params: {'p_reservation_id': reservationId},
+    );
   }
 
   /// Seller: all reservations for [storeId], newest first.
@@ -380,7 +483,8 @@ class ReservationService {
         .limit(100);
     return rows
         .map<BulkReservation>(
-            (r) => BulkReservation.fromJson(Map<String, dynamic>.from(r)))
+          (r) => BulkReservation.fromJson(Map<String, dynamic>.from(r)),
+        )
         .toList();
   }
 
@@ -400,12 +504,15 @@ class ReservationService {
     int? days,
     String? rejectionReason,
   }) async {
-    await _client.rpc('decide_bulk_reservation', params: {
-      'p_reservation_id': reservationId,
-      'p_approve': approve,
-      'p_days': days,
-      'p_rejection_reason': rejectionReason,
-    });
+    await _client.rpc(
+      'decide_bulk_reservation',
+      params: {
+        'p_reservation_id': reservationId,
+        'p_approve': approve,
+        'p_days': days,
+        'p_rejection_reason': rejectionReason,
+      },
+    );
 
     if (approve) {
       // Fire-and-forget: push failures must never fail the decision.
@@ -420,9 +527,7 @@ class ReservationService {
   /// the resolved deposit amount + deadline straight from the row the
   /// RPC just updated (the approving seller can SELECT it via RLS), so
   /// the push matches the in-app message exactly.
-  Future<void> _pushCustomerApproved({
-    required String reservationId,
-  }) async {
+  Future<void> _pushCustomerApproved({required String reservationId}) async {
     try {
       final row = await _client
           .from('bulk_reservations')
@@ -438,17 +543,22 @@ class ReservationService {
           ? null
           : DateTime.tryParse(row!['deposit_deadline'].toString());
 
-      await _client.functions.invoke('send-notification-push', body: {
-        'recipientUserId': customerId,
-        'title': 'Bulk reservation approved — deposit required',
-        'body': 'Your reservation of $quantity units was approved. '
-            'Pay the ₱$deposit GCash deposit (20% of the estimated value) by '
-            '${_formatUtcDeadline(deadline)} to hold the stock. '
-            'The deposit is NON-REFUNDABLE once paid.',
-        'type': 'bulk_reservation_approved',
-        'referenceId': reservationId,
-        'screen': 'my_reservations',
-      });
+      await _client.functions.invoke(
+        'send-notification-push',
+        body: {
+          'recipientUserId': customerId,
+          'title': 'Bulk reservation approved — deposit required',
+          'body':
+              'Your reservation of $quantity units was approved. '
+              'Pay the ₱$deposit GCash deposit '
+              '($kBulkReservationDepositLabel of the estimated value) by '
+              '${_formatUtcDeadline(deadline)} to hold the stock. '
+              'The deposit is NON-REFUNDABLE once paid.',
+          'type': 'bulk_reservation_approved',
+          'referenceId': reservationId,
+          'screen': 'my_reservations',
+        },
+      );
     } catch (e) {
       debugPrint('[ReservationService] Push trigger failed: $e');
     }
@@ -458,9 +568,7 @@ class ReservationService {
   /// request. Reads the stored [rejection_reason] (and the quantity) back
   /// from the row the RPC just decided, so the push repeats the reason the
   /// seller actually typed — the same text the in-app notification carries.
-  Future<void> _pushCustomerDeclined({
-    required String reservationId,
-  }) async {
+  Future<void> _pushCustomerDeclined({required String reservationId}) async {
     try {
       final row = await _client
           .from('bulk_reservations')
@@ -473,17 +581,20 @@ class ReservationService {
       final quantity = (row?['quantity'] as num?)?.toInt() ?? 0;
       final reason = row?['rejection_reason']?.toString();
 
-      await _client.functions.invoke('send-notification-push', body: {
-        'recipientUserId': customerId,
-        'title': 'Bulk reservation declined',
-        'body': bulkReservationDeclinedPushBody(
-          quantity: quantity,
-          reason: reason,
-        ),
-        'type': 'bulk_reservation_declined',
-        'referenceId': reservationId,
-        'screen': 'my_reservations',
-      });
+      await _client.functions.invoke(
+        'send-notification-push',
+        body: {
+          'recipientUserId': customerId,
+          'title': 'Bulk reservation declined',
+          'body': bulkReservationDeclinedPushBody(
+            quantity: quantity,
+            reason: reason,
+          ),
+          'type': 'bulk_reservation_declined',
+          'referenceId': reservationId,
+          'screen': 'my_reservations',
+        },
+      );
     } catch (e) {
       debugPrint('[ReservationService] Push trigger failed: $e');
     }
@@ -496,8 +607,18 @@ class ReservationService {
   String _formatUtcDeadline(DateTime? deadlineUtc) {
     if (deadlineUtc == null) return 'the deadline';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     String two(int n) => n.toString().padLeft(2, '0');
     return '${months[deadlineUtc.month - 1]} ${deadlineUtc.day}, '
@@ -506,15 +627,106 @@ class ReservationService {
 
   /// Seller: mark an approved (deposit-paid) reservation as picked up.
   Future<void> fulfillReservation(String reservationId) async {
-    await _client.rpc('fulfill_bulk_reservation',
-        params: {'p_reservation_id': reservationId});
+    await _client.rpc(
+      'fulfill_bulk_reservation',
+      params: {'p_reservation_id': reservationId},
+    );
   }
 
   /// Seller: confirm the deposit proof → stock is drawn into the hold
   /// (the relocated stock-draw), deposit flips to 'paid'.
-  Future<void> confirmDeposit(String reservationId) async {
-    await _client.rpc('confirm_bulk_reservation_deposit',
-        params: {'p_reservation_id': reservationId});
+  ///
+  /// Returns the receipt-mail result (`{sent: true, to}` or
+  /// `{sent: false, reason}`) so the seller can be told whether the customer
+  /// actually has their receipt — the same way the POS reports an emailed
+  /// sale receipt. A mail problem never throws here: the deposit is already
+  /// confirmed, and a Gmail outage must not read as a failed confirmation.
+  Future<Map<String, dynamic>> confirmDeposit(String reservationId) async {
+    await _client.rpc(
+      'confirm_bulk_reservation_deposit',
+      params: {'p_reservation_id': reservationId},
+    );
+
+    // The customer paid money and then had to wait for the store to check it.
+    // Nothing in their app changes until they open it, so the confirmation is
+    // pushed too — the one outcome in this flow that only ever arrives as
+    // good news, and the one the customer is most anxious about.
+    unawaited(_pushCustomerDepositConfirmed(reservationId: reservationId));
+
+    // The same money deserves the same paper: the customer's deposit receipt
+    // goes out over the order-receipt mail channel, with the A5 slip attached.
+    return _emailCustomerDepositReceipt(reservationId);
+  }
+
+  /// Sends the deposit receipt through `send-bulk-deposit-receipt` with the
+  /// seller's own session. The function resolves the customer's address,
+  /// builds the PDF and stamps the row, so nothing here duplicates its rules.
+  Future<Map<String, dynamic>> _emailCustomerDepositReceipt(
+    String reservationId,
+  ) async {
+    try {
+      final res = await _client.functions.invoke(
+        'send-bulk-deposit-receipt',
+        body: {'reservation_id': reservationId},
+      );
+      final data = res.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return {'sent': false, 'reason': 'unexpected_response'};
+    } on FunctionException catch (e) {
+      // A refusal is an answer, not a transport failure: keep its body so the
+      // seller can be told why (no address, already sent, SMTP down).
+      final details = e.details;
+      if (details is Map) return Map<String, dynamic>.from(details);
+      return {'sent': false, 'reason': 'error', 'detail': e.toString()};
+    } catch (e) {
+      debugPrint('[ReservationService] Deposit receipt failed: $e');
+      return {'sent': false, 'reason': 'error'};
+    }
+  }
+
+  /// FCM push to the customer that the store verified their deposit and the
+  /// stock is now physically held for them.
+  ///
+  /// Reads the resolved quantity, deposit and hold deadline back from the row
+  /// the RPC just updated, so the push states the same figures as the in-app
+  /// notification — and names the deadline, because "held" without "until
+  /// when" is the question the customer would open the app to answer.
+  Future<void> _pushCustomerDepositConfirmed({
+    required String reservationId,
+  }) async {
+    try {
+      final row = await _client
+          .from('bulk_reservations')
+          .select('customer_id, quantity, deposit_amount, expires_at')
+          .eq('id', reservationId)
+          .maybeSingle();
+      final customerId = row?['customer_id']?.toString();
+      if (customerId == null || customerId.isEmpty) return;
+
+      final quantity = (row?['quantity'] as num?)?.toInt() ?? 0;
+      final deposit = (row?['deposit_amount'] as num?)?.toInt() ?? 0;
+      final expiresAt = row?['expires_at'] == null
+          ? null
+          : DateTime.tryParse(row!['expires_at'].toString());
+
+      await _client.functions.invoke(
+        'send-notification-push',
+        body: {
+          'recipientUserId': customerId,
+          'title': 'Deposit confirmed — stock is held',
+          'body': bulkReservationDepositConfirmedPushBody(
+            quantity: quantity,
+            deposit: deposit,
+            heldUntil: expiresAt == null ? null : _formatUtcDeadline(expiresAt),
+          ),
+          'type': 'bulk_reservation_deposit_confirmed',
+          'referenceId': reservationId,
+          'screen': 'my_reservations',
+        },
+      );
+    } catch (e) {
+      debugPrint('[ReservationService] Push trigger failed: $e');
+    }
   }
 
   /// Seller: reject the deposit payment — terminal, nothing was drawn.
@@ -524,12 +736,14 @@ class ReservationService {
   /// waiting for them to open the app is not good enough. The reason is read
   /// back from the stored row, where the RPC has substituted its default for
   /// a blank one, so push and in-app text agree.
-  Future<void> rejectDeposit(String reservationId,
-      {String? rejectionReason}) async {
-    await _client.rpc('reject_bulk_reservation_deposit', params: {
-      'p_reservation_id': reservationId,
-      'p_reason': rejectionReason,
-    });
+  Future<void> rejectDeposit(
+    String reservationId, {
+    String? rejectionReason,
+  }) async {
+    await _client.rpc(
+      'reject_bulk_reservation_deposit',
+      params: {'p_reservation_id': reservationId, 'p_reason': rejectionReason},
+    );
 
     unawaited(_pushCustomerDepositDeclined(reservationId: reservationId));
   }
@@ -552,17 +766,20 @@ class ReservationService {
       final quantity = (row?['quantity'] as num?)?.toInt() ?? 0;
       final reason = row?['rejection_reason']?.toString();
 
-      await _client.functions.invoke('send-notification-push', body: {
-        'recipientUserId': customerId,
-        'title': 'Deposit payment declined',
-        'body': bulkReservationDepositDeclinedPushBody(
-          quantity: quantity,
-          reason: reason,
-        ),
-        'type': 'bulk_reservation_deposit_declined',
-        'referenceId': reservationId,
-        'screen': 'my_reservations',
-      });
+      await _client.functions.invoke(
+        'send-notification-push',
+        body: {
+          'recipientUserId': customerId,
+          'title': 'Deposit payment declined',
+          'body': bulkReservationDepositDeclinedPushBody(
+            quantity: quantity,
+            reason: reason,
+          ),
+          'type': 'bulk_reservation_deposit_declined',
+          'referenceId': reservationId,
+          'screen': 'my_reservations',
+        },
+      );
     } catch (e) {
       debugPrint('[ReservationService] Push trigger failed: $e');
     }
@@ -577,11 +794,74 @@ class ReservationService {
     required String referenceNumber,
     required String screenshotPath,
   }) async {
-    await _client.rpc('submit_bulk_reservation_deposit_proof', params: {
-      'p_reservation_id': reservationId,
-      'p_reference_number': referenceNumber,
-      'p_screenshot_url': screenshotPath,
-    });
+    await _client.rpc(
+      'submit_bulk_reservation_deposit_proof',
+      params: {
+        'p_reservation_id': reservationId,
+        'p_reference_number': referenceNumber,
+        'p_screenshot_url': screenshotPath,
+      },
+    );
+
+    // Fire-and-forget, like the request push: the proof is recorded either way,
+    // and a failed push must not fail the customer's submission. Until this,
+    // the deposit proof was the one bulk event with no push at all — the seller
+    // only found it by opening the queue.
+    unawaited(
+      _pushSellerDepositProof(
+        reservationId: reservationId,
+        referenceNumber: referenceNumber,
+      ),
+    );
+  }
+
+  /// FCM push to the store owner that a deposit proof is waiting to be
+  /// verified. Reads the amount back from the row the RPC just updated (the
+  /// submitting customer can SELECT their own reservation), so the push
+  /// repeats the same figure as the in-app message.
+  Future<void> _pushSellerDepositProof({
+    required String reservationId,
+    required String referenceNumber,
+  }) async {
+    try {
+      final row = await _client
+          .from('bulk_reservations')
+          .select('store_id, quantity, deposit_amount')
+          .eq('id', reservationId)
+          .maybeSingle();
+      final storeId = row?['store_id']?.toString();
+      if (storeId == null || storeId.isEmpty) return;
+
+      final store = await _client
+          .from('stores')
+          .select('owner_id')
+          .eq('id', storeId)
+          .maybeSingle();
+      final ownerId = store?['owner_id']?.toString();
+      if (ownerId == null || ownerId.isEmpty) return;
+
+      final quantity = (row?['quantity'] as num?)?.toInt() ?? 0;
+      final deposit = (row?['deposit_amount'] as num?)?.toInt() ?? 0;
+      final digits = referenceNumber.replaceAll(RegExp(r'\D'), '');
+
+      await _client.functions.invoke(
+        'send-notification-push',
+        body: {
+          'recipientUserId': ownerId,
+          'title': 'Deposit proof submitted',
+          'body':
+              'A customer sent a GCash deposit proof (₱$deposit'
+              '${digits.isEmpty ? '' : ', ref $digits'}) for their '
+              '$quantity-unit reservation. Verify it in your GCash app, then '
+              'confirm to hold the stock.',
+          'type': 'bulk_reservation_deposit',
+          'referenceId': reservationId,
+          'screen': 'seller_reservations',
+        },
+      );
+    } catch (e) {
+      debugPrint('[ReservationService] Deposit push trigger failed: $e');
+    }
   }
 
   /// Customer: upload the deposit proof screenshot to the PRIVATE

@@ -210,7 +210,8 @@ class AppConstants {
   // A role rather than `primary.withValues(alpha: 0.04)`, because a fade tuned
   // for a white page lands on a dark card as nothing at all: the role carries
   // the brightness instead of the call site.
-  static Color get unreadTint => AppPalette.of(AppBrightness.current).unreadTint;
+  static Color get unreadTint =>
+      AppPalette.of(AppBrightness.current).unreadTint;
 
   // Grounded band – the bottom navigation bar's default and section bands.
   // Retargeted at [surfaceSubtle] so the two can never drift.
@@ -591,6 +592,7 @@ class AppConstants {
   // (in-store on the spot, or shipped when remote). `refunded` is the
   // legacy status value kept for old orders; new approvals use `replaced`.
   static const String statusReplaced = 'replaced';
+
   /// Customer confirmed the shipped replacement arrived (the shipped
   /// path's "done"; an in-store swap finishes at the counter and stays
   /// `replaced`).
@@ -887,8 +889,10 @@ class AppConstants {
   /// rows**: the only `.glb` in the repo is V0's 29 KB placeholder, and the
   /// partner capture sessions (V2.8/V2.9) have not happened. Turning this on
   /// makes the pipeline *reachable*; nothing makes it *populated* yet.
-  static const bool shoeModelUploadEnabled =
-      bool.fromEnvironment('SHOE_MODEL_UPLOAD', defaultValue: true);
+  static const bool shoeModelUploadEnabled = bool.fromEnvironment(
+    'SHOE_MODEL_UPLOAD',
+    defaultValue: true,
+  );
 
   /// Gates the **seller's 3D model request** — the "Request a 3D model" row in
   /// the product action sheet, and the admin queue that answers it (roadmap
@@ -927,8 +931,10 @@ class AppConstants {
   ///
   /// Off means **nothing happens**: no row in the sheet, no admin queue entry
   /// in the dashboard, and `ShoeModelRequestService` is never constructed.
-  static const bool shoeModelRequestEnabled =
-      bool.fromEnvironment('SHOE_MODEL_REQUEST', defaultValue: true);
+  static const bool shoeModelRequestEnabled = bool.fromEnvironment(
+    'SHOE_MODEL_REQUEST',
+    defaultValue: true,
+  );
 
   /// Gates the **admin's model upload** — "Upload a 3D model" on a request in
   /// the queue, which fetches a `.glb`, publishes it against the requested
@@ -964,8 +970,10 @@ class AppConstants {
   ///
   /// Off means **nothing happens**: no action on the card, no sheet, and no
   /// write to either the bucket or the table.
-  static const bool adminModelUploadEnabled =
-      bool.fromEnvironment('ADMIN_MODEL_UPLOAD', defaultValue: true);
+  static const bool adminModelUploadEnabled = bool.fromEnvironment(
+    'ADMIN_MODEL_UPLOAD',
+    defaultValue: true,
+  );
 
   /// Whether the admin's model upload may be shown at all: **both** this
   /// surface's switch and the pipeline's own write switch.
@@ -996,8 +1004,10 @@ class AppConstants {
   ///
   /// **How it is turned off:** `--dart-define=TRY_ON_PREFETCH=false`. Off means
   /// nothing happens: no model table read, no download, no cache write.
-  static const bool tryOnPrefetchEnabled =
-      bool.fromEnvironment('TRY_ON_PREFETCH', defaultValue: true);
+  static const bool tryOnPrefetchEnabled = bool.fromEnvironment(
+    'TRY_ON_PREFETCH',
+    defaultValue: true,
+  );
 
   /// Gates the **real AR try-on surface** — V3's platform view, the one that
   /// puts an actual `.glb` in the camera feed instead of the placeholder
@@ -1051,8 +1061,9 @@ class AppConstants {
   /// **How it is turned on:** `--dart-define=TRY_ON_FOOT_TRACK=true`, for a
   /// device build that also passes `TRY_ON_V3=true`. Off means **nothing
   /// happens**: no timer, no frame request, no detector is even constructed.
-  static const bool tryOnFootTrackEnabled =
-      bool.fromEnvironment('TRY_ON_FOOT_TRACK');
+  static const bool tryOnFootTrackEnabled = bool.fromEnvironment(
+    'TRY_ON_FOOT_TRACK',
+  );
 
   /// **QA/development seam: let the try-on path render the repo's bundled
   /// block-out.** Default **off**; nothing is constructed and no asset is read
@@ -1083,8 +1094,9 @@ class AppConstants {
   /// customers, because neither bundled file is a product: the block-out is
   /// block geometry and the partner asset is unlicensable marketplace content
   /// whose declared length is an assumption, not a measurement.
-  static const bool tryOnPlaceholderModelEnabled =
-      bool.fromEnvironment('TRY_ON_PLACEHOLDER_MODEL');
+  static const bool tryOnPlaceholderModelEnabled = bool.fromEnvironment(
+    'TRY_ON_PLACEHOLDER_MODEL',
+  );
 
   /// Gates the **3D icon on the product photograph**, and behind it the
   /// full-screen 3D viewer whose section carries the "Try On in AR" button
@@ -1144,8 +1156,10 @@ class AppConstants {
   /// **How it is turned off:** `--dart-define=SHOE_PREVIEW=false`, or by clearing
   /// the define from `RELEASE_DART_DEFINES`. A build that passes nothing gets the
   /// default above (off in the code, on in a release).
-  static const bool shoePreviewEnabled =
-      bool.fromEnvironment('SHOE_PREVIEW', defaultValue: true);
+  static const bool shoePreviewEnabled = bool.fromEnvironment(
+    'SHOE_PREVIEW',
+    defaultValue: true,
+  );
 
   /// Whether the 3D box's refusal line also prints **the measured renderer
   /// facts** underneath the honest sentence.
@@ -1165,8 +1179,9 @@ class AppConstants {
   /// conclusion v1.0.35 reached for the prefetch.
   ///
   /// **How it is turned on:** `--dart-define=SHOE_PREVIEW_DIAGNOSTICS=true`.
-  static const bool shoePreviewDiagnosticsEnabled =
-      bool.fromEnvironment('SHOE_PREVIEW_DIAGNOSTICS');
+  static const bool shoePreviewDiagnosticsEnabled = bool.fromEnvironment(
+    'SHOE_PREVIEW_DIAGNOSTICS',
+  );
 
   /// ⚠️ **QA-only: let the native renderer attempt a glTF load below Filament's
   /// `FEATURE_LEVEL_2` instead of refusing.**
@@ -1197,8 +1212,9 @@ class AppConstants {
   /// screenshot from a QA phone can never be mistaken for a customer's.
   ///
   /// **How it is turned on:** `--dart-define=SHOE_PREVIEW_ALLOW_LEVEL1=true`.
-  static const bool shoePreviewAllowLevel1 =
-      bool.fromEnvironment('SHOE_PREVIEW_ALLOW_LEVEL1');
+  static const bool shoePreviewAllowLevel1 = bool.fromEnvironment(
+    'SHOE_PREVIEW_ALLOW_LEVEL1',
+  );
 
   /// ⚠️ **QA-only: bring the engine itself down to `FEATURE_LEVEL_1`** —
   /// `Engine.Builder.featureLevel(FEATURE_LEVEL_1)` when the engine does not
@@ -1239,8 +1255,9 @@ class AppConstants {
   /// (`ShoePreviewQaBanner`).
   ///
   /// **How it is turned on:** `--dart-define=SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1=true`.
-  static const bool shoePreviewLowerEngineToLevel1 =
-      bool.fromEnvironment('SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1');
+  static const bool shoePreviewLowerEngineToLevel1 = bool.fromEnvironment(
+    'SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1',
+  );
 
   /// **Which engine draws the 3D box: the native Filament view, or a WebView.**
   ///
@@ -1306,8 +1323,10 @@ class AppConstants {
   ///
   /// **How it is turned off:** `--dart-define=SHOE_PREVIEW_WEBVIEW=false`, which
   /// puts the Filament platform view back.
-  static const bool shoePreviewWebViewEnabled =
-      bool.fromEnvironment('SHOE_PREVIEW_WEBVIEW', defaultValue: true);
+  static const bool shoePreviewWebViewEnabled = bool.fromEnvironment(
+    'SHOE_PREVIEW_WEBVIEW',
+    defaultValue: true,
+  );
 
   /// Whether the box's WebView is mounted with **hybrid composition** — Flutter's
   /// `initExpensiveAndroidView` path, where the view's own surface is composited
@@ -1330,8 +1349,10 @@ class AppConstants {
   /// one-define rollback every switch in this feature keeps. The ladder stays under
   /// it either way: a box that still cannot draw reports `blank:` and moves to the
   /// native renderer.
-  static const bool shoePreviewHybridComposition =
-      bool.fromEnvironment('SHOE_PREVIEW_HYBRID', defaultValue: true);
+  static const bool shoePreviewHybridComposition = bool.fromEnvironment(
+    'SHOE_PREVIEW_HYBRID',
+    defaultValue: true,
+  );
 
   // --- VIRTUAL FITTING: V0 RENDERER SPIKE (dev-only, delete on retirement) ---
   /// Gates the V0 virtual-fitting renderer spike — a dev-only screen that
@@ -1348,7 +1369,9 @@ class AppConstants {
   ///
   /// Not a product surface: no size or colour selection, no fit verdict, no
   /// add-to-cart. Those stay in the simulated try-on until V3.
-  static const bool arTryOnSpikeEnabled = bool.fromEnvironment('AR_TRY_ON_SPIKE');
+  static const bool arTryOnSpikeEnabled = bool.fromEnvironment(
+    'AR_TRY_ON_SPIKE',
+  );
 
   /// Whether the customer actually has a foot size on file — the signal the
   /// home reminder banner keys off ("only show it when they haven't set a
@@ -1386,8 +1409,10 @@ class AppConstants {
   /// **How it is turned off:** `--dart-define=SELLER_WIDGET=false`. That is the
   /// whole rollback — no native code is removed by it, so the widget tile stays
   /// on the launcher and goes to its own empty state rather than crashing.
-  static const bool sellerWidgetEnabled =
-      bool.fromEnvironment('SELLER_WIDGET', defaultValue: true);
+  static const bool sellerWidgetEnabled = bool.fromEnvironment(
+    'SELLER_WIDGET',
+    defaultValue: true,
+  );
 
   /// Gates the CUSTOMER half of the same widget: whether a phone signed in as a
   /// customer gets a rotating feed of products instead of an empty tile.
@@ -1399,8 +1424,52 @@ class AppConstants {
   /// had before this existed — no second design is invented by the rollback.
   ///
   /// **How it is turned off:** `--dart-define=CUSTOMER_WIDGET=false`.
-  static const bool customerWidgetEnabled =
-      bool.fromEnvironment('CUSTOMER_WIDGET', defaultValue: true);
+  static const bool customerWidgetEnabled = bool.fromEnvironment(
+    'CUSTOMER_WIDGET',
+    defaultValue: true,
+  );
+
+  /// Gates the FREE 24-hour pickup hold flow on every surface it appears on:
+  /// the customer's "My Pickup Reservations" row and the "Reserve for pickup"
+  /// link on product pages, plus the seller's pickup card and alert chip.
+  ///
+  /// **Hidden for now** (default false), per the same "hide for now" reasoning
+  /// as the portal's GCash verification: the servers, tables and screens are
+  /// untouched, so `--dart-define=PICKUP_RESERVATIONS=true` brings the whole
+  /// flow back with nothing else to change. Hiding only the *list* would leave
+  /// customers able to create holds they could never see again, which is why
+  /// the entry point on the product page goes with it.
+  static const bool pickupReservationsEnabled = bool.fromEnvironment(
+    'PICKUP_RESERVATIONS',
+    defaultValue: false,
+  );
+
+  // --- DEMO MODE (payment bypass) ---
+  /// **A demo-build switch, not a feature.** When true, checkout can place a
+  /// GCash order that is marked paid without a GCash transfer, and the bulk
+  /// deposit screen can file a test proof instead of a real screenshot — so a
+  /// live demonstration never depends on money moving.
+  ///
+  /// **OFF unless a build asks for it, and there is no runtime toggle:**
+  ///
+  /// ```
+  /// flutter build apk --debug \
+  ///   --dart-define-from-file=dart_defines.json \
+  ///   --dart-define=DEMO_MODE=true
+  /// ```
+  ///
+  /// The flag is a `const`, so a build that did not pass the define has no
+  /// bypass path at all — the compiler drops the branches. That is deliberate:
+  /// a switch a real customer could reach would be a way to skip paying, and
+  /// this one must never be in a store build. Every surface that reads it also
+  /// shows a red DEVELOPER MODE banner, so an order placed this way is never
+  /// mistaken for a real sale while the demo is running.
+  ///
+  /// What it does NOT do: it does not change what the server stores beyond what
+  /// the normal checkout path already stores (the order is marked paid, as a
+  /// real GCash order is once paid). Demo sales are therefore real orders in
+  /// the database — the reference number is generated, not a receipt of money.
+  static const bool demoModeEnabled = bool.fromEnvironment('DEMO_MODE');
 
   // --- PRIVATE VERIFICATION STORAGE ---
   /// Private bucket for ID photos, selfies, barangay proofs and Tier 2

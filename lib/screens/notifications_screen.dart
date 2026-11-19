@@ -15,6 +15,7 @@ import '../widgets/sole_card.dart';
 import '../widgets/chat/chat_view.dart';
 import 'customer/tracking_screen.dart';
 import 'customer/my_reports_screen.dart';
+import 'customer/my_reservations_screen.dart';
 import 'customer/product_detail_screen.dart';
 import 'seller/manage_products_screen.dart';
 
@@ -31,7 +32,11 @@ class NotificationsScreen extends StatefulWidget {
   final NotificationCategory? initialCategory;
   final bool hideAppBar;
 
-  const NotificationsScreen({super.key, this.initialCategory, this.hideAppBar = false});
+  const NotificationsScreen({
+    super.key,
+    this.initialCategory,
+    this.hideAppBar = false,
+  });
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -69,9 +74,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   void _loadCurrentTab() {
     final orderType = _tabOrderTypes[_tabController.index];
     context.read<NotificationProvider>().loadNotifications(
-          categoryFilter: _categoryFilter,
-          orderTypeFilter: orderType,
-        );
+      categoryFilter: _categoryFilter,
+      orderTypeFilter: orderType,
+    );
   }
 
   /// Clear the category filter (e.g. when the user manually switches tabs).
@@ -93,7 +98,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     final orderType = _tabOrderTypes[_tabController.index];
     return provider.notifications
         .where((n) {
-          if (_categoryFilter != null && n.category != _categoryFilter) return false;
+          if (_categoryFilter != null && n.category != _categoryFilter)
+            return false;
           if (orderType != null && n.orderType != orderType) return false;
           return true;
         })
@@ -110,8 +116,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       appBar: widget.hideAppBar
           ? null
           : (provider.isSelectionMode
-              ? _buildSelectionAppBar(provider)
-              : _buildNormalAppBar(provider)),
+                ? _buildSelectionAppBar(provider)
+                : _buildNormalAppBar(provider)),
       body: Column(
         children: [
           // Show TabBar inline when AppBar is hidden (shell owns the title)
@@ -122,7 +128,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 controller: _tabController,
                 indicatorColor: AppConstants.primary,
                 labelColor: AppConstants.primary,
-                unselectedLabelColor: AppConstants.secondary.withValues(alpha: 0.5),
+                unselectedLabelColor: AppConstants.secondary.withValues(
+                  alpha: 0.5,
+                ),
                 labelStyle: AppConstants.bodyStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -136,65 +144,68 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               ),
             ),
           Expanded(
-          child: Stack(
-        children: [
-          AppConstants.noiseOverlay(opacity: 0.03),
-          provider.isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(
-                    color: AppConstants.primary,
-                  ),
-                )
-              : provider.notifications.isEmpty
-                  ? _buildEmptyState()
-                  : RefreshIndicator(
-                      color: AppConstants.primary,
-                      onRefresh: () async => _loadCurrentTab(),
-                      child: SlidableAutoCloseBehavior(
-                        closeWhenOpened: true,
-                        closeWhenTapped: true,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-                          itemCount: provider.notifications.length,
-                          itemBuilder: (context, index) {
-                            final notif = provider.notifications[index];
+            child: Stack(
+              children: [
+                AppConstants.noiseOverlay(opacity: 0.03),
+                provider.isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppConstants.primary,
+                        ),
+                      )
+                    : provider.notifications.isEmpty
+                    ? _buildEmptyState()
+                    : RefreshIndicator(
+                        color: AppConstants.primary,
+                        onRefresh: () async => _loadCurrentTab(),
+                        child: SlidableAutoCloseBehavior(
+                          closeWhenOpened: true,
+                          closeWhenTapped: true,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                            itemCount: provider.notifications.length,
+                            itemBuilder: (context, index) {
+                              final notif = provider.notifications[index];
 
-                            // If a category filter is active, only show matching
-                            if (_categoryFilter != null &&
-                                notif.category != _categoryFilter) {
-                              return const SizedBox.shrink();
-                            }
+                              // If a category filter is active, only show matching
+                              if (_categoryFilter != null &&
+                                  notif.category != _categoryFilter) {
+                                return const SizedBox.shrink();
+                              }
 
-                            return _NotificationSlidable(
-                              notification: notif,
-                              index: index,
-                              isSelectionMode: provider.isSelectionMode,
-                              isSelected: provider.selectedIds.contains(notif.id),
-                              onTap: provider.isSelectionMode
-                                  ? () => provider.toggleSelection(notif.id)
-                                  : () => _handleTap(provider, notif),
-                              onLongPress: provider.isSelectionMode
-                                  ? null
-                                  : () {
-                                      provider.enterSelectionMode();
-                                      provider.toggleSelection(notif.id);
-                                    },
-                              onDelete: () => _handleDelete(provider, notif, index),
-                              onToggleRead: () {
-                                if (notif.isRead) {
-                                  provider.markAsUnread(notif.id);
-                                } else {
-                                  provider.markAsRead(notif.id);
-                                }
-                              },
-                              onView: () => _handleTap(provider, notif),
-                            );
-                          },
+                              return _NotificationSlidable(
+                                notification: notif,
+                                index: index,
+                                isSelectionMode: provider.isSelectionMode,
+                                isSelected: provider.selectedIds.contains(
+                                  notif.id,
+                                ),
+                                onTap: provider.isSelectionMode
+                                    ? () => provider.toggleSelection(notif.id)
+                                    : () => _handleTap(provider, notif),
+                                onLongPress: provider.isSelectionMode
+                                    ? null
+                                    : () {
+                                        provider.enterSelectionMode();
+                                        provider.toggleSelection(notif.id);
+                                      },
+                                onDelete: () =>
+                                    _handleDelete(provider, notif, index),
+                                onToggleRead: () {
+                                  if (notif.isRead) {
+                                    provider.markAsUnread(notif.id);
+                                  } else {
+                                    provider.markAsRead(notif.id);
+                                  }
+                                },
+                                onView: () => _handleTap(provider, notif),
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ),
-        ],
-      ),
+              ],
+            ),
           ), // Expanded
         ],
       ),
@@ -259,11 +270,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     // ── Support/report notification: deep-link to MyReportsScreen ──
     if (notif.isSupportNotification) {
       if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const MyReportsScreen(),
-          ),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const MyReportsScreen()));
       }
       return;
     }
@@ -274,8 +283,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         reviewProductId != null &&
         reviewProductId.isNotEmpty) {
       try {
-        final product =
-            await SupabaseService.instance.fetchProductById(reviewProductId);
+        final product = await SupabaseService.instance.fetchProductById(
+          reviewProductId,
+        );
         if (product != null && mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -284,7 +294,26 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           );
         }
       } catch (e) {
-        debugPrint('[Notifications] Failed to fetch product for review tap: $e');
+        debugPrint(
+          '[Notifications] Failed to fetch product for review tap: $e',
+        );
+      }
+      return;
+    }
+
+    // ── Reservation notice: open the reservation list ────────────
+    //
+    // The bulk-reservation RPCs write to `notifications` with category
+    // 'reservations' and no `order_id`, so every branch below (all keyed on
+    // `order_id`) left the tap dead — the row marked itself read and did
+    // nothing. There is no per-reservation customer screen to open, so the
+    // list is the right destination: it carries every request the customer
+    // has made, with the open one at the top.
+    if (notif.category == NotificationCategory.reservations) {
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const MyReservationsScreen()));
       }
       return;
     }
@@ -297,14 +326,14 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         // string equality if it's a UUID or non-numeric value.
         final data = await Supabase.instance.client
             .from('orders')
-            .select('*, order_items(*, products(name, product_images(image_url, display_order)))')
+            .select(
+              '*, order_items(*, products(name, product_images(image_url, display_order)))',
+            )
             .eq('id', int.tryParse(orderIdStr) ?? orderIdStr)
             .single();
         if (mounted) {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => OrderTrackingScreen(order: data),
-            ),
+            MaterialPageRoute(builder: (_) => OrderTrackingScreen(order: data)),
           );
         }
       } catch (e) {
@@ -388,7 +417,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   PreferredSizeWidget _buildSelectionAppBar(NotificationProvider provider) {
     final visible = _visibleIds(provider);
-    final allVisibleSelected = visible.isNotEmpty &&
+    final allVisibleSelected =
+        visible.isNotEmpty &&
         visible.every((id) => provider.selectedIds.contains(id));
 
     return AppBar(
@@ -706,8 +736,9 @@ class _NotificationCardContent extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: _categoryColor(notification.category)
-                        .withValues(alpha: 0.12),
+                    color: _categoryColor(
+                      notification.category,
+                    ).withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -759,8 +790,8 @@ class _NotificationCardContent extends StatelessWidget {
                         label: notification.reviewKind == 'reply'
                             ? 'Seller reply'
                             : notification.reviewKind == 'comment'
-                                ? 'Discussion'
-                                : 'Your review',
+                            ? 'Discussion'
+                            : 'Your review',
                       )
                     else if (notification.isBatched &&
                         notification.previews.isNotEmpty)
