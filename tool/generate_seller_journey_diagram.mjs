@@ -533,9 +533,6 @@ page(1, (b) => {
   b.proc('load', ['A short loading screen', 'checks for updates.']);
   b.decision('signed', ['Are they already', 'signed in?'], { down: 'No' });
   b.branchExit('right', 6, { label: 'Yes' });
-  b.decision('firsttime', ['First time', 'opening it?'], { down: 'No' });
-  b.branch('right', 'slides', ['Show the three welcome', 'slides — they can skip them.'], { label: 'Yes' });
-  b.circleJump('right', 'A', 'screen', 0.5);
   b.proc('screen', ['Show the Apply to sell and', 'Sign in screen with Continue', 'with Google and Facebook.', 'One screen — the video', 'keeps playing.']);
   b.decision('whichtap', ['What do they tap?', 'Apply to sell, Sign in,', 'Google or Facebook?']);
   b.branchExit('right', 2, { label: 'Apply to sell' });

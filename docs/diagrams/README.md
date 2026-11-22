@@ -10,7 +10,7 @@ draw.io (`1 Open the app` … `14 Settings in detail`).
 
 | Page | What it covers | Continues to |
 |---|---|---|
-| 1 Open the app | loading check, already-signed-in shortcut, welcome slides, Sign up / Sign in screen | 2, 5 and 6 |
+| 1 Open the app | loading check, already-signed-in shortcut, browsing with no account, Sign up / Sign in only when an action needs one | 2, 5 and 6 |
 | 2 Create an account | the full form, fix-ups, email already used, confirm-or-straight-in branch | 3 and 4 |
 | 3 Confirm the email | the 6-digit code, the email button, wrong/expired codes, back to sign in | 4 and 5 |
 | 4 Add their foot size | scan, type it in, or skip — from code done or no code needed | 6 |

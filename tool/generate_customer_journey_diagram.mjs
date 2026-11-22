@@ -532,9 +532,12 @@ page(1, (b) => {
   b.proc('load', ['A short loading screen', 'checks for updates.']);
   b.decision('signed', ['Are they already', 'signed in?'], { down: 'No' });
   b.branchExit('right', 6, { label: 'Yes' });
-  b.decision('firsttime', ['First time', 'opening it?'], { down: 'No' });
-  b.branch('right', 'slides', ['Show the three welcome', 'slides — they can skip them.'], { label: 'Yes' });
-  b.circleJump('right', 'A', 'screen', 0.5);
+  b.proc('guest', ['No account needed: Home opens',
+    'and they browse the shops, the',
+    'products and the reviews right away.']);
+  b.decision('needaccount', ['Do they tap something', 'that needs an account?'], { down: 'Yes, to buy or' });
+  b.branch('right', 'keep', ['They keep browsing the shop —', 'nothing is saved to an account.'], { label: 'No', kind: 'io' });
+  b.circleJump('right', 'A', 'guest', 0.5);
   b.proc('screen', ['Show the Sign up and Sign in', 'screen with Continue with', 'Google and Facebook buttons.', 'One screen — the video', 'keeps playing.']);
   b.decision('whichtap', ['What do they tap?', 'Sign up, Sign in,', 'Google or Facebook?']);
   b.branchExit('right', 2, { label: 'Sign up' });
