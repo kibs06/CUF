@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../constants/app_constants.dart';
 import '../providers/cart_provider.dart';
 import '../screens/customer/cart_screen.dart';
+import 'auth/require_sign_in.dart';
 
 /// Persistent cart icon button for the AppBar.
 /// Displays a shopping bag icon with an animated badge showing the
@@ -78,7 +79,16 @@ class _CartIconButtonState extends State<CartIconButton>
       padding: const EdgeInsets.only(right: 8.0),
       child: IconButton(
         key: widget.iconKey,
-        onPressed: () {
+        onPressed: () async {
+          // The cart belongs to an account: a guest tapping the bag is asked
+          // for one rather than shown an empty cart with no way to fill it.
+          if (!await requireSignIn(
+            context,
+            reason: 'Sign in to see your cart.',
+          )) {
+            return;
+          }
+          if (!context.mounted) return;
           Navigator.of(context).push(
             MaterialPageRoute(builder: (context) => const CartScreen()),
           );

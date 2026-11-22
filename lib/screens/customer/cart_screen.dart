@@ -4,6 +4,7 @@ import '../../constants/app_constants.dart';
 import '../../providers/cart_provider.dart';
 import '../../utils/size_key.dart';
 import '../../widgets/sole_card.dart';
+import '../../widgets/auth/require_sign_in.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../store/store_profile_screen.dart';
@@ -720,7 +721,17 @@ class _CartCheckoutBar extends StatelessWidget {
               label: 'Check Out',
               expandToFill: true,
               onPressed: canCheckout
-                  ? () {
+                  ? () async {
+                      // Defensive: the cart entry points already gate guests,
+                      // but checkout is the one step that must never open
+                      // without an account to place the order against.
+                      if (!await requireSignIn(
+                        context,
+                        reason: 'Sign in to place your order.',
+                      )) {
+                        return;
+                      }
+                      if (!context.mounted) return;
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (context) => const CheckoutScreen(),

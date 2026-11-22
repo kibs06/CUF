@@ -142,37 +142,49 @@ class _ProductImagePagerState extends State<ProductImagePager> {
   Widget _dots() {
     return Padding(
       padding: const EdgeInsets.only(bottom: ProductImagePager.dotsInset),
-      child: Row(
-        key: ProductImagePager.dotsKey,
-        mainAxisAlignment: MainAxisAlignment.center,
-        // Space between the dots, rather than a margin on each of them: a
-        // margin would be part of the Container's own box.
-        spacing: 4,
-        children: [
-          for (var index = 0; index < widget.images.length; index++)
-            Container(
-              key: ValueKey('product-image-dot-$index'),
-              width: index == _page
-                  ? ProductImagePager.activeDotWidth
-                  : ProductImagePager.dotSize,
-              height: ProductImagePager.dotSize,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(
-                  alpha: index == _page ? 0.95 : 0.5,
-                ),
-                borderRadius: BorderRadius.circular(
-                  ProductImagePager.dotSize / 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.30),
-                    blurRadius: 3,
-                    offset: const Offset(0, 1),
+      // A card can be narrower than the dots' natural width — a two-up grid on
+      // a small phone is under 90dp, and a product with 15 photos then asked
+      // the row for ~124dp and overflowed. `scaleDown` shrinks the row only
+      // when it does not fit, so a normal-width card is untouched (scale 1.0,
+      // same dots, same spacing) and a narrow one keeps every mark visible
+      // rather than clipping or dropping any.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          key: ProductImagePager.dotsKey,
+          // Shrink-wrapped so the fitted box sees the row's real width. It is
+          // centred either way, so this changes nothing on screen.
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          // Space between the dots, rather than a margin on each of them: a
+          // margin would be part of the Container's own box.
+          spacing: 4,
+          children: [
+            for (var index = 0; index < widget.images.length; index++)
+              Container(
+                key: ValueKey('product-image-dot-$index'),
+                width: index == _page
+                    ? ProductImagePager.activeDotWidth
+                    : ProductImagePager.dotSize,
+                height: ProductImagePager.dotSize,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(
+                    alpha: index == _page ? 0.95 : 0.5,
                   ),
-                ],
+                  borderRadius: BorderRadius.circular(
+                    ProductImagePager.dotSize / 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.30),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

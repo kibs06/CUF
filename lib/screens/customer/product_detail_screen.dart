@@ -28,6 +28,7 @@ import '../../utils/shoe_preview_visibility.dart';
 import '../../utils/shoe_paint.dart';
 import '../../utils/variant_swatch_color.dart';
 import '../../widgets/sole_badge.dart';
+import '../../widgets/auth/require_sign_in.dart';
 import '../../widgets/sole_review_card.dart';
 import '../../widgets/sole_star_rating.dart';
 import '../../utils/compact_number.dart';
@@ -1725,7 +1726,18 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     }
   }
 
-  void _addToCart() {
+  Future<void> _addToCart() async {
+    // Browsing the page is open to guests; adding to a cart is not. The item
+    // is only added once the sign-in prompt produced a session, so the
+    // optimistic cart write always has an owner.
+    if (!await requireSignIn(
+      context,
+      reason: 'Sign in to add this item to your cart.',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+
     if (_selectedSize == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1800,7 +1812,17 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     });
   }
 
-  void _buyNow() {
+  Future<void> _buyNow() async {
+    // Buy Now goes straight to checkout, so it needs an account just like
+    // the cart does.
+    if (!await requireSignIn(
+      context,
+      reason: 'Sign in to check out this item.',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+
     if (_selectedSize == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

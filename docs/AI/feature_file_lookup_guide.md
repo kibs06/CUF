@@ -7,7 +7,7 @@ This document maps 8 product improvements to their relevant file paths, existing
 ## Project Architecture
 
 - **State management:** Provider (all providers extend `ChangeNotifier`, use `context.watch<T>()` / `context.read<T>()`)
-- **Local storage:** `SharedPreferences` (used for cart cache, onboarding flag, floating button position, last visited store, notification filter)
+- **Local storage:** `SharedPreferences` (used for cart cache, floating button position, last visited store, notification filter)
 - **Data source:** Supabase (PostgreSQL) via `supabase_flutter` SDK — everything is a REST query, no local product list
 - **Widget library:** Custom components in `lib/widgets/` — `SoleCard`, `SolePrimaryButton`, `SoleBadge`, `SoleStatusChip`, `SoleTimeline`, `SoleStarRating`, `SoleMetricCard`, `SoleProductCard`. **Use these**, don't introduce raw Material widgets where a `Sole*` equivalent exists.
 - **Constants:** All colors, typography, roles, API keys in `lib/constants/app_constants.dart` — reuse existing style getters (e.g. `AppConstants.bodyStyle()`) rather than hardcoding `TextStyle`s

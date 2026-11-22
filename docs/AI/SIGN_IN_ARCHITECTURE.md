@@ -23,8 +23,10 @@
 
 - **Screen:** `AccountEntryScreen` (`lib/screens/auth/account_entry_screen.dart`)
   — the merged front door that replaced the old `LoginScreen` + separate
-  role-choice screen. Reached from `AuthGate` (returning logged-out user) or
-  the OnboardingScreen's final fade.
+  role-choice screen. Pushed ABOVE the page a shopper is on by a gated action
+  (`requireSignIn` / `openSignIn` in `lib/widgets/auth/require_sign_in.dart`),
+  or by Settings → Switch account. A signed-out shopper browses the storefront
+  in `CustomerShell(guest: true)` — nothing is required until they act.
 - **Two in-place modes** (`AuthEntryMode.create` / `.signin`) share **one
   full-bleed video background** (`video/locals.mp4`, looping/muted/autoplay).
   Switching modes is a **state change inside the widget — never a route push** —
@@ -161,9 +163,11 @@ ROUTING       AuthGate StreamBuilder → _routeByRole() → shell
                      │        AuthGate              │
                      │  StreamBuilder(authState)     │
                      │   user == null                │
-                     │   has_seen_onboarding?        │
-                     │   └─ true → AccountEntryScreen◄┤
+                     │   └─ CustomerShell(guest:true)│
+                     │      no account required      │
                      └──────────────────────────────┘
+                                     │  a gated action → requireSignIn()
+                                     │  → AccountEntryScreen pushed ABOVE
                                      │  create mode: "Shop as customer?"
                                      │  → push CustomerRegisterScreen
                                      │  create mode: "Apply to sell"
@@ -250,7 +254,8 @@ ROUTING       AuthGate StreamBuilder → _routeByRole() → shell
 | State | `lib/providers/auth_provider.dart` | `login()`, `logout()`, session/profile cache, `onLoginHook`/`onLogoutHook`, error mapping |
 | Service | `lib/services/auth_service.dart` | `signIn()` — force sign-out → `signInWithPassword` → `getProfile` |
 | Service | `lib/services/biometric_service.dart` | Native auth prompt + secure credential vault (local_auth + flutter_secure_storage) |
-| Routing | `lib/screens/auth_gate.dart` | AuthState stream → `_routeByRole` → shells; suspended gate; first-time/login router |
+| Routing | `lib/screens/auth_gate.dart` | AuthState stream → `_routeByRole` → shells; suspended gate; `CustomerShell(guest: true)` when signed out |
+| Routing | `lib/widgets/auth/require_sign_in.dart` | `hasAccount` / `requireSignIn` / `openSignIn` / `showSignInPrompt` + the rules that dismiss the pushed form |
 | Shared UI | `lib/widgets/app_error_toast.dart` | Floating root-overlay error toast |
 | Utils | `lib/utils/auth_error_messages.dart` | `AuthException.code` → friendly copy (shared with signup) |
 | Constants | `lib/constants/app_constants.dart` | Palette, typography, radii, shadows |
@@ -305,14 +310,15 @@ ROUTING       AuthGate StreamBuilder → _routeByRole() → shell
     replaces the gate's own route and unmounts it — after which no listener
     exists and a successful sign-in does precisely nothing until the app is
     force-closed.
-    - **First launch (the reported bug):** `OnboardingScreen._completeOnboarding`
-      called `Navigator.pushReplacement(AccountEntryScreen)`. The onboarding
-      screen is the gate's CHILD, not a route, so that call replaced the gate's
-      route: the very first sign-in after installing the app left the user on
-      the sign-in panel, and reopening the app (now with a session and no
-      pushed route) landed them on the shell. The screen now reports
-      `onFinished` and `_FirstTimeOrLoginRouter` performs the swap
-      (`test/screens/onboarding_handoff_test.dart` pins this).
+    - **Signed-out browsing (fresh install):** the gate returns
+      `CustomerShell(guest: true)` — a child, not a route — and the front door
+      is pushed ABOVE whatever page the shopper reached for (`requireSignIn`).
+      That push is what returns them to the page after signing in, so the
+      form must never push a route of its own on success: the gate's swap
+      happens underneath it. The pushed form leaves the screen either because
+      a session appeared (`DismissOnSignIn`) or because the gate took over
+      with a state it renders itself (`PopsWhenGateTakesOver`), both in
+      `lib/widgets/auth/require_sign_in.dart`.
     - **Settings → Switch Account → Add account** pushes `AccountEntryScreen`
       above the gate, so the gate's swap rendered *underneath* it. That route is
       now wrapped in `DismissOnSignIn` (`lib/widgets/auth/dismiss_on_signin.dart`),

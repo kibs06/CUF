@@ -47,7 +47,6 @@ The AR (Augmented Reality) Virtual Try-On system is a **simulated AR experience*
 | `lib/providers/cart_provider.dart` | Receives add-to-cart calls from AR screen |
 | `lib/models/product_models.dart` | `ProductVariant` model (used for variant resolution in AR) |
 | `lib/constants/app_constants.dart` | Design tokens: `accent` color (#4ECDC4, teal for AR mode), `surfaceDark` (#1A1208), typography, etc. |
-| `lib/screens/auth/onboarding_screen.dart` | Slide 3: "Try It On with AR" introduction with custom SVG illustration |
 
 ---
 
@@ -397,20 +396,7 @@ Products are `Map<String, dynamic>` objects fetched from Supabase. The AR screen
 
 ---
 
-## 9. Integration with Onboarding
-
-**File:** `lib/screens/auth/onboarding_screen.dart`
-
-The third onboarding slide (Slide 3) introduces the AR feature:
-- **Headline:** "Try It On with AR"
-- **Body:** "Use our augmented reality feature to see how shoes look on your feet before you buy."
-- **SVG:** Custom illustration showing a phone with a foot outline and dashed shoe overlay, corner brackets, and AR sparkle dots
-
-This is purely informational — it does not deep-link to the AR screen.
-
----
-
-## 10. Current Limitations & Future Work
+## 9. Current Limitations & Future Work
 
 ### Current State
 - **No real AR:** The camera feed is a simulated placeholder with animated overlays
@@ -437,7 +423,7 @@ This is purely informational — it does not deep-link to the AR screen.
 
 ---
 
-## 11. Testing Notes
+## 10. Testing Notes
 
 - The AR screen depends on `ProductProvider` being initialized in the widget tree (via `ChangeNotifierProvider`)
 - `CartProvider` must be available for the add-to-cart flow
@@ -446,7 +432,7 @@ This is purely informational — it does not deep-link to the AR screen.
 
 ---
 
-## 12. Quick Reference — Key Classes & Widgets
+## 11. Quick Reference — Key Classes & Widgets
 
 ```
 ARVirtualFitScreen          ← Main AR screen (StatefulWidget)

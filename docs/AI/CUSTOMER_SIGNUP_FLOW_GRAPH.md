@@ -2,8 +2,8 @@
 
 > **Purpose:** One diagram for the whole customer path — from app launch / sign-up to landing inside `CustomerShell` (Home · Store · Notifications · Profile).
 > **Audience:** AI agents and developers tracing or changing the customer auth entry point.
-> **Last updated:** October 17, 2026 — polished to the actual journey: splash shortcut, confirm-OFF branch, give-up path, foot-scan returns, full sign-in gates
-> **Verified against:** `lib/screens/auth_gate.dart`, `lib/screens/auth/customer_register_screen.dart`, `lib/screens/auth/account_entry_screen.dart`, `lib/screens/auth/foot_profile_onboarding_screen.dart`, `lib/providers/auth_provider.dart`, `lib/services/auth_service.dart`, `lib/screens/customer/customer_shell.dart`
+> **Last updated:** November 22, 2026 — the three-slide intro is gone: a signed-out shopper lands in `CustomerShell(guest: true)` and the sign-in form is pushed above the page they were on
+> **Verified against:** `lib/screens/auth_gate.dart`, `lib/screens/auth/customer_register_screen.dart`, `lib/screens/auth/account_entry_screen.dart`, `lib/screens/auth/foot_profile_onboarding_screen.dart`, `lib/providers/auth_provider.dart`, `lib/services/auth_service.dart`, `lib/screens/customer/customer_shell.dart`, `lib/widgets/auth/require_sign_in.dart`
 >
 > **Editable copy (Dia):** `docs/AI/diagrams/customer-signup-flow.dia` — the same flow as an editable [Dia](https://gitlab.gnome.org/GNOME/dia) diagram. It has two layers, "1 - Signup to CustomerShell" and "2 - CustomerShell tabs", which can be toggled independently in the Layers dialog. Rendered exports sit beside it (`.png`, `.svg`).
 >
@@ -28,8 +28,8 @@
 flowchart LR
     A(["SplashScreen<br/>2 s + silent update check"]) --> B{"Existing session?"}
     B -- "Yes" --> H(["CustomerShell<br/>straight in, no form"])
-    B -- "No" --> C("Onboarding<br/>(first launch only)")
-    C --> D("AccountEntryScreen<br/>(create / signin switch in place)")
+    B -- "No" --> C("CustomerShell guest:true<br/>browse — no account needed")
+    C -- "a gated action<br/>(cart · buy · profile)" --> D("AccountEntryScreen<br/>pushed above that page")
     D --> E("CustomerRegisterScreen")
     E --> F{"Confirm email ON?<br/>usual is yes"}
     F -- "Yes" --> G("E-mail code / link<br/>(profiles row written here)")
@@ -45,8 +45,9 @@ flowchart LR
 > ⚠️ The customer has **no navigation of its own** on success. Every screen in the
 > sign-up path stops at "account created" and `AuthGate`'s `StreamBuilder` swaps
 > the root widget. Pushing a route from inside the gate's subtree replaces the
-> gate's own route and kills the auth listener — see the comment in
-> `lib/screens/auth/onboarding_screen.dart`.
+> gate's own route and kills the auth listener — which is why the sign-in form
+> is pushed ABOVE the gate by `requireSignIn` and dismisses itself afterwards
+> (`lib/widgets/auth/require_sign_in.dart`).
 
 ---
 
@@ -56,10 +57,8 @@ flowchart LR
 flowchart TD
     A(["App launch — <code>SplashScreen</code><br/>2 s · silent UpdateProvider check"]) --> B{"AuthGate<br/>existing session?"}
 
-    B -- "No session" --> C{"has_seen_onboarding<br/>SharedPreferences?"}
-    C -- "false — very first launch" --> D["OnboardingScreen<br/>3 slides · Skip / Get Started<br/>writes has_seen_onboarding = true"]
-    C -- "true" --> E["AccountEntryScreen<br/>in-place mode = create"]
-    D --> E
+    B -- "No session" --> C["CustomerShell(guest: true)<br/>the storefront — no account needed<br/>(fresh install or not)"]
+    C -- "a gated action (cart · buy ·<br/>profile) → requireSignIn" --> E["AccountEntryScreen<br/>pushed ABOVE that page<br/>in-place mode = create"]
 
     E -- "\"Shop as customer?\"" --> F["CustomerRegisterScreen<br/>(this flow)"]
     E -- "\"Apply to sell\"" --> X1["SellerApplicationFlow<br/>→ seller side, out of scope"]
@@ -221,7 +220,8 @@ flowchart TB
 | # | Decision | Where | What happens |
 |---|---|---|---|
 | 0 | Existing session? | `AuthGate` + `SplashScreen` update check | Session present → profile fetch → shell directly, no form |
-| 1 | Onboarding seen? | `_FirstTimeOrLoginRouter` (auth_gate.dart) | 3-slide intro once per install; written to `has_seen_onboarding` |
+| 1 | Account needed to browse? | `AuthGate` (signed-out branch) | No — `CustomerShell(guest: true)`, the shell a sign-in then upgrades in place |
+| 1b | Does this action need an account? | `requireSignIn` (`require_sign_in.dart`) | Prompt sheet → form pushed above the page; it dismisses itself and the pending action runs |
 | 2 | Create vs. sign in | `AccountEntryScreen._switchMode` | In-place state change, **not** a route push (the video hero never restarts) |
 | 3 | Email already registered? | `AuthService.emailExists()` before signUp | Inline field error, no account created, no e-mail sent |
 | 4 | Terms accepted? | `CustomerRegisterScreen._submit` | Blocks submit with a toast (independent of form validation) |
@@ -246,7 +246,8 @@ flowchart TB
 |---|---|
 | Splash + silent update check | `lib/screens/auth/splash_screen.dart` |
 | Auth decision tree, OTP gates, role routing, error view | `lib/screens/auth_gate.dart` |
-| First-launch onboarding | `lib/screens/auth/onboarding_screen.dart` |
+| Signed-out browsing (guest shell) | `lib/screens/auth_gate.dart` → `CustomerShell(guest: true)` |
+| Gated actions + the pushed sign-in form | `lib/widgets/auth/require_sign_in.dart` |
 | Merged create / sign-in front door | `lib/screens/auth/account_entry_screen.dart` |
 | Customer registration form | `lib/screens/auth/customer_register_screen.dart` |
 | 6-digit e-mail code screen (signup + new device) | `lib/screens/shared/email_otp_screen.dart` |

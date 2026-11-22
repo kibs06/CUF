@@ -10,6 +10,7 @@ import '../../utils/customer_profile_fields.dart';
 import '../../utils/dev_mode.dart';
 import '../../widgets/auth/dev_mode_swipe_detector.dart';
 import '../../widgets/auth/dismiss_on_signin.dart';
+import '../../widgets/auth/require_sign_in.dart';
 import '../auth/account_entry_screen.dart';
 import '../customer/address_book_screen.dart';
 import '../customer/size_your_foot_screen.dart';
@@ -653,10 +654,18 @@ class SettingsScreen extends StatelessWidget {
     // account and stays on the form. The current account is NOT signed out
     // here: `logout()` drops it from the multi-account store, which is the
     // opposite of what "add account" means.
+    //
+    // The second hand-off matters here for the same reason: a login that the
+    // gate parks behind its new-device OTP (or a recovery session) withdraws
+    // its own session, so nothing fires the sign-in dismissal — without the
+    // gate-takeover wrapper the code screen would render invisibly below this
+    // form and the login would look like it did nothing.
     if (result == 'add_account' && context.mounted) {
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const DismissOnSignIn(child: AccountEntryScreen()),
+          builder: (_) => const PopsWhenGateTakesOver(
+            child: DismissOnSignIn(child: AccountEntryScreen()),
+          ),
         ),
       );
     }

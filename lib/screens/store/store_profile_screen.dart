@@ -15,6 +15,7 @@ import '../../providers/review_provider.dart';
 import '../../utils/sale_price.dart';
 import '../../services/message_service.dart';
 import '../../services/store_service.dart';
+import '../../widgets/auth/require_sign_in.dart';
 import '../../widgets/chat/chat_view.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/sole_card.dart';
@@ -126,6 +127,15 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   }
 
   Future<void> _messageSeller() async {
+    // Guests may read a store page; a conversation needs an account.
+    if (!await requireSignIn(
+      context,
+      reason: 'Sign in to message this store.',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+
     final customerId = Supabase.instance.client.auth.currentUser?.id;
     if (customerId == null) return;
 
@@ -1465,6 +1475,14 @@ class _FollowButtonState extends State<_FollowButton>
 
   Future<void> _handleTap(FollowProvider followProvider) async {
     if (_isLoading) return;
+    // Following is stored per account, so a guest is asked for one first.
+    if (!await requireSignIn(
+      context,
+      reason: 'Sign in to follow this store.',
+    )) {
+      return;
+    }
+    if (!mounted) return;
     HapticFeedback.lightImpact();
 
     // Bounce: scale up then settle back down

@@ -18,9 +18,7 @@ import 'shared/email_otp_screen.dart';
 import 'shared/mfa_verify_screen.dart';
 import 'shared/terms_privacy_screen.dart';
 import 'admin/admin_shell.dart';
-import 'auth/account_entry_screen.dart';
 import 'auth/foot_profile_onboarding_screen.dart';
-import 'auth/onboarding_screen.dart';
 import 'auth/pending_approval_screen.dart';
 import 'auth/reset_password_screen.dart';
 import 'auth/seller_approved_celebration_screen.dart';
@@ -357,9 +355,13 @@ class _AuthGateState extends State<AuthGate> {
           // the new user's profile from scratch.
           _resetProfileCache();
 
-          // First time ever opening app → show onboarding
-          // Returning logged-out user → show login
-          return const _FirstTimeOrLoginRouter();
+          // No account required to browse: a signed-out shopper lands in the
+          // storefront — fresh install or not. The three-slide intro that used
+          // to sit here is gone: with guest browsing there is nothing left to
+          // gate, and the feed explains the shop better than a carousel before
+          // it. Sign-in is pushed from whatever they reach for (cart, checkout,
+          // profile, notifications) — see `requireSignIn`.
+          return const CustomerShell(guest: true);
         }
 
         // Ensure FollowProvider is loaded for this session.
@@ -707,65 +709,6 @@ class _MfaGateState extends State<_MfaGate> {
       onSignOut: () => context.read<AuthProvider>().logout(),
       // The lost-authenticator path emails its code here.
       email: Supabase.instance.client.auth.currentUser?.email,
-    );
-  }
-}
-
-// ─── First Time / Login Router ──────────────────────────────────────
-/// Checks SharedPreferences to decide between OnboardingScreen and
-/// AccountEntryScreen (the merged create-account / sign-in front door).
-class _FirstTimeOrLoginRouter extends StatefulWidget {
-  const _FirstTimeOrLoginRouter();
-
-  @override
-  State<_FirstTimeOrLoginRouter> createState() =>
-      _FirstTimeOrLoginRouterState();
-}
-
-class _FirstTimeOrLoginRouterState extends State<_FirstTimeOrLoginRouter> {
-  bool? _hasSeenOnboarding;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _hasSeenOnboarding = prefs.getBool('has_seen_onboarding') ?? false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_hasSeenOnboarding == null) return const _LoadingScreen();
-
-    // Return directly — do NOT use Navigator.pushReplacement.
-    // AuthGate's StreamBuilder controls all navigation after login.
-    // When the stream emits signedIn, AuthGate rebuilds and replaces
-    // this widget with the correct shell automatically.
-    //
-    // The same rule applies to what is returned here. Onboarding is a CHILD of
-    // this router, so a route pushed from inside it would replace this gate's
-    // own route and leave the app with no auth listener at all — the fresh
-    // install bug where a successful sign-in did nothing until the app was
-    // restarted (proven 2026-09-28). It reports completion instead, and the
-    // swap to AccountEntryScreen happens right here.
-    //
-    // The swap is animated in place so the handoff keeps the fade the old
-    // `pushReplacement` provided — without borrowing its route semantics.
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 400),
-      child: _hasSeenOnboarding!
-          ? const AccountEntryScreen(key: ValueKey('account-entry'))
-          : OnboardingScreen(
-              key: const ValueKey('onboarding'),
-              onFinished: () => setState(() => _hasSeenOnboarding = true),
-            ),
     );
   }
 }

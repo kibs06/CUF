@@ -1,5 +1,12 @@
 # CUFMAI — Changelog
 
+## Unreleased — browsing no longer needs an account
+
+- **A fresh install opened on a sign-in screen, preceded by a three-slide intro.** It now opens on the storefront: products, stores, reviews and the shop's own screens are readable with no account — the Shopee/Lazada model, and what the customer portal's `RequireAuth` already did. The intro carousel is gone with it; there was nothing left for it to explain before the feed does.
+- **Actions ask for the account; browsing does not.** Add to cart, Buy now, checkout, the profile and notification tabs, following a store and messaging a seller each go through `requireSignIn`: a short "Sign in to continue / Keep browsing" sheet, then the merged front door pushed ABOVE the page the shopper was on, so a completed sign-in returns them there and the tap they were reaching for finishes on its own. Guests stay in the same `CustomerShell` — signing in upgrades it in place instead of swapping roots, and the account tabs render an inline prompt rather than a dead tap.
+- **A pushed sign-in form could hide the gate's own OTP screens.** A new-device challenge withdraws its session, so the form sat there looking like a sign-in that did nothing while the code screen waited underneath it; the same held for a sign-up's e-mail code and a recovery link. `PopsWhenGateTakesOver` now dismisses everything from the form upward the moment the gate owns the screen, and Settings → Switch account uses it too.
+- **The product-card image dots overflowed on narrow cards.** They scale down to fit (`FittedBox` around a min-size row) with no visible change at normal width.
+
 ## Unreleased — the Verified Seller badge reaches every buyer-facing surface
 
 - **The badge lived only on the seller profile and the public store page.** It now appears in the customer Stores tab's focused store strip too, resolved from the same `profiles.seller_verified_at` trust flag the other surfaces read, so a verified artisan is recognisable before the store page is opened.

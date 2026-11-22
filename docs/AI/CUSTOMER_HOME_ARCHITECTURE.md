@@ -13,7 +13,7 @@ main.dart
         default                → CustomerShell  ←── this doc
 ```
 
-AuthGate also handles suspended accounts, onboarding vs. login routing, and profile error/retry screens.
+AuthGate also handles suspended accounts, the signed-out guest shell (`CustomerShell(guest: true)` — browse first, sign in only to act), and profile error/retry screens.
 
 ## CustomerShell — tab host
 

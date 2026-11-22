@@ -14,6 +14,7 @@ import '../../utils/cart_helpers.dart';
 import '../../utils/foot_measurement_utils.dart' show mapNormalizedToView;
 import '../../utils/size_key.dart';
 import '../../widgets/ar_view_placeholder.dart';
+import '../../widgets/auth/require_sign_in.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
 import 'ar_try_on_spike_screen.dart';
@@ -666,7 +667,17 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
     );
   }
 
-  void _addToCart() {
+  Future<void> _addToCart() async {
+    // Same account gate as the product page: trying on is open to guests,
+    // adding to a cart is not.
+    if (!await requireSignIn(
+      context,
+      reason: 'Sign in to add this item to your cart.',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+
     // Guard against rapid taps stacking multiple overlay flights (mirrors
     // product detail screen's _isAddingToCart pattern).
     if (_isAddingToCart) return;

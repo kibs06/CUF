@@ -224,8 +224,9 @@ until approved.
 
 `AuthGate` is the root-level `StreamBuilder<AuthState>` on `authStateChanges`:
 
-- **No session** → `_FirstTimeOrLoginRouter`: onboarding (first launch, checked via
-  SharedPreferences `has_seen_onboarding`) or LoginScreen.
+- **No session** → `CustomerShell(guest: true)`: the storefront, no account
+  needed. The sign-in form is pushed above that page from a gated action
+  (`requireSignIn`), so the shopper returns to what they were doing.
 - **Session, profile loading** → loading screen, then `_routeByRole(profile)`.
 - **Profile fetch fails** → connectivity-aware error view with retry
   (`TimeoutException` / `PostgrestException` are mapped to friendly copy).

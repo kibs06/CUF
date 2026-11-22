@@ -159,4 +159,39 @@ void main() {
     expect(find.byKey(const Key('test-band')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a narrow card keeps the dots on the photo instead of overflowing',
+      (tester) async {
+    // The two-up grid on a small phone is ~90dp wide. Fifteen photos are
+    // ~124dp of dots, which used to overflow the row by ~34px.
+    final manyPhotos = List.generate(15, (i) => 'https://example.com/$i.jpg');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 90,
+              height: 90,
+              child: ProductImagePager(images: manyPhotos),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull, reason: 'no RenderFlex overflow');
+
+    final pager = tester.getRect(find.byType(ProductImagePager));
+    final dots = tester.getRect(find.byKey(ProductImagePager.dotsKey));
+    expect(dots.left, greaterThanOrEqualTo(pager.left - 0.5));
+    expect(dots.right, lessThanOrEqualTo(pager.right + 0.5));
+    // Every photo still gets its mark — the row is scaled, never truncated.
+    for (var index = 0; index < manyPhotos.length; index++) {
+      expect(
+        find.byKey(ValueKey('product-image-dot-$index')),
+        findsOneWidget,
+      );
+    }
+  });
 }
