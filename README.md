@@ -24,11 +24,14 @@ One Flutter app serves all three roles. Two React apps run alongside it against 
 
 Access is decided by `profiles.role` (`customer` / `seller` / `admin`) plus `seller_status` (`none` / `pending` / `approved` / `rejected`) — a seller who applies during sign-up lands on a pending screen until an admin approves them.
 
+**Browsing needs no account.** A fresh install opens on the storefront: the home feed, product pages, store pages and reviews are readable signed-out, inside the same `CustomerShell` a sign-in then upgrades in place. Sign-in is asked for only when an action needs an owner — add to cart, buy, checkout, the profile and notification tabs, following a store, messaging a seller. `requireSignIn` (`lib/widgets/auth/require_sign_in.dart`) shows a short "Sign in to continue / Keep browsing" prompt, pushes the merged front door **above** the page the shopper was on, and lets the action finish when they return. It is the Shopee/Lazada model, and the one the customer portal already implements with `RequireAuth`.
+
 ---
 
 ## What's in the app
 
 **Customer**
+- **Browse with no account** — the storefront opens on a fresh install; sign-in is requested only for actions that need one
 - Home feed with a masonry catalog, category rows, audience shelves (Men's / Women's / Kids' / Unisex), an On Sale poster, and a "Based on your size" shelf drawn from a saved foot measurement
 - Search with suggestions, history, and a results page; shelves that search, filter and sort in place
 - Store discovery, store pages, follow/unfollow and store messaging
